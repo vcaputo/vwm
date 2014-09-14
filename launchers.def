@@ -1,6 +1,8 @@
 /* it's up to you to ensure you don't conflict with the global VWM keys */
-/* keysym, argv list */
-launcher(XK_x, "/usr/bin/xterm")
-launcher(XK_b, "/usr/bin/iceweasel", "-ProfileManager", "-no-remote")
-launcher(XK_g, "/usr/bin/gimp")
-launcher(XK_period, "/usr/local/bin/xlock")
+/* 		keysym, 	label,		cmd			*/
+launcher(	XK_x, 		"xterm",	"/usr/bin/xterm")
+launcher(	XK_b, 		"iceweasel",	"/usr/bin/iceweasel -ProfileManager -no-remote")
+launcher(	XK_g, 		"gimp",		"/usr/bin/gimp")
+launcher(	XK_period,	"lock",		"/usr/bin/xlock")
+launcher(       XK_minus,       "dpms off",     "/usr/bin/xset -dpms s off")
+launcher(       XK_equal,       "dpms on",      "/usr/bin/xset +dpms s on")

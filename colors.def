@@ -1,5 +1,6 @@
 color(focused_window_border, "Green")
 color(shelved_window_border, "purple")
 color(unfocused_window_border, "DarkGray")
+color(shelved_console_border, "red")
 color(rubberband, "Orange")
 color(logo, "LimeGreen")

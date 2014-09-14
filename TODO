@@ -1,23 +1,101 @@
+XINERAMA:  
+- XRandR events removing screens containing windows turns them into
+  pseudo-phantom windows.  You can reclaim them by Mod1-Tabbing to them (which
+  you can infer by not seeing a green square anywhere visible) and using a
+  window autoconfiguration hotkey like Mod1-enter or Mod1-].  
+  *** May require Mod1-Shift-Tabbing now actually.
+
+  vwm should detect when screens disappear containing such windows and move
+  them to another screen, even if it's just the 0,0 coordinate of a present
+  screen.
+
+- Add a modifier for window configuration hotkeys to become pointer-relative,
+  so one can move a window to a different screen while resizing it by simply
+  having the pointer in the desired screen and hitting the appropriately
+  modified resize command.
+
+- There's no direct keyboard method for migrating a window to another screen,
+  much like one can migrate windows from one virtual desktop to another by
+  simply holding shift while switching, it should have something similar for
+  moving a window to the next screen within the same virtual desktop.
+  This could also be autoconfig-aware, so if you migrated half-screened
+  window to another screen, the autoconfigure could recur adapting to the
+  new screen's potentially different dimensions...
+
+  This isn't difficult to implement, just need to come up with a good key for
+  it.  Mod1-Shift-Tab is already taken for switching focus across screens.
+  Maybe it makes more sense to assign a new key to switching focus across
+  screens rather than modifying the Tab, then shifting that key will turn it
+  into a screen migration.
+
+- If shelf semantics were murky before they're muddy with Xinerama.
+  *** a particularly annoying issue is shelved windows don't get put in the
+      same screen, I'm leaning towards the screen vwm started with the pointer
+      in (the one the logo gets drawn on) gets assigned as the shelf screen
+      too.
+  *** Instead it would probably be more convenient to have the shelf always
+      appear on the currently focused screen at the time of being toggled.
+      This just requires shelf focusing of windows to always configure them
+      on the focused screen (fullscreening already happens at tht time so
+      it should be trivial to move them to the current screen as well)
+  *** in the mean time, the shelf follows the screen containing the pointer.
+  *** maybe Mod1-Shift-Tab in the shelf context should move the shelf to
+      another screen...
+
+  vwm is supposed to do what is expected at all times, when it doesn't it's a
+  bug (which are numerous).  It's kept simple to promote success in achieving
+  this goal, and even so this has proven quite challenging.
+
+  Xinerama introduces many new interactions which will require time and thought
+  to make behave as expected.  I don't know what other WM's are like in this
+  regard, but find multihead vwm pretty annoying in its current state.
+  *** The usability of multihead vwm has improved substantially with the
+      introduction of screen fencing (for Mod1-Tab) and the explicit violation
+      of those fences (Mod1-Shift-Tab).
+
+
 BUGS:
+- The halfscreen/quarterscreen shortcuts are treated as user-configured windows
+  clobbering the cached original client configuration, I don't think this is
+  the right thing to do.  I'm leaning towards all the shortcutted
+  configurations being treated as various forms of fullscreened state which
+  don't get remembered in window reconfiguration, keeping the other
+  configuration available for window restore.  But maybe there's a need for
+  more flexibility.  Below I talk about keeping a list of window configurations
+  per window in MRU order then have a way to cycle through them... perhaps it
+  makes more sense to just have a last-configuration cache in the window
+  instance, as well as a cache of the most recent non-shortcutted (either
+  original client configuration or one that was manually sized) available with
+  a modifier.  Like Mod1-Enter flips between the two most recent
+  configurations, and adding Shift always brings you back to the original size?
+  *** for now Mod1-Enter fullscreens a non-autoconfigured window, or restores
+      an autoconfigured window to the latest non-autoconfigured dimensions.
+      All the half/quarter/full/all screen modes for windows are uniformly
+      considered autoconfigured states now.  The functions have been
+      consolidated...
+
+- I suspect there are some situations where the MRU desktop is updated but
+  shouldn't be, but I haven't made a significant effort to specifically isolate
+  and characterize them, just something I feel like I've groaned about
+  occasionally when something unexpected occurred requiring a Mod1-Space storm.
+
+  * MRU-based window migration (Mod1-Shift-Space) updates MRU without a Mod1
+    release, that's a bug, no commit has been done.
+
+- Seems like there's a bug when exiting a shelved transmission without
+  waiting for it to fully exit before returning to a virtual desktop.
+  Upon switching to the virtual desktop the other shelved window had
+  originated from it is shown erroenously with a focused-shelved window border
+  with the other windows of that desktop.
 
 - Audit the code for memory leaks, I don't clean up things diligently on
   destroy of things, especially surrounding X resources I presume.
-
-- There seems to be a problem with automatically focusing the remaining window
-  when the focused window is unmanaged.  Seems like I can simply repro. this by
-  starting iceweasel in an empty desktop.  It seems to be due to the 10x10 plugin
-  container window, why are we tripped up by this little window?  Why is this
-  window managed but not focusable? fucking X
-
-- Shelving a window doesn't focus it in the shelf context (is this limited to
-  only migration shelving?)
 
 - A floating window in the shelf, even when rendered as focused, doesn't behave
   as it's focused.... this is really annoying.  I really need to formalize the
   multi-window (new window) behavior within the shelf, it's totally undefined
   currently, I just avoid launching things in the shelf and don't run apps which
   create windows from within it.
-
   ... 
 
   Window creation while in the shelf is still a bit odd.  The shelf isn't
@@ -34,24 +112,123 @@ BUGS:
   multi-window state within the shelf is a transient one which ceases to
   occur the moment the shelf context is left or a subsequent Alt+Tab further
   cycles the focused shelf, unmapping the currently mapped windows.
+  ...
 
-- Mod1+d destruction of an empty virtual desktop should probably require double
-  press of the 'd', and perhaps a visual indicator of emminent destruction after
-  the initial 'd'.
+  Shelf is like the junk drawer, I don't think it matters, as long as I can
+  throw windows I want out of my main workflow there and eventually find them
+  should I need to it's working well enough.  It's not really where any time
+  gets spent other than queueing music in cmus or checking on gtk-transmission
+  downloads.
+
+  It might be interesting to have a concept of a persistent shelf actually,
+  I tend to _always_ launch alsamixer and cmus in the shelf.  I'd appreciate
+  that happening automatically on startup.  Humm... then it becomes appealing
+  to assign specific identifiers to their respective shelf windows rather
+  than having to skip through the shelved windows searching, slippery slope.
+
+  Fuck it, let's consider this; Mod1_` continues to toggle the shelf, then
+  Mod1_1-0 focus the 1-10th persistent shelved windows?  They all exist in the
+  shelf as before, in MRU order, cyclable via Mod1_Tab, but Mod1_1-0 are
+  shortcuts to the first 10 shelved windows in shelved order?  Or is it reserved
+  for specifically persistent shelved windows which have been specified in the
+  code somewhere, like a launchers.def-like list (shelves.def?)?
+
+  It's actually somewhat complicated to launch an X client into a specific
+  context.  I abuse resource classes for identifying the xterm-based console
+  window and placing it in the shelf with the red border.  If I wanted to have
+  automatically launched clients @ startup getting placed in the shelf, it's
+  not necessarily safe to assume every client can specify a class for vwm to
+  recognize like xterm -class, not to mention that's a resource class, it has
+  existing semantics and I've just overloaded it for the console.  The clients
+  may not want to have their resource class changed arbitrarily...  there needs
+  to be a better way.
+
+  As an interim solution, what I could do is generalize the launching and
+  shelving of commands (like the console) according to their class.  I
+  currently only want to put things under xterms into the shelf at startup
+  anyways, so the xterm -class hack fulfills my immediate needs, and I already
+  basically do it for the console so this would just be more of the same with a
+  generalized implementation.  Things like -class VWMMixerXTerm and -class
+  VWMCmusXTerm, define them in a shelves.def where their commands and keysym
+  ids are assigned as well, throw the console in there too removing its
+  specialized shit from vwm.c then generate the startup, identification, and
+  shelving code for all those listed in the file.
+
+  Worth it?  All to save having to launch two xterms and running alsamixer and
+  cmus every time I boot my computer more or less?  Unsure.  It might be nicer
+  to also have them directly locatable via Mod1-1 and Mod1-2, perhaps
+  suppressing the MRU update on direct addressing to not pollute the MRU of the
+  ephemeral shelves.
+
+  (this bug entry has become a feature monologue)
+
+- Virtual desktop window unmap/map sequences aren't Z-ordered, this causes some
+  visual artifacts when switching desktops depending on how things happen to
+  be ordered.  Fixing this requires maintaining a windows list in the same
+  stacking order as the X server, worth fixing, and will be needed anyways when
+  I integrate the composited window child monitoring code.  There are features
+  below which also would benefit from the ability to preserve window stacking.
 
 
 FEATURES:
 
-- It would be useful if fullscreened windows obscured their border when they are
-  not obscured, as-is I lose a pixel on each edge in fullscreen xterms just so I
-  can see if the window is focused or not via the border color.  This is only
-  appreciated when focus is potentially ambiguous.  Come up with a good approach
-  which allows obstruction of the border while still showing the border in
-  potentially ambiguous situations.
+- Introduce a run command key?  Include a modifier for focusing the console
+  upon execution?  So you can directly launch (without creating an xterm)
+  command lines?
+
+  Initially I thought it might be a good idea to make vwm interactively take
+  the input for the command in a custom widget of sorts.
+
+  But after sitting on this for awhile and giving it more thought, I don't
+  think that makes any sense.  It's very rare when I know specifically what I
+  want to run with precisely the right arguments from the correct directory
+  without some filesystem navigation, reverse history search, and perhaps an
+  --help invocation or two.
+
+  For instance, these days I'm often getting on various wireless networks and I
+  invoke wpa supplicant directly using a locale-named configuration file as
+  root largely via an reverse history search of the locale's name.
+
+  What I do today is I create an xterm for wpa_supplicant and shelve it, which
+  wastes a page in the shelf list on an xterm I'm really unlikely to need to
+  visit.  The reason I'd like the run command is for launching things like
+  wpa_supplicant without dedicating an xterm to it.  It would also be nice to
+  run some of these things under screen so they don't necessarily have to exit
+  should I exit vwm/X.  Losing wireless connectivity because I quit vwm is
+  annoying sometimes, like if I'm doing alot of restarting vwm experimenting or
+  something.
+
+  Maybe what makes the most sense is for a run command to simply focus the
+  console in the shelf while sending the console screen session the remote
+  command for creating a window.
+
+  Or maybe there should be a separate console session for executing run
+  commands like wpa_supplicant/cmus/alsamixer?  Just because it would be
+  cumbersome to navigate a polluted screen session full of all the X clients in
+  addition to the interactive launches, when you're really only going to be
+  interested in the interactive launches.  In essence, this is a vwm binding
+  for ^a-c in a dedicated per-X-display screen session (would it be useful to
+  make it a global per-user screen session?  could multiple vwm instances share
+  a launcher screen?  DISPLAY= would be correct for just one of them, but that
+  has no effect on non-X processes.  Interesting to consider, but is there any
+  practical reason to have multiple vwm's running for a user?  Unless you're
+  hacking and experimenting with a new feature long enough to want to try live
+  in it for a few hours without leaving your current production arrangement?
+
+  Unsure.
+
+- Multihead-awareness?  I don't really have a setup to mess with this on right
+  now, which also removes the pressure from me to actually make it
+  well-integrated.  However, I've used xrandr --same-as configurations for
+  watching movies on a projector, and provided I set the external display as
+  the "primary" (xrandr terminology) then things like allscreen use the
+  appropriate geometry for the external display.  Upon stopping the external
+  usage I need to disable the output or set the internal one as primary etc to
+  restore internal display correctness for geometry-dependent functionality.
 
 - Mod1+enter currently toggles between the currently user-specified (starts out
   at client-configured) dimensions, and full-screen.  I think it would be useful
-  to support 3 states, the clients originally configured dimensions, the
+  to support 3 states, the client's originally configured dimensions, the
   user-specified dimensions (if they have been varied from the client-configured
   dimensions) and full-screen.  This needs more thought, because it might not 
   be very intuitive to sometimes have 3 persisted window states vs. 2, depending
@@ -67,16 +244,82 @@ FEATURES:
   should the resize last long enough to become realized rather than suppressed
   and treated as only a focus without raise event.
 
+- Mod1+tab currently changes the window stacking order by leaving intermediate
+  windows raised, even though they were simply visited.  This is common in WM's,
+  but what I really want is for the window focused at the time of Mod1 release to
+  be the only window remaining raised.  The intermediates should only be temporarily
+  raised when they were visited but restored to their previous position in the stack
+  at the subsequent tab press.
+
 - Window cycling should probably be reversible (shift+Mod1+Tab?)
+  *** strangely lacking this hasn't really annoyed me, MRU keeps things
+      mostly where you need them.
 
 - Window placement is static, at least cascade, preferably intelligent
   placement resorting to cascade when the desktop is filled.  I actually like how
   wmaker 'auto mode' tries to fill open spaces with window placement then falls
   back to cascade once no open spaces exist to accomodate the created window's
   preferred size.
+  *** funny how simply throwing all new windows in the corner is pretty damn
+      acceptable, at least it's deterministic, moving it is easy enough.
+
+- An snap-to grid for window resize and movement may be useful, perhaps
+  activated by a modifier (shift?) pressed during the grab?  I'm not sure how I
+  feel about making windows snap to arbitrary alignments at neighboring window
+  borders vs. simply adhering to some fixed absolute grid totally ignorant of
+  other window boundaries.
+
+- With the introduction of Mod1-[], Mod1-Shift-[] for halfscreens, and the
+  repeaters for quarter windows, most appreciable XGA window layouts are
+  quickly achieved with the keyboard alone.  However, on higher resolution
+  screens, quarter windows can still be too large with high probability.  I'm
+  thinking it might be better to adapt the current technique to a more
+  generalized quadtree-inspired navigation.  By quadtree I mean incremental
+  recursive bisection of a window along choosable axis in simultaneously chosen
+  directions.  So Mod1-[ would be left subhalf bisecting the X axis, Mod1-]
+  right subhalf bisecting the X axis.  Shifted Mod1-[ would be top subhalf
+  bisecting the Y axis, and shifted Mod1-] the bottom subhalf bisecting the Y
+  axis.  The subhalves are always confined to the window's current space, the
+  recursive bisecting continuing until the Mod1 is released.  If Mod1 is
+  released, then the bisection resumed, the process will restart from the
+  screen half initially chosen.  It might also be interesting to support a
+  means of going "up" the tree rather than down, to enlarge the window on a
+  chosen axis and direction, additionally it may be useful to move the window
+  laterally in its current dimensions along quadtree-aligned boundaries.
+  Or maybe it's simply good enough to restart from a toplevel half when you
+  wish to effectively move up or laterally in the virtual quadtree.
 
 - Virtual desktop genesis needs to query the user for the name, and create a
   full-screen xterm running screen -S $desktopname for the root (or something)
+  (perhaps something like specifying special per-virtual-desktop classes to
+   the xterm creation can be used to establish desktop affinity and apply special
+   rules to these per-desktop screen-under-xterm sessions)
+
+  The per-desktop fullscreen xterm can be automatically made borderless when
+  it's shown alone, and bordered when overlapping.  A key combination can be
+  defined to (un)map all windows on a desktop except the "root" fullscreen
+  desktop window.  This may be achievable entirely via resource classes (xterm
+  -class) so vwm can identify these special per-desktop xterms.
+
+  *  I think it might make more sense to just add a concept of virtual desktop
+     "leaders", and have the default be a fullscreen xterm running screen, but
+     also allow it to be anything defined in launchers.def (added labels to
+     those anticipating a possible best-match search to be performed @
+     genesis).
+
+     Then vwm can have a key for "show leader" which hides everything on the focused
+     desktop except the leader window.  A key can also be added to assign leadership
+     to any window, but the common pattern would be to @ desktop genesis time establish
+     the leader when it's created, and that will usually be a fullscreened xterm running
+     screen with a named session you name interactively immediately after Mod1-v.
+     Of course there would also need to be the opposite of "show leader" which would
+     probably just be the same key pressed again like a toggle, to show the inferiors.
+     I think there's an important subtle detail in the leader/inferiors visibility
+     toggling to make it particularly useful, and that's one of focus.  Show leader
+     should focus the leader, but show inferiors should probably restore focus to the
+     inferior if one was focused at the time show leader was performed.  Maintenance
+     of the window stacking order would be helpful too in this case, which is something
+     I don't maintain at all right now.
 
 - Implement screen lock (right now I use xlock, I want something integrated which
   does the following:
@@ -88,3 +331,15 @@ FEATURES:
   * if possible, disable ctrl-alt-backspace, allowing me to run Xorg with this enabled
     without making my desktop totally insecure.  When unlocked I like this ability, but
     when locked it can't be available for obvious reasons.
+
+  *** I think the best way to achieve this is to actually extend the Xorg server to
+      support the window manager sending two new requests:
+      1. "close all backdoors"
+      2. "restore all backdoors"
+      Then the window manager can send request #1 prior to running any lock displays,
+      and #2 upon exiting a lock display.
+
+  *** Queried Keith Packard (fd.o) on this topic, he thinks it makes sense and
+      might be appropriate to add to xinput or xkbd extensions rather than
+      creating a
+      new one.

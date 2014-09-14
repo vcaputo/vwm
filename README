@@ -1,0 +1,94 @@
+                                    \/\/\
+
+Built-ins:
+
+  Mod1-RClick           Focus the clicked window, but suppress raising
+  Mod1-RClick-drag      Focus the clicked window, suppress raising, resizing the window from its nearest corner until drag completes
+  Mod1-LClick           Focus and raise the clicked window
+  Mod1-LClick-drag      Focus and raise the clicked window, moving the window until the drag completes
+* Mod1-l                Switch to virtual desktop to the right (if exists)
+* Mod1-h                Switch to virtual desktop to the left (if exists)
+  Mod1-j                Lower focused window, if the focused window is in "allscreen" mode it will simply be fullscreened first without lowering
+  Mod1-k [-k [-k]       Raise focused window [a second k raises and fullscreens the window [a third k raises and "allscreens" without a visible border
+          [-k] [-k]]    [a fourth k raises and fullscreens across all heads [a fifth k raises and "allscreens" across all heads]]]
+  Mod1-Shift-k          Shelve focused window and switch to the shelf context
+  Mod1-Shift-j          Migrate the focused window from the shelf to the last focused virtual desktop, switch to that virtual desktop, and focus the migrated window
+* Mod1-Shift-l          Migrate the focused window to the virtual desktop to the right (if exists), keeping the window focused
+* Mod1-Shift-h          Migrate the focused window to the virtual desktop to the left (if exists), keeping the window focused
+  Mod1-v                Create a new virtual desktop and switch to it
+  Mod1-Shift-v          Create a new virtual desktop, move the focused window to it, and switch to it
+* Mod1-Space            Switch to the most recently used virtual desktop (like Mod1-Tab but for virtual desktops)
+* Mod1-Shift-Space      Switch to the most recently used virtual desktop, bringing the focused window with
+  Mod1-`                Alternate between shelf (if populated) and virtual desktop contexts
+  Mod1-s                Shelve the focused window without switching to the shelf, adopting the newly shelved window as the focused window within the shelf
+* Mod1-Tab              Focus and raise the next window in the current context (shelf or virtual desktop), the focused window is not 'committed' as the MRU window
+                        until Mod1 is released, so you may peruse intermediate windows without affecting the order until releasing Mod1.  In multihead configurations
+			the next window selection is confined to the current screen.
+  Mod1-Shift-Tab	Identical to Mod1-Tab except switches to the MRU window on another screen in a multihead configuration
+  Mod1-d                Request the client destroy the focused window, or destroy the current virtual desktop when no windows exist on it
+  Mod1-Shift-d          XKillClient the focused window (useful for misbehaving clients)
+  Mod1-Enter            Alternate between full-screen and windowed dimensions for the focused window
+  Mod1-[ [-[]           Reconfigure the focused window to fill the left half of the screen [ left bottom quarter of screen ]
+  Mod1-] [-]]           Reconfigure the focused window to fill the right half of the screen [ right top quarter of screen ]
+  Mod1-Shift-[ [-[]     Reconfigure the focused window to fill the top half of the screen [ top left quarter of screen ]
+  Mod1-Shift-] [-]]     Reconfigure the focused window to fill the bottom half of the screen [ bottom right quarter of screen ]
+  Mod1-Esc-Esc-Esc      Exit vwm (if vwm is the child of your X server, X exits too, so your X clients all lose their connection and die.
+                        However, your clients are running under screen, and if your X server didn't exit, they won't lose their X connection.)
+
+  *'s above indicate commands which initiate an MRU-update to be committed on the next Mod1 release.  One may traverse windows and desktops without affecting
+      their MRU order by returning to the original initiating window and/or desktop before releasing Mod1.  This permits one to do quite a lot of things
+      under a single, long-duration Mod1 press only committing to a potentially different focused window/desktop at the very end.
+      Think of the Mod1 release as a transaction commit when coupled with the *'d commands.
+
+Default launchers (configure by editing launchers.def and rebuild):
+
+  Mod1-x                xterm
+  Mod1-b                iceweasel
+  Mod1-g                gimp
+  Mod1-.                xlock
+  Mod1--                xset -dpms s off
+  Mod1-=                xset +dpms s on
+
+
+General:
+
+  Newly created windows are raised but not focused unless they are the first
+  window on an otherwise empty virtual desktop, then they are focused as well.
+  When new windows appear on a populated virtual desktop, they are inserted
+  immediately after the currently focused window in the windows list, so a
+  Mod1-Tab will immediately focus new windows.  Windows are kept in a MRU (Most
+  Recently Used) order, keeping it efficient to alternate between an evolving
+  set of active windows.
+
+  The shelf is a sort of omnipresent and limited virtual desktop always
+  available via Mod1-`, it only shows a single window at a time, Mod1-Tab
+  cycles through the shelved windows.  I use it as a place to stow xterms
+  running backround processes I would like to retain the ability to observe the
+  output of or interact with occasionally.  Programs like transmission-gtk,
+  cmus, wpa_supplicant under xterm, sometimes even iceweasel sessions find
+  themselves in my shelf on a regular basis.
+
+
+Multihead/Xinerama:
+
+  In multihead configurations new windows are placed on the screen containing
+  the pointer if that screen is empty.  Should the pointer be on a non-empty
+  screen, then new windows are placed on the screen containing the currently
+  focused window.
+
+  New windows will automatically be focused if the screen they were placed on
+  is empty, even if their virtual desktop is not, which is a divergence from
+  the single-headed behavior where only lone windows on virtual desktops are
+  automatically focused.
+
+
+
+
+
+
+
+TODO ...
+
+
+
+
