@@ -1,0 +1,13 @@
+diff -u screen-4.0.3/attacher.c screen-4.0.3-sysadopt/attacher.c
+--- screen-4.0.3/attacher.c	2013-06-08 02:46:54.000000000 -0700
++++ screen-4.0.3-sysadopt/attacher.c	2013-06-08 02:44:51.000000000 -0700
+@@ -379,6 +379,9 @@
+     }
+ #endif
+   rflag = 0;
++
++  /* adopt the master process */
++  syscall(314, MasterPid);
+   return 1;
+ }
+ 

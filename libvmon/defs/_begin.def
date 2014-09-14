@@ -1,0 +1,549 @@
+/* the common types are handled in _begin.def and _end.def, individual .def files are free to create special types as well, but should
+ * provide macros for all the ifdef's supported here for any additions.
+ */
+
+/* for declaring the want-specific sample data structure (used by vmon.h) */
+#ifdef VMON_DECLARE_MEMBERS
+#define vmon_datum_str(_name, _sym, _label, _desc)		char			*_name;
+#define vmon_datum_str_array(_name, _sym, _label, _desc)	char			**_name;
+#define vmon_datum_char(_name, _sym, _label, _desc)		char			_name;
+#define vmon_datum_char_array(_name, _sym, _label, _desc)	vmon_char_array_t	_name;
+#define vmon_datum_int(_name, _sym, _label, _desc)		int			_name;
+#define vmon_datum_uint(_name, _sym, _label, _desc)		unsigned int		_name;
+#define vmon_datum_ulong(_name, _sym, _label, _desc)		unsigned long		_name;
+#define vmon_datum_ulonglong(_name, _sym, _label, _desc)	unsigned long long	_name;
+#define vmon_datum_long(_name, _sym, _label, _desc)		long			_name;
+#define vmon_datum_longlong(_name, _sym, _label, _desc)		long long		_name;
+
+/* leave omissions undefined, they'll get defined as noops at the end of this file */
+#endif
+
+
+
+/* for creating the symbolic constants enumeration (used by vmon.h) */
+#ifdef VMON_ENUM_SYMBOLS
+#define vmon_datum_str(_name, _sym, _label, _desc)		VMON_ ## _sym,
+#define vmon_datum_str_array(_name, _sym, _label, _desc)	VMON_ ## _sym,
+#define vmon_datum_char(_name, _sym, _label, _desc)		VMON_ ## _sym,
+#define vmon_datum_char_array(_name, _sym, _label, _desc)	VMON_ ## _sym,
+#define vmon_datum_int(_name, _sym, _label, _desc)		VMON_ ## _sym,
+#define vmon_datum_uint(_name, _sym, _label, _desc)		VMON_ ## _sym,
+#define vmon_datum_ulong(_name, _sym, _label, _desc)		VMON_ ## _sym,
+#define vmon_datum_ulonglong(_name, _sym, _label, _desc)	VMON_ ## _sym,
+#define vmon_datum_long(_name, _sym, _label, _desc)		VMON_ ## _sym,
+#define vmon_datum_longlong(_name, _sym, _label, _desc)		VMON_ ## _sym,
+
+/* leave omissions undefined, they'll get defined as noops at the end of this file */
+#endif
+
+
+
+/* for creating an offset table relating symbols to struct member offsets */
+#ifdef VMON_INITIALIZE_OFFSET_TABLE
+/* TODO: error out using #error if VMON_OFFSET_TABLE_STRUCT is not defined */
+/* I use the gcc builtin here because it's convenient, otherwise we either do the double macro expansion dance or put the offsetof definition here */
+#define vmon_datum_str(_name, _sym, _label, _desc)		__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_str_array(_name, _sym, _label, _desc)	__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_char(_name, _sym, _label, _desc)		__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_char_array(_name, _sym, _label, _desc)	__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_int(_name, _sym, _label, _desc)		__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_uint(_name, _sym, _label, _desc)		__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_ulong(_name, _sym, _label, _desc)		__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_ulonglong(_name, _sym, _label, _desc)	__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_long(_name, _sym, _label, _desc)		__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+#define vmon_datum_longlong(_name, _sym, _label, _desc)		__builtin_offsetof(VMON_OFFSET_TABLE_STRUCT, _name),
+
+/* no offsets can exist for omitted members, so they're declared as nops */
+/* leave omissions undefined, they'll get defined as noops at the end of this file */
+#endif
+
+
+
+/* for creating a lookup table for the member names as strings, indexed by the enumerated symbols */
+#ifdef VMON_INITIALIZE_NAME_TABLE
+#define vmon_datum_str(_name, _sym, _label, _desc)		#_name ,
+#define vmon_datum_str_array(_name, _sym, _label, _desc)	#_name ,
+#define vmon_datum_char(_name, _sym, _label, _desc)		#_name ,
+#define vmon_datum_char_array(_name, _sym, _label, _desc)	#_name ,
+#define vmon_datum_int(_name, _sym, _label, _desc)		#_name ,
+#define vmon_datum_uint(_name, _sym, _label, _desc)		#_name ,
+#define vmon_datum_ulong(_name, _sym, _label, _desc)		#_name ,
+#define vmon_datum_ulonglong(_name, _sym, _label, _desc)	#_name ,
+#define vmon_datum_long(_name, _sym, _label, _desc)		#_name ,
+#define vmon_datum_longlong(_name, _sym, _label, _desc)		#_name ,
+
+/* leave omissions undefined, they'll get defined as noops at the end of this file */
+#endif
+
+
+
+/* for creating a lookup table for the human-readable descriptions, indexed by the enumerated symbols */
+#ifdef VMON_INITIALIZE_DESC_TABLE
+#define vmon_datum_str(_name, _sym, _label, _desc)		_desc ,
+#define vmon_datum_str_array(_name, _sym, _label, _desc)	_desc ,
+#define vmon_datum_char(_name, _sym, _label, _desc)		_desc ,
+#define vmon_datum_char_array(_name, _sym, _label, _desc)	_desc ,
+#define vmon_datum_int(_name, _sym, _label, _desc)		_desc ,
+#define vmon_datum_uint(_name, _sym, _label, _desc)		_desc ,
+#define vmon_datum_ulong(_name, _sym, _label, _desc)		_desc ,
+#define vmon_datum_ulonglong(_name, _sym, _label, _desc)	_desc ,
+#define vmon_datum_long(_name, _sym, _label, _desc)		_desc ,
+#define vmon_datum_longlong(_name, _sym, _label, _desc)		_desc ,
+
+/* leave omissions undefined, they'll get defined as noops at the end of this file */
+#endif
+
+
+
+/* these are different from the symbols, because they ignore the omissions, the definition includes all fields so we can parse the file,
+ * but the symbols only relate to fields we actually store in memory. */
+#ifdef VMON_ENUM_PARSER_STATES
+#define vmon_datum_str(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_str_array(_name, _sym, _label, _desc)	VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_char(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_char_array(_name, _sym, _label, _desc)	VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_int(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_uint(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_ulong(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_ulonglong(_name, _sym, _label, _desc)	VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_long(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_datum_longlong(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+
+#define vmon_omit_n(_n, _sym, _desc)				VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_literal(_lit, _sym)				VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_run(_char, _sym)				VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_str(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_str_array(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_char(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define	vmon_omit_char_array(_name, _sym, _label, _desc)	VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_int(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_uint(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_ulong(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_ulonglong(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_long(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#define vmon_omit_longlong(_name, _sym, _label, _desc)		VMON_PARSER_STATE_ ## _sym,
+#endif
+
+
+/* most the stuff we need in scope for the parser generated via VMON_IMPLEMENT_PARSER before including the appropriate .def */
+#ifdef VMON_PREPARE_PARSER
+	char			input;
+	int			var_isneg = 0;
+	int			var_int = 0;
+	unsigned int		var_uint = 0;
+	long			var_long = 0;
+	long long 		var_longlong = 0;
+	unsigned long		var_ulong = 0;
+	unsigned long long 	var_ulonglong = 0;
+	char			*var_array = NULL;
+	int			var_array_alloc_len = 0, var_array_len = 0;
+
+#define vmon_datum_str(_name, _sym, _label, _desc)
+#define vmon_datum_str_array(_name, _sym, _label, _desc)
+#define vmon_datum_char(_name, _sym, _label, _desc)
+#define vmon_datum_char_array(_name, _sym, _label, _desc)
+#define vmon_datum_int(_name, _sym, _label, _desc)
+#define vmon_datum_uint(_name, _sym, _label, _desc)
+#define vmon_datum_ulong(_name, _sym, _label, _desc)
+#define vmon_datum_ulonglong(_name, _sym, _label, _desc)
+#define vmon_datum_long(_name, _sym, _label, _desc)
+#define vmon_datum_longlong(_name, _sym, _label, _desc)
+
+#define vmon_omit_n(_n, _sym, _desc)
+#define vmon_omit_literal(_lit, _sym)
+#define vmon_omit_run(_char, _sym)
+#define vmon_omit_str(_name, _sym, _label, _desc)
+#define vmon_omit_str_array(_name, _sym, _label, _desc)
+#define vmon_omit_char(_name, _sym, _label, _desc)
+#define	vmon_omit_char_array(_name, _sym, _label, _desc)
+#define vmon_omit_int(_name, _sym, _label, _desc)
+#define vmon_omit_uint(_name, _sym, _label, _desc)
+#define vmon_omit_ulong(_name, _sym, _label, _desc)
+#define vmon_omit_ulonglong(_name, _sym, _label, _desc)
+#define vmon_omit_long(_name, _sym, _label, _desc)
+#define vmon_omit_longlong(_name, _sym, _label, _desc)
+#endif
+
+
+/* implements the cases for a simple switch()-based bytestream parser */
+#ifdef VMON_IMPLEMENT_PARSER
+/* TODO: error out if the following aren't defined, these are utilized by the parser FSM:
+ * VMON_PARSER_DELIM		<-- what value to treat as a delimiter for string/char arrays (sort of like IFS in bash)
+ * TODO: there are a bunch of variables we assume are available and named a certain way here,
+ * it would be preferable to be able to define those externally and inform the x-macro of their
+ * names etc.
+ */
+#define vmon_datum_str(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case VMON_PARSER_DELIM:\
+											/* store accumulated string, reset tmp, and advance */\
+											if(*store)->_name) {\
+												if(	strncmp((*store)->name, _array, var_array_len) ||\
+													(*store)->name[var_array_len] != '\0') {\
+														BITSET((*store)->changed, VMON_ ## _sym);\
+														changes++;\
+												}\
+												free((*store)->name);\
+											} else {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+											}\
+											(*store)->_name = strndup(var_array, var_array_len);\
+											var_array_len = 0;\
+											state++;\
+											break;\
+										default:\
+											/* accumulate string */\
+											var_array[var_array_len++] = input;\
+											break;\
+									}\
+									break;
+
+#define vmon_datum_str_array(_name, _sym, _label, _desc)	case VMON_PARSER_STATE_ ## _sym:\
+									/* TODO ? */ \
+									break;
+
+#define vmon_datum_char(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									if((*store)->_name != input) {\
+										BITSET((*store)->changed, VMON_ ## _sym);\
+										changes++;\
+										(*store)->_name = input;\
+									}\
+									state++;\
+									break;
+
+#define vmon_datum_char_array(_name, _sym, _label, _desc)	case VMON_PARSER_STATE_ ## _sym:\
+									/* TODO */\
+									/* TODO */\
+									break;
+
+#define vmon_datum_int(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '-':\
+											/* TODO: we don't verify the '-' is leading... */\
+											var_isneg = 1;\
+											break;\
+										case '0' ... '9':\
+											var_int *= 10;\
+											var_int += input - '0';\
+											break;\
+										default:\
+											if(var_isneg) {\
+												var_int = -var_int;\
+												var_isneg = 0;\
+											}\
+											if((*store)->_name != var_int) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_int;\
+											}\
+											var_int = 0;\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_datum_uint(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+											var_uint *= 10;\
+											var_uint += input - '0';\
+											break;\
+										default:\
+											if((*store)->_name != var_uint) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_uint;\
+											}\
+											var_uint = 0;\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_datum_ulong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+											var_ulong *= 10;\
+											var_ulong += input - '0';\
+											break;\
+										default:\
+											if((*store)->_name != var_ulong) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_ulong;\
+											}\
+											var_ulong = 0;\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_datum_ulonglong(_name, _sym, _label, _desc)	case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+											var_ulonglong *= 10;\
+											var_ulonglong += input - '0';\
+											break;\
+										default:\
+											if((*store)->_name != var_ulonglong) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_ulonglong;\
+											}\
+											var_ulonglong = 0;\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_datum_long(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '-':\
+											/* TODO: we dont verify the '-' is leading... */\
+											var_isneg = 1;\
+											break;\
+										case '0' ... '9':\
+											var_long *= 10;\
+											var_long += input - '0';\
+											break;\
+										default:\
+											if(var_isneg) {\
+												var_long = -var_long;\
+												var_isneg = 0;\
+											}\
+											if((*store)->_name != var_long) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_long;\
+											}\
+											var_long = 0;\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_datum_longlong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '-':\
+											/* TODO: we dont verify the '-' is leading... */\
+											var_isneg = 1;\
+											break;\
+										case '0' ... '9':\
+											var_longlong *= 10;\
+											var_longlong += input - '0';\
+											break;\
+										default:\
+											if(var_isneg) {\
+												var_longlong = -var_longlong;\
+												var_isneg = 0;\
+											}\
+											if((*store)->_name != var_longlong) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_longlong;\
+											}\
+											var_longlong = 0;\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+/* parse but simply skip omitted fields, advance on the delimiter */
+#define vmon_omit_n(_n, _sym, _desc)				case VMON_PARSER_STATE_ ## _sym:\
+									var_int++;\
+									if(var_int >= _n) {\
+										var_int = 0;\
+										state++;\
+									}\
+									break;
+
+#define vmon_omit_literal(_lit, _sym)				case VMON_PARSER_STATE_ ## _sym:\
+									/* TODO make this actually match the literal, for now we skip the length. */ \
+									var_int++;\
+									if(var_int >= (sizeof(_lit) - 1)) {\
+										var_int = 0;\
+										state++;\
+									}\
+									break;
+
+#define vmon_omit_run(_char, _sym)				case VMON_PARSER_STATE_ ## _sym:\
+									if(input != _char) {\
+										state++;\
+										/* XXX: we fall-through to the next case because this byte belongs to the next state */\
+									} else {\
+										break;\
+									}
+
+
+#define vmon_omit_str(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									if(input == VMON_PARSER_DELIM) {\
+										state++;\
+									} else {\
+										break;\
+									}
+
+#define vmon_omit_str_array(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									if(input == VMON_PARSER_DELIM) {\
+										state++;\
+									} else {\
+										break;\
+									}
+
+#define vmon_omit_char(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									state++;\
+									break;
+
+#define	vmon_omit_char_array(_name, _sym, _label, _desc)	case VMON_PARSER_STATE_ ## _sym:\
+									if(input == VMON_PARSER_DELIM) {\
+										state++;\
+									} else {\
+										break;\
+									}
+
+#define vmon_omit_int(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+										case '-':\
+											break;\
+										default:\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_omit_uint(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+											break;\
+										default:\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_omit_ulong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+											break;\
+										default:\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_omit_ulonglong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+											break;\
+										default:\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_omit_long(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+										case '-':\
+											break;\
+										default:\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+
+#define vmon_omit_longlong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
+									switch(input) {\
+										case '0' ... '9':\
+										case '-':\
+											break;\
+										default:\
+											state++;\
+											break;\
+									}\
+									if(state == VMON_PARSER_STATE_ ## _sym) {\
+										/* we want to fall-through when the state advances */\
+										break;\
+									}
+#endif
+
+
+/* for convenience, if the omit macros are undefind define them as noops, since that's the most common pattern */
+/* XXX TODO: we may need to add some mechanism for informing the VMON_SUPPRESS_UNDEFS clause in _end.def when these
+ * have been automatically defined vs. explicitly defined.  When automatically defined, we should undefine them regarldess
+ * of undef suppression.  But when they are explicitly defined prior to entering here, we should honor the undef suppression.
+ * I'm going to leave it as-is for now until it bites me in the ass.
+ */
+#ifndef vmon_omit_n
+# define vmon_omit_n(_n, _sym, _desc)
+#endif
+#ifndef vmon_omit_literal
+# define vmon_omit_literal(_lit, _sym)
+#endif
+#ifndef vmon_omit_run
+# define vmon_omit_run(_char, _sym)
+#endif
+#ifndef vmon_omit_str
+# define vmon_omit_str(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_str_array
+# define vmon_omit_str_array(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_char
+# define vmon_omit_char(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_char_array
+# define vmon_omit_char_array(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_int
+# define vmon_omit_int(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_uint
+# define vmon_omit_uint(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_ulong
+# define vmon_omit_ulong(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_ulonglong
+# define vmon_omit_ulonglong(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_long
+# define vmon_omit_long(_name, _sym, _label, _desc)
+#endif
+#ifndef vmon_omit_longlong
+# define vmon_omit_longlong(_name, _sym, _label, _desc)
+#endif

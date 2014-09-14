@@ -1,0 +1,7 @@
+#include "_begin.def"
+
+/* the available sys-wide wants */
+vmon_want(SYS_STAT,		sys_stat,		sys_sample_stat)
+vmon_want(SYS_VM,		sys_vm,			sys_sample_vm)
+
+#include "_end.def"

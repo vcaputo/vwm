@@ -1,0 +1,14 @@
+#include "_begin.def"
+
+/* the available per-process wants, the order here matters, put wants which affect the sampling heirarchy first */
+/* otherwise they will change the heirarchy after samples have been collected, leaving newly introduced nodes with uninitialized sample stores after return from vmon_sample() */
+
+/*	  sym,				name,				internal fulfilllment function */
+vmon_want(PROC_FOLLOW_CHILDREN,		proc_follow_children,		proc_follow_children)
+vmon_want(PROC_FOLLOW_THREADS,		proc_follow_threads,		proc_follow_threads)
+vmon_want(PROC_FILES,			proc_files,			proc_sample_files)
+vmon_want(PROC_STAT,			proc_stat,			proc_sample_stat)
+vmon_want(PROC_VM,			proc_vm,			proc_sample_vm)
+vmon_want(PROC_IO,			proc_io,			proc_sample_io)
+
+#include "_end.def"

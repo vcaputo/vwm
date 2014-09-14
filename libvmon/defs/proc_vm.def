@@ -1,0 +1,19 @@
+#include "_begin.def"
+
+		/* 		member name,	symbolic constant,		human label,	human description (think UI/help) */
+	/* /proc/$pid/statm */
+vmon_datum_ulonglong(		size_pages,	PROC_VM_SIZE_PAGES,		"Size",		"Size in pages")
+vmon_omit_run(			' ',		PROC_VM_RESIDENT_PAGES_SP)
+vmon_datum_ulonglong(		resident_pages,	PROC_VM_RESIDENT_PAGES,		"Resident",	"Resident set size in pages")
+vmon_omit_run(			' ',		PROC_VM_SHARED_PAGES_SP)
+vmon_datum_ulonglong(		shared_pages,	PROC_VM_SHARED_PAGES,		"Shared",	"Shared size in pages")
+vmon_omit_run(			' ',		PROC_VM_TEXT_PAGES_SP)
+vmon_datum_ulonglong(		text_pages,	PROC_VM_TEXT_PAGES,		"Text",		"Text segment size in pages")
+vmon_omit_run(			' ',		PROC_VM_LIB_PAGES_SP)
+vmon_omit_ulonglong(		lib_pages,	PROC_VM_LIB_PAGES,		"Library",	"Library segment size (skipped, unused in 2.6)")
+vmon_omit_run(			' ',		PROC_VM_DATA_PAGES_SP)
+vmon_datum_ulonglong(		data_pages,	PROC_VM_DATA_PAGES,		"Data",		"Data segment size in pages")
+vmon_omit_run(			' ',		PROC_VM_DIRTY_PAGES_SP)
+vmon_omit_ulonglong(		dirty_pages,	PROC_VM_DIRTY_PAGES,		"Dirty",	"Dirtied (skipped, unused in 2.6)")
+
+#include "_end.def"

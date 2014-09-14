@@ -1,0 +1,33 @@
+#include "_begin.def"
+
+		/* 		member name,		symbolic constant,			human label,		human description (think UI/help) */
+	/* /proc/$pid/io */
+vmon_omit_literal("rchar: ",				PROC_IO_RCHAR_LABEL)
+vmon_datum_ulonglong(		rchars,			PROC_IO_RCHAR,				"CharsRead",		"Characters read (all)")
+vmon_omit_literal("\n",					PROC_IO_RCHAR_NL)
+
+vmon_omit_literal("wchar: ",				PROC_IO_WCHAR_LABEL)
+vmon_datum_ulonglong(		wchars,			PROC_IO_WCHAR,				"CharsWritten",		"Characters written (all)")
+vmon_omit_literal("\n",					PROC_IO_WCHAR_NL)
+
+vmon_omit_literal("syscr: ",				PROC_IO_SYSCR_LABEL)
+vmon_datum_ulonglong(		syscr,			PROC_IO_SYSCR,				"SysReads",		"Read system calls")
+vmon_omit_literal("\n",					PROC_IO_SYSCR_NL)
+
+vmon_omit_literal("syscw: ",				PROC_IO_SYSCW_LABEL)
+vmon_datum_ulonglong(		syscw,			PROC_IO_SYSCW,				"SysWrites",		"Write system calls")
+vmon_omit_literal("\n",					PROC_IO_SYSCW_NL)
+
+vmon_omit_literal("read_bytes: ",			PROC_IO_READBYTES_LABEL)
+vmon_datum_ulonglong(		read_bytes,		PROC_IO_READBYTES,			"BytesReadIO",		"Bytes read from storage")
+vmon_omit_literal("\n",					PROC_IO_READBYTES_NL)
+
+vmon_omit_literal("write_bytes: ",			PROC_IO_WRITEBYTES_LABEL)
+vmon_datum_ulonglong(		write_bytes,		PROC_IO_WRITEBYTES,			"BytesWrittenIO",	"Bytes written to storage")
+vmon_omit_literal("\n",					PROC_IO_WRITEBYTES_NL)
+
+vmon_omit_literal("cancelled_write_bytes: ",		PROC_IO_CANCELLED_WRITEBYTES_LABEL)
+vmon_datum_ulonglong(		cancelled_write_bytes,	PROC_IO_CANCELLED_WRITEBYTES,		"CancelledWriteBytes",	"Bytes written but canceled before reaching storage (truncate)")
+vmon_omit_literal("\n",					PROC_IO_CANCELLED_WRITEBYTES_NL)
+
+#include "_end.def"

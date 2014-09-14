@@ -1,0 +1,23 @@
+--- xorg-server-1.12.4/dix/window.c	2012-05-17 10:09:02.000000000 -0700
++++ xorg-server-1.12.4.hacked/dix/window.c	2014-06-04 18:54:33.570855708 -0700
+@@ -840,6 +840,20 @@
+         event.u.createNotify.override = pWin->overrideRedirect;
+         DeliverEvents(pParent, &event, 1, NullWindow);
+     }
++
++    if (pScreen->root == pParent) {
++        /* top-level windows with local connections can reliably get _NET_WM_PID set by the server */
++        LocalClientCredRec *lcc;
++        if (GetLocalClientCreds(client, &lcc) != -1)
++            if (lcc->fieldsSet & LCC_PID_SET) {
++                Atom prop;
++
++                prop = MakeAtom("_NET_WM_PID", strlen("_NET_WM_PID"), TRUE);
++                dixChangeWindowProperty(client, pWin, prop,
++                                        XA_CARDINAL, 32, PropModeReplace,
++                                        1, &lcc->pid, FALSE);
++            }
++    }
+     return pWin;
+ }
+ 

@@ -1,0 +1,8 @@
+#include "_begin.def"
+
+		/* 		member name,		symbolic constant,	human label,		human description (think UI/help) */
+	/* /proc/$pid/fd */
+vmon_datum_int(			fdnum,			FILES_FDNUM,		"FdNum",		"File descriptor number (historically 0-255)")
+vmon_datum_char_array(		object_path,		FILES_OBJPATH,		"ObjPath",		"Object path this descriptor represents a handle for")
+
+#include "_end.def"

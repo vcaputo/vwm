@@ -1,0 +1,114 @@
+#include "_begin.def"
+
+		/* 		member name,	symbolic constant,	human label,	human description (think UI/help) */
+	/* /proc/stat */
+
+/* a cpu row, this is shown once for the total prefixed with "cpu  ", then again for every cpu prefixed with "cpuN ", newlines terminate rows */
+vmon_omit_n(			5,		SYS_STAT_CPU_PREFIX,			"cpu line \"cpu  \" prefix")
+vmon_datum_ulonglong(		user,		SYS_STAT_CPU_USER,	"UserTime",	"Time spent in user mode (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_CPU_NICE_SP)
+vmon_datum_ulonglong(		nice,		SYS_STAT_CPU_NICE,	"NiceTime",	"Time spent in user mode with low priority (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_CPU_SYS_SP)
+vmon_datum_ulonglong(		system,		SYS_STAT_CPU_SYS,	"SysTime",	"Time spent in system mode (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_CPU_IDLE_SP)
+vmon_datum_ulonglong(		idle,		SYS_STAT_CPU_IDLE,	"IdleTime",	"Time spent in the idle task (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_CPU_IOWAIT_SP)
+vmon_datum_ulonglong(		iowait,		SYS_STAT_CPU_IOWAIT,	"IOWaitTime",	"Time spent runnable but waiting for IO (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_CPU_IRQ_SP)
+vmon_datum_ulonglong(		irq,		SYS_STAT_CPU_IRQ,	"IRQTime",	"Time spent in IRQ context (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_CPU_SIRQ_SP)
+vmon_datum_ulonglong(		softirq,	SYS_STAT_CPU_SIRQ,	"SoftIRQTime",	"Time spent in the softirq context (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_CPU_STEAL_SP)
+vmon_datum_ulonglong(		steal,		SYS_STAT_CPU_STEAL,	"StealTime",	"Time spent in a virtualized environment (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_CPU_GUEST_SP)
+vmon_datum_ulonglong(		guest,		SYS_STAT_CPU_GUEST,	"GuestTime",	"Time spent in a virtual cpu (ticks)")
+vmon_omit_literal(		"\n",		SYS_STAT_CPU_NL)
+
+
+
+
+#if 0
+/* here we want to embed a list of a cpus, the cpu entries need to be a composite type which needs */
+
+/* TODO: the rest of /proc/stat, need to develop the macro language further to cleanly support the variable structures like N cpu rows etc...  */
+vmon_heredef_list_begin(	cpus,		SYS_STAT_CPUS,		"CPUs",		"CPU time accounts for every cpu in the system")
+/* we probably should somehow express which field is to be used as an index for addressing the array elements (and growing as needed) */
+vmon_omit_n(			5,		SYS_STAT_PERCPU_PREFIX,			"cpu line \"cpu  \" prefix")
+vmon_datum_ulonglong(		user,		SYS_STAT_PERCPU_USER,	"UserTime",	"Time spent in user mode (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_PERCPU_NICE_SP)
+vmon_datum_ulonglong(		nice,		SYS_STAT_PERCPU_NICE,	"NiceTime",	"Time spent in user mode with low priority (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_PERCPU_SYS_SP)
+vmon_datum_ulonglong(		system,		SYS_STAT_PERCPU_SYS,	"SysTime",	"Time spent in system mode (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_PERCPU_IDLE_SP)
+vmon_datum_ulonglong(		idle,		SYS_STAT_PERCPU_IDLE,	"IdleTime",	"Time spent in the idle task (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_PERCPU_IOWAIT_SP)
+vmon_datum_ulonglong(		iowait,		SYS_STAT_PERCPU_IOWAIT,	"IOWaitTime",	"Time spent runnable but waiting for IO (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_PERCPU_IRQ_SP)
+vmon_datum_ulonglong(		irq,		SYS_STAT_PERCPU_IRQ,	"IRQTime",	"Time spent in IRQ context (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_PERCPU_SIRQ_SP)
+vmon_datum_ulonglong(		softirq,	SYS_STAT_PERCPU_SIRQ,	"SoftIRQTime",	"Time spent in the softirq context (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_PERCPU_STEAL_SP)
+vmon_datum_ulonglong(		steal,		SYS_STAT_PERCPU_STEAL,	"StealTime",	"Time spent in a virtualized environment (ticks)")
+vmon_omit_run(			' ',		SYS_STAT_PERCPU_GUEST_SP)
+vmon_datum_ulonglong(		guest,		SYS_STAT_PERCPU_GUEST,	"GuestTime",	"Time spent in a virtual cpu (ticks)")
+vmon_omit_literal(		"\n",		SYS_STAT_PERCPU_NL)
+vmon_heredef_list_end(		cpus,		SYS_STAT_CPUS)
+
+/* we make the interrupts array dynamic, which is kind of annoying, since in older/simple XT-PIC systems it could be simply an array of 16 elements,
+   and the calling code could have made assumptions about the layout.  Taking this approach to accomodate modern systems also forces calling code to
+   be more indirect about accessing the members of this array, less assumptions can be made, such is life.  I considered using a simple static array with
+   named directly-accessible members in the CONFIG_GENERIC_HARDIRQS case, but that would encourage creating programs dependent on that case which would
+   then not work unmodified on the newer (and more common, now) complicated irq routing case. :(
+ */
+vmon_omit_literal("intr",			SYS_STAT_IRQS_PREFIX)
+vmon_heredef_array_begin(	irqs,		SYS_STAT_IRQS,		"IRQs",		"Counters for all interrupts in the system")
+vmon_omit_literal(" ",				SYS_STAT_IRQS_SP)
+vmon_datum_ulonglong(		count,		SYS_STAT_PERIRQ_COUNT)
+vmon_heredef_array_end(		irqs,		SYS_STAT_IRQS)
+vmon_omit_literal("\n",				SYS_STAT_IRQS_NL)
+
+vmon_omit_literal("ctxt ",			SYS_STAT_CTXT_SWITCHES_PREFIX)
+vmon_datum_ulonglong(		ctxt,		SYS_STAT_CTXT_SWITCHES,	"CXs",		"Count of context switches since boot")
+vmon_omit_literal("\n",				SYS_STAT_CTXT_SWITCHES_NL)
+
+vmon_omit_literal("btime ",			SYS_STAT_BOOTTIME_PREFIX)
+vmon_datum_ulong(		boot_time,	SYS_STAT_BOOTTIME,	"BootTime",	"Number of seconds since epoch the system booted at")
+vmon_omit_literal("\n",				SYS_STAT_BOOTTIME_NL)
+
+vmon_omit_literal("processes ",			SYS_STAT_FORKS_PREFIX)
+vmon_datum_ulong(		forks,		SYS_STAT_FORKS,		"Forks",	"Number of forks since the system booted")
+vmon_omit_literal("\n",				SYS_STAT_FORKS_NL)
+
+vmon_omit_literal("procs_running ",		SYS_STAT_NRUNNABLE_PREFIX)
+vmon_datum_ulong(		n_runnable,	SYS_STAT_NRUNNABLE,	"NumRunnable",	"Number of processes currently runnable (may exceed number of cpus)")
+vmon_omit_literal("\n",				SYS_STAT_NRUNNABLE_NL)
+
+vmon_omit_literal("procs_blocked ",		SYS_STAT_NBLOCKED_PREFIX)
+vmon_datum_ulong(		n_blocked,	SYS_STAT_NBLOCKED,	"NumBlocked",	"Number of processes currently blocked")
+vmon_omit_literal("\n",				SYS_STAT_NBLOCKED_NL)
+
+vmon_omit_literal("softirq ",			SYS_STAT_SIRQS_PREFIX)
+vmon_datum_ulonglong(		sirq_hi,	SYS_STAT_SIRQ_HI,	"HiSIRQ",	"Number of high priority soft interrupts (HI_SOFTIRQ)")
+vmon_omit_literal(" ",				SYS_STAT_SIRQ_TIMER_SP)
+vmon_datum_ulonglong(		sirq_timer,	SYS_STAT_SIRQ_TIMER,	"TimerSIRQ",	"Number of timer software interrupts (TIMER_SOFTIRQ)")
+vmon_omit_literal(" ",				SYS_STAT_SIRQ_NET_TX_SP)
+vmon_datum_ulonglong(		sirq_net_tx,	SYS_STAT_SIRQ_NET_TX,	"NetTxSIRQ",	"Number of network transmit software interrupts (NET_TX_SOFTIRQ)")
+vmon_omit_literal(" ",				SYS_STAT_SIRQ_NET_RX_SP)
+vmon_datum_ulonglong(		sirq_net_rx,	SYS_STAT_SIRQ_NET_RX,	"NetRxSIRQ",	"Number of network receive software interrupts (NET_RX_SOFTIRQ)")
+vmon_omit_literal(" ",				SYS_STAT_SIRQ_BLOCK_SP)
+vmon_datum_ulonglong(		sirq_block,	SYS_STAT_SIRQ_BLOCK,	"BlockSIRQ",	"Number of block software interrupts (BLOCK_SOFTIRQ)")
+vmon_omit_literal(" ",				SYS_STAT_SIRQ_IOPOLL_SP)
+vmon_datum_ulonglong(		sirq_iopoll,	SYS_STAT_SIRQ_IOPOLL,	"IOPollSIRQ",	"Number of block IO poll software interrupts (BLOCK_IOPOLL_SOFTIRQ)")
+vmon_omit_literal(" ",				SYS_STAT_SIRQ_TASKLET_SP)
+vmon_datum_ulonglong(		sirq_tasklet,	SYS_STAT_SIRQ_TASKLET,	"TaskletSIRQ",	"Number of tasklet software interrupts (TASKLET SOFTIRQ)")
+vmon_omit_literal(" ",				SYS_STAT_SIRQ_HRTIMER_SP)
+vmon_datum_ulonglong(		sirq_hrtimer,	SYS_STAT_SIRQ_HRTIMER,	"HRTimerSIRQ",	"Number of hrtimer software interrupts (HRTIMER_SOFTIRQ)")
+vmon_omit_literal(" ",				SYS_STAT_SIRQ_RCU_SP)
+vmon_datum_ulonglong(		sirq_rcu,	SYS_STAT_SIRQ_RCU,	"RCUSIRQ",	"Number of RCU software interrupts (RCU_SOFTIRQ)")
+vmon_omit_literal("\n",				SYS_STAT_SIRQS_NL)
+
+
+#endif
+
+
+#include "_end.def"

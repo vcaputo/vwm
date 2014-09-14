@@ -32,6 +32,10 @@ Built-ins:
   Mod1-] [-]]           Reconfigure the focused window to fill the right half of the screen [ right top quarter of screen ]
   Mod1-Shift-[ [-[]     Reconfigure the focused window to fill the top half of the screen [ top left quarter of screen ]
   Mod1-Shift-] [-]]     Reconfigure the focused window to fill the bottom half of the screen [ bottom right quarter of screen ]
+  Mod1-Semicolon        Toggle monitoring overlays (when active vwm becomes a compositing manager, which is slower)
+  Mod1-Apostrophe       Discard the "snowflakes" region of the focused window's monitoring overlay
+  Mod1-Right            Increase monitoring frequency (when overlays are active, too high a frequency can overload X)
+  Mod1-Left             Decrease monitoring frequency, the lowest setting halts monitoring)
   Mod1-Esc-Esc-Esc      Exit vwm (if vwm is the child of your X server, X exits too, so your X clients all lose their connection and die.
                         However, your clients are running under screen, and if your X server didn't exit, they won't lose their X connection.)
 
@@ -82,13 +86,229 @@ Multihead/Xinerama:
   automatically focused.
 
 
+Composite/Monitoring:
+
+  One reason vwm was created was to provide a simplified platform for the
+  research and development of a window manager with integrated omnipresent
+  first-class local process monitoring.  Early attempts were made to modify an
+  existing window manager (WindowMaker) which produced unsatisfactory though
+  inspiring results.  The window managers vwm[12] were created shortly after to
+  flesh out the interaction model and solidify an perfectly usable and easily
+  modified window manager foundation, while libvmon was created in parallel to
+  facilitate the efficient process monitoring required for such a task.
+
+  After a number of iterations it was found that the Composite extension (along
+  with the accompanying Damage and Render extensions) would give the best
+  results on a modern Xorg linux system.  Compositing hurts the rendering
+  performance of X applications significantly however, so a hybrid model has
+  been employed.
+
+  Monitoring overlays visibility is toggled using Mod1-Semicolon, the sample
+  rate is increased using Mod1-Right, and decreased using Mod1-Left.
+
+  When the monitoring is not visible, vwm3 continues to leave X in immediate
+  rendering mode with no additional overhead in the rendering pipeline, just
+  like vwm2.  The only additional overhead is the cost of regularly sampling
+  process statistics and maintaining the state of window overlays (which does
+  involve some X rendering of graphs and text, but does not introduce overhead
+  to the drawing of client windows).
+
+  When monitoring overlays are made visible vwm3 temporarily becomes a
+  compositing manager, redirecting the rendering of all windows to offscreen
+  memory and assuming the responsibility of drawing all damaged contents to the
+  root window on their behalf.  This is what gives vwm3 the opportunity to draw
+  alpha-blended contextual monitoring data over all of the windows, but it does
+  come with a cost.
+
+  Most modern GNU/Linux desktop environments are full-time composited, meaning
+  all X clients are redirected at all times.  This makes their draws more
+  costly and latent due to all the additional copies being performed.
+  Depending on how things have been implemented, in the interests of supporting
+  things like transparent windows it also generally results in overlapping
+  window regions being drawn repeatedly for every overlapping window from the
+  bottom-up rather than just the top one.
+
+  In vwm3 transparent windows are not supported, and shape windows (xeyes) are
+  made rectangular in composited mode.  This is so overlapping regions are only
+  drawn once for the top windows having damage per burst of screen updates.
+
+  Immediate rendering mode is restored upon disabling the monitoring overlays,
+  restoring the drawing performance to vwm[12] levels where vwm3 is completely
+  out of the drawing loop.
+
+  Here are some relevant things worth noting:
+
+  - The monitoring is only heirarchical if your kernel is configured with
+    CONFIG_CHECKPOINT_RESTORE, which seems to be common nowadays.  This is
+    required for the /proc/$pid/task/$tid/children files, which is what
+    libvmon uses to efficiently scope monitoring to just the descendants of
+    the explicitly monitored client precesses.
+
+  - tmux orphans its backend process immediately at startup, discarding its
+    parent->child relationship, so you don't get any monitoring of the commands
+    running in your local tmux session.  Use GNU screen instead.
+
+  - GNU screen orphans its backend on detach, so on reattach you've lost the
+    parent->child relationship and find yourself in the same situation tmux
+    puts you in immediately.  I've developed an adopt() system call patch for
+    the linux kernel to enable adopting orphans in this situation, but it
+    hasn't been accepted.  With this patch and a one line change to GNU screen
+    the parent->child relationship is restored on reattach.
+
+    You may find patches for adding the adopt() system call to Linux and its
+    integration into GNU screen in the patches/ subdirectory.
+
+  - The top row of the overlays shows:
+
+     Total CPU Idle % (cyan):
+      The height of every cyan vertical line reflects the %age of ticks since
+      the previous sample which were spent in the idle task.
+    
+     Total CPU IOWait % (red):
+      The height of every red vertical line reflects the %age of ticks since
+      the previous sample which were lost to IO wait.  Many people don't
+      understand this correctly.  This reflects opportunities to execute
+      something other than the idle task which were lost because _all_
+      runnable tasks at the time were blocked in IO.
+
+      An absence of IOWait does not mean nothing is blocked on IO.  It just
+      means there weren't opportunities to execute something which were lost due
+      to waiting on IO.
+
+      For example, lets say you have a dual core machine, and you launch two
+      "yes > /dev/null &" commands.  These two yes commands are essentially busy
+      loops writing "yes" to /dev/null, they will always be runnable, and you
+      will see a top row in the overlay devoid of any cyan _or_red_ while they
+      execute.
+
+      While they execute run something like:
+      "sudo echo 2 > /proc/sys/vm/drop_caches && du /"
+
+      Still no IOWait in the top row.  We know that du is blocking on IO, the
+      caches are empty, but because there is always something runnable on the
+      two cores thanks to the two yes commands, we'll never see IOWait.  The
+      other runnable processes mask the IOWait from our visibility.
+
+      Now kill the two yes commands and rerun the du command, watch the top
+      row.  Some red should appear, the red indicates that there was CPU time
+      available for running something, and the _only_ things available for that
+      time was blocked in IO.  Had there something else runnable, we wouldn't
+      see the time lost to IOWait.
+
+      When you see IOWait time, it's just saying nothing executed for that
+      time, not for lack of any runnable tasks, just that all runnable tasks
+      were blocked.  It's still of value, but easily obscured on a system with
+      any cpu-bound tasks constantly running.
+
+  - The per-task (processes or threads) rows of the overlays show:
+
+     User CPU % (cyan):
+      The height of every cyan vertical line reflects the %age of ticks since
+      the previous sample which were spent executing this task in the user
+      context.
+
+     System CPU % (red):
+      The height of every red vertical line reflects the %age of ticks since
+      the previous sample which were spent executing this task in kernel/system
+      context.
+
+     Task monitoring beginning and ending is indicated with solid and checkered
+     vertical bars, respectively.  These generally coincide with the task clone
+     and exit, but not always, especially the cloning.
+
+  - You can pause sampling by lowering its rate (Mod1-Left) to 0Hz.  Just be
+    aware that this also pauses the updating of the overlay contents, so window
+    resizes won't be adapted to in the overlay until increasing the sample rate
+    (Mod1-Right).  Pausing is useful if you've seen something interesting and
+    would like to screenshot, study, or discuss.  BTW, to take a screenshot
+    when composited you have to capture the root window.  If you capture the
+    client window, you won't get the overlays, you'll just get the redirected
+    window contents.  Compositing mode composites everything into the root
+    window, when you're interacting with the composited vwm3, you're looking at
+    the root window the entire time.
+
+  - The sample rate will automatically be lowered by vwm3 when it detects that
+    it's having trouble maintaining the current one.  If you have many windows
+    or have a slow or heavily loaded processor/GPU they can become bottlenecks,
+    especially at higher sample rates.  Rather than continuing to bog down your
+    X server (Xorg is not good at fairly scheduling clients under GPU
+    contention), vwm3 will simply back off the sample rate as if you had hit
+    Mod1-Left, to try ameliorate rather than exacerbate the situation.
+
+  - The monitoring is implemented using sampling, not tracing.  Below the
+    current process heirarchy for every window there is an exited tasks
+    snowflakes section filling the remaining space.  Do not mistake this for
+    something lossless like bash history or strace output, it's lossy since
+    it's produced from sampled data.  In part to try avoid interpretation of
+    these as a reliable process history I refer to them as snowflakes in the
+    code, since they fall downwards and sideways.
+
+    With sufficiently high sample rates the output starts to take on the
+    appearance of tracing, and while it may happen to capture every process in
+    slower executions, most automata will execute entire commands in the time
+    between samples.  So try keep this in mind before thinking something's
+    broken because you don't see something you expected in the snowflakes.
+
+    Some artifacts you might notice due to this which are not bugs are:
+
+     - "#missed it!"  being shown as the command name, this happens when
+       libvmon caught the process but the process exited before libvmon caught
+       a sample of the name.
+
+     - A parent's command name in the child when a different command was
+       executed.  In UNIX systems processes fork before execing the new
+       command, in that window of time between the fork and exec, the child
+       process is a clone of the parent, command and argv included.  Sometimes
+       the sample catches at just the right moment to see this in action.
+
+     - Varying outputs in seeming identical actions.  Things like simply
+       launching xterm may produce no snowflakes at all in the new xterm, or a
+       few like "bash" "dircolors -b" and "utempter add :0", especially if you
+       have the sample rate turned up and cause some load on the system to slow
+       the xterm and interactive bash startup scripts down.
+    
+  - In the interests of being efficient, nothing is being logged historically.
+    The snowflakes area is all you get, which is limited to the free pixel
+    space below the instantaneous process heirarchy within the window.
+
+    Everything which falls off the edges of the screen is lost forever, with
+    the exception of windows which have been made smaller than they were.
+
+    You cannot scroll down or to the right to see older snowflakes or graphs.
+
+    You cannot search the snowflakes.
+
+    The native text and numeric representations of the sampled data is not kept
+    any longer than the current sample, just long enough to update the
+    overlays.  From that point on the information exists only as visualized
+    pixels in the overlay layers with no additional indexing or relationships
+    being maintained with the currently monitored state.
+
+  - You can wipe the snowflakes of the focused window with Mod1-Apostrophe
+
+  - The client PID is found via the _NET_WM_PID X property.  This must be set
+    by the client, and not all clients cooperate (xpdf is one I've noticed).
+
+    This is annoying especially considering the vast majority of X clients run
+    on modern systems are local clients connected via UNIX domain sockets.
+    These sockets support ancillary messages including SCM_CREDENTIALS, which
+    contains the pid of the connected process.  Some investigation into the
+    Xorg sources found it already queries this information and has it on hand,
+    but doesn't bother setting the _NET_WM_PID property even though it's well-
+    positioned to do so.
+
+    I've developed and submitted upstream a patch for Xorg which sets
+    _NET_WM_PID on local connections, it complements vwm3 nicely.
+
+    You can find the patch in the patches directory.
+
+  - There are around 5 files kept open in /proc for every task monitored by
+    vwm.  This applies to children processes and threads alike, so on a busy
+    system it's not unrealistic to exceed 1024, a common default open files
+    ulimit for GNU/Linux distributions.  You can generally change this limit
+    for your user via configuration in /etc/security/limits.conf or
+    /etc/security/limits.d/.
 
 
-
-
-
-TODO ...
-
-
-
+TODO finish and polish this readme...
 

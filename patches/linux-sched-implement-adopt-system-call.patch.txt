@@ -1,0 +1,132 @@
+From 2d9f1781c6cdec8d74f44f98624af2eacbd21810 Mon Sep 17 00:00:00 2001
+From: Vito Caputo <vcaputo@gnugeneration.com>
+Date: Mon, 10 Jun 2013 17:28:49 -0700
+Subject: [PATCH 1/1] 	sched: implement adopt() system call
+
+	This implements a proposed facility for adopting a process
+	by another.  The immediate use case is programs like GNU
+	screen which lose their parent-child relationship when
+	detached.  Using this sytem call on reattach, the relation
+	can be restored, which is particularly of use to those
+	taking advantage of the /proc/$pid/task/$pid/children list
+	provided by CONFIG_CHECKPOINT_RESTORE.
+
+	This implementation applies permission checks similar to
+	that of kill(), in addition to preventing the adoption of
+	an ancestor process.
+
+	I have tested it and use the change myself to complement
+	process subtree monitoring, without which I lose all
+	visibility of the descendants of my screen sessions on
+	reattach.
+
+Signed-off-by: Vito Caputo <vcaputo@gnugeneration.com>
+---
+ arch/x86/syscalls/syscall_32.tbl |    1 +
+ arch/x86/syscalls/syscall_64.tbl |    1 +
+ include/linux/syscalls.h         |    2 ++
+ kernel/exit.c                    |   59 ++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 63 insertions(+)
+
+diff --git a/arch/x86/syscalls/syscall_32.tbl b/arch/x86/syscalls/syscall_32.tbl
+index aabfb83..d219781 100644
+--- a/arch/x86/syscalls/syscall_32.tbl
++++ b/arch/x86/syscalls/syscall_32.tbl
+@@ -357,3 +357,4 @@
+ 348	i386	process_vm_writev	sys_process_vm_writev		compat_sys_process_vm_writev
+ 349	i386	kcmp			sys_kcmp
+ 350	i386	finit_module		sys_finit_module
++351	i386	adopt			sys_adopt
+diff --git a/arch/x86/syscalls/syscall_64.tbl b/arch/x86/syscalls/syscall_64.tbl
+index 38ae65d..6345ebf 100644
+--- a/arch/x86/syscalls/syscall_64.tbl
++++ b/arch/x86/syscalls/syscall_64.tbl
+@@ -320,6 +320,7 @@
+ 311	64	process_vm_writev	sys_process_vm_writev
+ 312	common	kcmp			sys_kcmp
+ 313	common	finit_module		sys_finit_module
++314	common	adopt			sys_adopt
+ 
+ #
+ # x32-specific system call numbers start at 512 to avoid cache impact
+diff --git a/include/linux/syscalls.h b/include/linux/syscalls.h
+index 4147d70..3997cde 100644
+--- a/include/linux/syscalls.h
++++ b/include/linux/syscalls.h
+@@ -841,4 +841,6 @@ asmlinkage long sys_process_vm_writev(pid_t pid,
+ asmlinkage long sys_kcmp(pid_t pid1, pid_t pid2, int type,
+ 			 unsigned long idx1, unsigned long idx2);
+ asmlinkage long sys_finit_module(int fd, const char __user *uargs, int flags);
++
++asmlinkage long sys_adopt(pid_t upid);
+ #endif
+diff --git a/kernel/exit.c b/kernel/exit.c
+index af2eb3c..5b554c8 100644
+--- a/kernel/exit.c
++++ b/kernel/exit.c
+@@ -1681,3 +1681,62 @@ SYSCALL_DEFINE3(waitpid, pid_t, pid, int __user *, stat_addr, int, options)
+ }
+ 
+ #endif
++
++/*
++ * sys_adopt() adopts the process specified as upid by the current
++ * process if permitted.  This is linux-specific and provided so
++ * programs such as GNU screen may restore the parent-child
++ * relationship lost in detaching when reattaching.
++ */
++SYSCALL_DEFINE1(adopt, pid_t, upid)
++{
++	long ret = -ENOENT;
++	struct pid *pid;
++
++	if ((pid = find_get_pid(upid))) {
++		struct task_struct	*p;
++
++		rcu_read_lock();
++		write_lock_irq(&tasklist_lock);
++		p = pid_task(pid, PIDTYPE_PID);
++		if (p) {
++			struct task_struct *t;
++			const struct cred *cred = current_cred();
++			const struct cred *tcred = __task_cred(p);
++
++			if (!uid_eq(cred->euid, tcred->suid) &&
++			    !uid_eq(cred->euid, tcred->uid)  &&
++			    !uid_eq(cred->uid,  tcred->suid) &&
++			    !uid_eq(cred->uid,  tcred->uid) &&
++			    !ns_capable(cred->user_ns, CAP_KILL)) {
++				ret = -EPERM;
++				goto out_unlock;
++			}
++
++
++			/* upid cannot be current nor an ancestor of current */
++			for (t = current;; t = t->real_parent) {
++				if (t == p) {
++					ret = -EINVAL;
++					goto out_unlock;
++				}
++				if (is_global_init(t))
++					break;
++			}
++
++			t = p;
++			do {
++				t->real_parent = current;
++			} while_each_thread(p, t);
++
++			list_move_tail(&p->sibling, &p->real_parent->children);
++			ret = 0;
++		} /* else { ret = -ENOENT } */
++out_unlock:
++		write_unlock_irq(&tasklist_lock);
++		rcu_read_unlock();
++		put_pid(pid);
++	} /* else { ret = -ENOENT } */
++
++	return ret;
++}
+-- 
+1.7.10.4
+

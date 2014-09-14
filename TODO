@@ -1,3 +1,88 @@
+COMPOSITE (only relevant when monitoring overlays are enabled):
+- Sometimes popup dialogs seem to take more than one try to get displayed,
+  observed in GIMP during testing.  Right clicking in the image took two
+  tries.
+
+- There's often an extra row included after the process heirarchy in the
+  overlays.  This depends on wether the client process' monitor was installed
+  first by the automatic following of children in libvmon or the vwm explicit
+  process monitoring of _NET_WM_PID.  There's an extra row included depending
+  on how the race played out, and it's probably because count_rows() is
+  employed in xwin_monitor() to initialize xwin->heirarchy_end but it's not
+  making any effort to be proc->is_new aware or something.  Since an extra row
+  is relatively harmless I haven't bothered to fix it yet.
+
+- There are a number of optimization opportunities left on the table.
+  * The heirarchy (top) portion of the overlay text is redrawn on every
+    maintain_overlay(), even if it has no changes. (text only, not the graphs)
+    *** this has been changed to only happen if compositing is enabled.
+  * The shadow layer is inefficiently created with 4 renders through the text
+    as a stencil at 4 offsets to create a shadow on every compose_overlay()
+    call, even if the text is unchanged since the last compose.
+    - keep a cached version of the text shadow for reuse if the text is
+      unchanged. (depends not just on the heirarchy portion, _all_ the text
+      layer)
+    - find a better way to create the text shadow than 4x renders through the
+      stencil.
+    *** already improved with a shadow layer maintained as the text layer
+	changes.  When the heirarchy rendering becomes more change-aware, so
+        will the shadow updates.
+  * Snowflake maintenance is probably copying more area than it needs to when
+    shifting, it's not aware of snowflakes_cnt.
+  * Heirarchy rows are erased unnecessarily in maintain_overlays(), but this is
+    part of excessive heirarchy redraws.
+  * poll() timeout isn't calculated very well, extraneous wakeups and
+    gettimeofday() calls are being performed.
+    - This matters even when compositing is off, since we always maintain
+      monitoring, unless Hz is turned down to 0.
+  * Overlays are essentially triple buffered since they're composed into the
+    xwin->overlay.picture @ compose_overlay(), then paint_all() renders
+    xwin->overlay.picture into root_buffer after rendering xwin->picture into
+    the root_buffer in composing the screen contents, which then gets rendered
+    into root_picture where everything becomes visible.
+
+    It's possible to instead have compose_overlay render directly to
+    root_buffer after xwin->picture, but it makes things a bit more
+    complicated and will require some refactoring.
+
+    At least this overhead is only present when compositing is active.
+
+- Cleanups.  Much of the current compositing code is taken from a prototype
+  branch and merged with the latest vwm2 tree to create vwm3.  There are
+  numerous inconsistencies and just crufty things going on, but that will
+  improve with time.
+
+- libvmon could easily be monitoring other system things at little additional
+  cost:
+  * battery capacity/charging status/rate
+  * thermals
+  * cpu frequency
+  * diskstats
+  * network interface counters
+  * wireless interface signal strengths
+  it would be helpful to have another overlay visualizing these system-wide
+  things
+
+- There's a mildly annoying latency between switching Hz (Mod1-(Left|Right))
+  and its value changing visibly in the upper right corner of a window overlay.
+  This is mostly only noticable when switching to 1Hz.  The cause is that
+  status gets updated by the sampling callback, which is delayed by the
+  sampling interval.  When the interval is 1Hz, there's a ~1 second delay.
+
+  A refactoring should probably be done which allows maintain_overlays() to
+  have a redraw mode where no sampling has taken place and we want to simply
+  reproduce the last state, but we need to redraw everything in response to
+  things like Hz changing or a window reconfiguration.  (a similar latency is
+  observed when resizing a window, the overlay doesn't visibly adapt to the new
+  dimensions until the next sample is taken)
+
+  These are relatively minor issues, fixing them is a matter of polish IMO.
+
+- Streaming snowflakes to a png file when some kind of record button has been
+  pressed for the focused window would be interesting.  Not to produce an
+  animation of any sort, but more like a scrolled record.
+
+
 XINERAMA:  
 - XRandR events removing screens containing windows turns them into
   pseudo-phantom windows.  You can reclaim them by Mod1-Tabbing to them (which
@@ -162,13 +247,6 @@ BUGS:
 
   (this bug entry has become a feature monologue)
 
-- Virtual desktop window unmap/map sequences aren't Z-ordered, this causes some
-  visual artifacts when switching desktops depending on how things happen to
-  be ordered.  Fixing this requires maintaining a windows list in the same
-  stacking order as the X server, worth fixing, and will be needed anyways when
-  I integrate the composited window child monitoring code.  There are features
-  below which also would benefit from the ability to preserve window stacking.
-
 
 FEATURES:
 
@@ -186,7 +264,7 @@ FEATURES:
   --help invocation or two.
 
   For instance, these days I'm often getting on various wireless networks and I
-  invoke wpa supplicant directly using a locale-named configuration file as
+  invoke wpa_supplicant directly using a locale-named configuration file as
   root largely via an reverse history search of the locale's name.
 
   What I do today is I create an xterm for wpa_supplicant and shelve it, which
@@ -217,15 +295,6 @@ FEATURES:
 
   Unsure.
 
-- Multihead-awareness?  I don't really have a setup to mess with this on right
-  now, which also removes the pressure from me to actually make it
-  well-integrated.  However, I've used xrandr --same-as configurations for
-  watching movies on a projector, and provided I set the external display as
-  the "primary" (xrandr terminology) then things like allscreen use the
-  appropriate geometry for the external display.  Upon stopping the external
-  usage I need to disable the output or set the internal one as primary etc to
-  restore internal display correctness for geometry-dependent functionality.
-
 - Mod1+enter currently toggles between the currently user-specified (starts out
   at client-configured) dimensions, and full-screen.  I think it would be useful
   to support 3 states, the client's originally configured dimensions, the
@@ -234,6 +303,9 @@ FEATURES:
   be very intuitive to sometimes have 3 persisted window states vs. 2, depending
   on if the user has reconfigured the window dimensions, perhaps it should just
   always be 3 but sometimes 2 of them are identical.
+  *** this is slightly different now, but I still think it might be useful to
+  keep the original client-supplied configuration available, so a tristate may
+  be cool, keeping the bug entry for the time being.
 
 - Mod1+right click resizing should insert a short delay before actually applying
   motion events for resizing, this better facilitates the use case of
@@ -251,10 +323,6 @@ FEATURES:
   raised when they were visited but restored to their previous position in the stack
   at the subsequent tab press.
 
-- Window cycling should probably be reversible (shift+Mod1+Tab?)
-  *** strangely lacking this hasn't really annoyed me, MRU keeps things
-      mostly where you need them.
-
 - Window placement is static, at least cascade, preferably intelligent
   placement resorting to cascade when the desktop is filled.  I actually like how
   wmaker 'auto mode' tries to fill open spaces with window placement then falls
@@ -262,12 +330,7 @@ FEATURES:
   preferred size.
   *** funny how simply throwing all new windows in the corner is pretty damn
       acceptable, at least it's deterministic, moving it is easy enough.
-
-- An snap-to grid for window resize and movement may be useful, perhaps
-  activated by a modifier (shift?) pressed during the grab?  I'm not sure how I
-  feel about making windows snap to arbitrary alignments at neighboring window
-  borders vs. simply adhering to some fixed absolute grid totally ignorant of
-  other window boundaries.
+  *** still unsure on this, deterministic placement is pretty nice.
 
 - With the introduction of Mod1-[], Mod1-Shift-[] for halfscreens, and the
   repeaters for quarter windows, most appreciable XGA window layouts are
@@ -288,6 +351,11 @@ FEATURES:
   laterally in its current dimensions along quadtree-aligned boundaries.
   Or maybe it's simply good enough to restart from a toplevel half when you
   wish to effectively move up or laterally in the virtual quadtree.
+
+- Resistive edges would be handy, at least screen edges, but window edges can
+  be nice too.  It's not that much code to add it, and it makes things much
+  more usable for when the autoconfigured window options aren't fitting the
+  situation...
 
 - Virtual desktop genesis needs to query the user for the name, and create a
   full-screen xterm running screen -S $desktopname for the root (or something)

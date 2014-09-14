@@ -1,0 +1,43 @@
+#ifndef VMON_SUPPRESS_UNDEFS
+
+/* XXX TODO: we may need to detect and manage the automatic definition of the vmon_omit_* definitions */
+
+#undef vmon_datum_str
+#undef vmon_datum_str_array
+#undef vmon_datum_char
+#undef vmon_datum_char_array
+#undef vmon_datum_int
+#undef vmon_datum_uint
+#undef vmon_datum_ulong
+#undef vmon_datum_ulonglong
+#undef vmon_datum_long
+#undef vmon_datum_longlong
+#undef vmon_omit_n
+#undef vmon_omit_literal
+#undef vmon_omit_run
+#undef vmon_omit_str
+#undef vmon_omit_str_array
+#undef vmon_omit_char
+#undef vmon_omit_char_array
+#undef vmon_omit_int
+#undef vmon_omit_uint
+#undef vmon_omit_ulong
+#undef vmon_omit_ulonglong
+#undef vmon_omit_long
+#undef vmon_omit_longlong
+#undef VMON_DECLARE_MEMBERS
+#undef VMON_DECLARE_CHANGEBITS
+#undef VMON_ENUM_SYMBOLS
+#undef VMON_ASSIGN_NAME_TABLE
+#undef VMON_ASSIGN_DESC_TABLE
+#undef VMON_ENUM_PARSER_STATES
+#undef VMON_PREPARE_PARSER
+#undef VMON_IMPLEMENT_PARSER
+#undef VMON_PARSER_DELIM
+#undef vmon_want
+
+#else
+
+#undef VMON_SUPPRESS_UNDEFS
+
+#endif
