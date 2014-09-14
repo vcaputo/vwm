@@ -1,0 +1,5 @@
+color(focused_window_border, "Green")
+color(shelved_window_border, "purple")
+color(unfocused_window_border, "DarkGray")
+color(rubberband, "Orange")
+color(logo, "LimeGreen")

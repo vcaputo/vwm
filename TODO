@@ -1,0 +1,90 @@
+BUGS:
+
+- Audit the code for memory leaks, I don't clean up things diligently on
+  destroy of things, especially surrounding X resources I presume.
+
+- There seems to be a problem with automatically focusing the remaining window
+  when the focused window is unmanaged.  Seems like I can simply repro. this by
+  starting iceweasel in an empty desktop.  It seems to be due to the 10x10 plugin
+  container window, why are we tripped up by this little window?  Why is this
+  window managed but not focusable? fucking X
+
+- Shelving a window doesn't focus it in the shelf context (is this limited to
+  only migration shelving?)
+
+- A floating window in the shelf, even when rendered as focused, doesn't behave
+  as it's focused.... this is really annoying.  I really need to formalize the
+  multi-window (new window) behavior within the shelf, it's totally undefined
+  currently, I just avoid launching things in the shelf and don't run apps which
+  create windows from within it.
+
+  ... 
+
+  Window creation while in the shelf is still a bit odd.  The shelf isn't
+  intended to be a multi-window context, but it probably makes sense to
+  allow temporary situations on new windows in the shelf where windows
+  coexist/potentially overlap.  In such a situation, the new window should
+  be mapped and raised but not focused, as well as being flagged as shelved.
+  Focusing the newly created window via Mod1+Tab or a click-to-focus should
+  not unmap the currently focused window, but should focus the new window,
+  temporarily adopting virtual-desktop behavior within the shelf.  If the
+  window is closed/destroyed, the previously focused shelved window resumes
+  focus.  If the shelf is exited and reentered, the newly created and
+  shelved window becomes the exclusively mapped and focused window.  The
+  multi-window state within the shelf is a transient one which ceases to
+  occur the moment the shelf context is left or a subsequent Alt+Tab further
+  cycles the focused shelf, unmapping the currently mapped windows.
+
+- Mod1+d destruction of an empty virtual desktop should probably require double
+  press of the 'd', and perhaps a visual indicator of emminent destruction after
+  the initial 'd'.
+
+
+FEATURES:
+
+- It would be useful if fullscreened windows obscured their border when they are
+  not obscured, as-is I lose a pixel on each edge in fullscreen xterms just so I
+  can see if the window is focused or not via the border color.  This is only
+  appreciated when focus is potentially ambiguous.  Come up with a good approach
+  which allows obstruction of the border while still showing the border in
+  potentially ambiguous situations.
+
+- Mod1+enter currently toggles between the currently user-specified (starts out
+  at client-configured) dimensions, and full-screen.  I think it would be useful
+  to support 3 states, the clients originally configured dimensions, the
+  user-specified dimensions (if they have been varied from the client-configured
+  dimensions) and full-screen.  This needs more thought, because it might not 
+  be very intuitive to sometimes have 3 persisted window states vs. 2, depending
+  on if the user has reconfigured the window dimensions, perhaps it should just
+  always be 3 but sometimes 2 of them are identical.
+
+- Mod1+right click resizing should insert a short delay before actually applying
+  motion events for resizing, this better facilitates the use case of
+  click-focusing without raising, without accidental resizes occuring.  This
+  window of time could also be leveraged to discover on what axis the resize is
+  to occur (compound vs x vs y).  The resize outcome of the motion events which
+  occur in this delay period should still become realized rather than discarded,
+  should the resize last long enough to become realized rather than suppressed
+  and treated as only a focus without raise event.
+
+- Window cycling should probably be reversible (shift+Mod1+Tab?)
+
+- Window placement is static, at least cascade, preferably intelligent
+  placement resorting to cascade when the desktop is filled.  I actually like how
+  wmaker 'auto mode' tries to fill open spaces with window placement then falls
+  back to cascade once no open spaces exist to accomodate the created window's
+  preferred size.
+
+- Virtual desktop genesis needs to query the user for the name, and create a
+  full-screen xterm running screen -S $desktopname for the root (or something)
+
+- Implement screen lock (right now I use xlock, I want something integrated which
+  does the following:
+  * disable sysrq on screen lock via /proc/sys/kernel/sysrq, restores sysrq on unlock
+
+  * disable VT switching on screen lock (unsure how right now), restore VT switching
+    on unlock
+
+  * if possible, disable ctrl-alt-backspace, allowing me to run Xorg with this enabled
+    without making my desktop totally insecure.  When unlocked I like this ability, but
+    when locked it can't be available for obvious reasons.

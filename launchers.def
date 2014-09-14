@@ -1,0 +1,6 @@
+/* it's up to you to ensure you don't conflict with the global VWM keys */
+/* keysym, argv list */
+launcher(XK_x, "/usr/bin/xterm")
+launcher(XK_b, "/usr/bin/iceweasel", "-ProfileManager", "-no-remote")
+launcher(XK_g, "/usr/bin/gimp")
+launcher(XK_period, "/usr/local/bin/xlock")
