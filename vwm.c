@@ -2453,7 +2453,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 	static typeof(keypress->xkey.state)	last_state;
 	static int				repeat_cnt = 0;
 	int					do_grab = 0;
-	char					*quit_console_args[] = {"bash", "-c", "screen -dr " CONSOLE_SESSION_STRING " -X quit", NULL};
+	char					*quit_console_args[] = {"/bin/sh", "-c", "screen -dr " CONSOLE_SESSION_STRING " -X quit", NULL};
 
 	sym = XLookupKeysym(&keypress->xkey, 0);
 
@@ -2469,7 +2469,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 #define launcher(_sym, _label, _argv)\
 		case _sym:	\
 			{	\
-			char	*args[] = {"bash", "-c", "screen -dr " CONSOLE_SESSION_STRING " -X screen bash -i -x -c \"" _argv " || sleep 86400\"", NULL};\
+			char	*args[] = {"/bin/sh", "-c", "screen -dr " CONSOLE_SESSION_STRING " -X screen /bin/sh -i -x -c \"" _argv " || sleep 86400\"", NULL};\
 			vwm_launch(args, VWM_LAUNCH_MODE_BG);\
 			break;	\
 		}
@@ -2783,7 +2783,7 @@ int main(int argc, char *argv[])
 	XEvent		event;
 	Cursor		pointer;
 	struct pollfd	pfd;
-	char		*console_args[] = {"xterm", "-class", CONSOLE_WM_CLASS, "-e", "bash", "-c", "screen -D -RR " CONSOLE_SESSION_STRING, NULL};
+	char		*console_args[] = {"xterm", "-class", CONSOLE_WM_CLASS, "-e", "/bin/sh", "-c", "screen -D -RR " CONSOLE_SESSION_STRING, NULL};
 	Window		bitmask;
 	vwm_clickety_t	clickety = { .vwin = NULL };
 
