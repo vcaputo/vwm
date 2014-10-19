@@ -1606,7 +1606,7 @@ static void vwm_win_autoconf(vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_a
 	/* remember the current configuration as the "client" configuration if it's not an autoconfigured one. */
 	if(vwin->autoconfigured == VWM_WIN_AUTOCONF_NONE) vwin->client = vwin->xwindow->attrs;
 
-	scr = vwm_screen_find(rel, vwin->xwindow);
+	scr = vwm_screen_find(rel, vwin->xwindow); /* XXX FIXME: this becomes a bug when vwm_screen_find() uses non-xwin va_args */
 	va_start(ap, conf);
 	switch(conf) {
 		case VWM_WIN_AUTOCONF_QUARTER: {
@@ -3023,8 +3023,18 @@ int main(int argc, char *argv[])
 								.border_width = WINDOW_BORDER_WIDTH /* except I do override whatever the border width may be */
 							};
 					unsigned long	change_mask = (event.xconfigurerequest.value_mask & (CWX | CWY | CWWidth | CWHeight)) | CWBorderWidth;
+					vwm_xwindow_t	*xwin;
+
 					/* XXX: windows raising themselves is annoying, so discard CWSibling and CWStackMode. */
 					VWM_TRACE("configurerequest x=%i y=%i w=%i h=%i", changes.x, changes.y, changes.width, changes.height);
+
+					if((xwin = vwm_xwin_lookup(event.xconfigure.window)) &&
+					    xwin->managed &&
+					    xwin->managed->autoconfigured == VWM_WIN_AUTOCONF_ALL) {
+						/* this is to allow auto-allscreen to succeed in getting a borderless window configured */
+						change_mask &= ~CWBorderWidth;
+					}
+
 					XConfigureWindow(display, event.xconfigurerequest.window, change_mask, &changes);
 					break;
 				}
@@ -3113,8 +3123,9 @@ int main(int argc, char *argv[])
 					   ((vwin = xwin->managed) || (vwin = vwm_win_manage_xwin(xwin)))) {
 						XWindowAttributes	attrs;
 						XWindowChanges		changes = {.x = 0, .y = 0};
+						unsigned		changes_mask = (CWX | CWY);
 						XClassHint		*classhint;
-						const vwm_screen_t	*scr;
+						const vwm_screen_t	*scr = NULL;
 
 						xwin->mapped = 1;	/* note that the client mapped the window */
 
@@ -3163,13 +3174,23 @@ int main(int argc, char *argv[])
 						XGetWMNormalHints(display, event.xmap.window, vwin->hints, &vwin->hints_supplied);
 						XGetWindowAttributes(display, event.xmap.window, &attrs);
 
+
+						/* if the window size is precisely the screen size then directly "allscreen" the window right here */
+						if(!vwin->shelved && scr &&
+						   attrs.width == scr->width &&
+						   attrs.height == scr->height) {
+						   	VWM_TRACE("auto-allscreened window \"%s\"", vwin->xwindow->name);
+							changes.border_width = 0;
+							changes_mask |= CWBorderWidth;
+							vwin->autoconfigured = VWM_WIN_AUTOCONF_ALL;
+						}
+
 						vwin->client.x = changes.x;
 						vwin->client.y = changes.y;
-
 						vwin->client.height = attrs.height;
 						vwin->client.width = attrs.width;
 
-						XConfigureWindow(display, event.xmap.window, (CWX | CWY), &changes);
+						XConfigureWindow(display, event.xmap.window, changes_mask, &changes);
 					}
 				
 					if(domap) {
