@@ -1,7 +1,7 @@
 /*
  *                                  \/\/\
  *
- *  Copyright (C) 2012-2014  Vito Caputo - <vcaputo@gnugeneration.com>
+ *  Copyright (C) 2012-2015  Vito Caputo - <vcaputo@gnugeneration.com>
  *
  *  This program is free software: you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License version 3 as published
@@ -91,6 +91,7 @@ static LIST_HEAD(desktops_mru);							/* global list of all (virtual) desktops i
 static LIST_HEAD(windows_mru);							/* global list of all managed windows kept in MRU order */
 static LIST_HEAD(xwindows);							/* global list of all xwindows kept in the X server stacking order */
 static vwm_window_t		*console = NULL;				/* the console window */
+static vwm_window_t		*focused_origin = NULL;				/* the originating window in a grabbed operation/transaction */
 static vwm_desktop_t		*focused_desktop = NULL;			/* currently focused (virtual) desktop */
 static vwm_window_t		*focused_shelf = NULL;				/* currently focused shelved window */
 static vwm_context_focus_t	focused_context = VWM_CONTEXT_FOCUS_DESKTOP;	/* currently focused context */ 
@@ -1877,6 +1878,7 @@ static vwm_xwindow_t * vwm_win_unmanage(vwm_window_t *vwin)
 	list_del(&vwin->windows_mru);
 
 	if(vwin == console) console = NULL;
+	if(vwin == focused_origin) focused_origin = NULL;
 
 	vwin->xwindow->managed = NULL;
 
@@ -2423,6 +2425,14 @@ static void vwm_keyreleased(Window win, XEvent *keyrelease)
 		case XK_Alt_R:
 		case XK_Alt_L:	/* TODO: actually use the modifier mapping, for me XK_Alt_[LR] is Mod1.  XGetModifierMapping()... */
 			VWM_TRACE("XK_Alt_[LR] released");
+
+			/* aborted? try restore focused_origin */
+			if(key_is_grabbed > 1 && focused_origin) {
+				VWM_TRACE("restoring %p on %p", focused_origin, focused_origin->desktop);
+				vwm_desktop_focus(focused_origin->desktop);
+				vwm_win_focus(focused_origin);
+			}
+
 			/* make the focused window the most recently used */
 			if((vwin = vwm_win_focused())) vwm_win_mru(vwin);
 
@@ -2464,6 +2474,8 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 		repeat_cnt = 0;
 	}
 
+	vwin = vwm_win_focused();
+
 	switch(sym) {
 
 #define launcher(_sym, _label, _argv)\
@@ -2475,6 +2487,11 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 		}
 #include "launchers.def"
 #undef launcher
+		case XK_Alt_L: /* transaction abort */
+		case XK_Alt_R:
+			if(key_is_grabbed) key_is_grabbed++;
+			VWM_TRACE("aborting with origin %p", focused_origin);
+			break;
 
 		case XK_grave: /* toggle shelf visibility */
 			vwm_context_focus(VWM_CONTEXT_FOCUS_OTHER);
@@ -2484,7 +2501,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			do_grab = 1; /* update MRU window on commit (Mod1 release) */
 
 			/* focus the next window, note this doesn't affect MRU yet, that happens on Mod1 release */
-			if((vwin = vwm_win_focused())) {
+			if(vwin) {
 				if(keypress->xkey.state & ShiftMask) {
 					vwm_win_focus_next(vwin, focused_context, VWM_FENCE_MASKED_VIOLATE);
 				} else {
@@ -2500,7 +2517,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 
 			if(keypress->xkey.state & ShiftMask) {
 				/* migrate the focused window with the desktop focus to the most recently used desktop */
-				if((vwin = vwm_win_focused())) vwm_win_migrate(vwin, next_desktop);
+				if(vwin) vwm_win_migrate(vwin, next_desktop);
 			} else {
 				vwm_desktop_focus(next_desktop);
 			}
@@ -2508,7 +2525,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 		}
 
 		case XK_d: /* destroy focused */
-			if((vwin = vwm_win_focused())) {
+			if(vwin) {
 				if(keypress->xkey.state & ShiftMask) {  /* brutally destroy the focused window */
 					XKillClient(display, vwin->xwindow->id);
 				} else { /* kindly destroy the focused window */
@@ -2533,7 +2550,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
 			if(keypress->xkey.state & ShiftMask) {
-				if((vwin = vwm_win_focused())) {
+				if(vwin) {
 					/* migrate the focused window to a newly created virtual desktop, focusing the new desktop simultaneously */
 					vwm_win_migrate(vwin, vwm_desktop_create(NULL));
 				}
@@ -2547,7 +2564,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
 			if(keypress->xkey.state & ShiftMask) {
-				if((vwin = vwm_win_focused()) && vwin->desktop->desktops.prev != &desktops) {
+				if(vwin && vwin->desktop->desktops.prev != &desktops) {
 					/* migrate the focused window with the desktop focus to the previous desktop */
 					vwm_win_migrate(vwin, list_entry(vwin->desktop->desktops.prev, vwm_desktop_t, desktops));
 				}
@@ -2566,7 +2583,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
 			if(keypress->xkey.state & ShiftMask) {
-				if((vwin = vwm_win_focused()) && vwin->desktop->desktops.next != &desktops) {
+				if(vwin && vwin->desktop->desktops.next != &desktops) {
 					/* migrate the focused window with the desktop focus to the next desktop */
 					vwm_win_migrate(vwin, list_entry(vwin->desktop->desktops.next, vwm_desktop_t, desktops));
 				}
@@ -2582,7 +2599,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_k: /* raise or shelve the focused window */
-			if((vwin = vwm_win_focused())) {
+			if(vwin) {
 				if(keypress->xkey.state & ShiftMask) { /* shelf the window and focus the shelf */
 					if(focused_context != VWM_CONTEXT_FOCUS_SHELF) {
 						/* shelve the focused window while focusing the shelf */
@@ -2615,7 +2632,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_j: /* lower or unshelve the focused window */
-			if((vwin = vwm_win_focused())) {
+			if(vwin) {
 				if(keypress->xkey.state & ShiftMask) { /* unshelf the window to the focused desktop, and focus the desktop */
 					if(focused_context == VWM_CONTEXT_FOCUS_SHELF) {
 						/* unshelve the focused window, focus the desktop it went to */
@@ -2633,7 +2650,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_Return: /* (full-screen / restore) focused window */
-			if((vwin = vwm_win_focused())) {
+			if(vwin) {
 				if(vwin->autoconfigured) {
 					vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_NONE);
 				} else {
@@ -2643,11 +2660,11 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_s: /* shelve focused window */
-			if((vwin = vwm_win_focused()) && !vwin->shelved) vwm_win_shelve(vwin);
+			if(vwin && !vwin->shelved) vwm_win_shelve(vwin);
 			break;
 
 		case XK_bracketleft:	/* reconfigure the focused window to occupy the left or top half of the screen or left quarters on repeat */
-			if((vwin = vwm_win_focused())) {
+			if(vwin) {
 				do_grab = 1;
 
 				if(keypress->xkey.state & ShiftMask) {
@@ -2667,7 +2684,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_bracketright:	/* reconfigure the focused window to occupy the right or bottom half of the screen or right quarters on repeat */
-			if((vwin = vwm_win_focused())) {
+			if(vwin) {
 				do_grab = 1;
 
 				if(keypress->xkey.state & ShiftMask) {
@@ -2691,7 +2708,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_apostrophe:	/* reset snowflakes of the focused window, suppressed when not compositing */
-			if((vwin = vwm_win_focused()) && compositing_mode && vwin->xwindow->overlay.snowflakes_cnt) {
+			if(vwin && compositing_mode && vwin->xwindow->overlay.snowflakes_cnt) {
 				vwin->xwindow->overlay.snowflakes_cnt = 0;
 				vwm_comp_damage_win(vwin->xwindow);
 			}
@@ -2711,6 +2728,8 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 
 	/* if what we're doing requests a grab, if not already grabbed, grab keyboard */
 	if(!key_is_grabbed && do_grab) {
+		VWM_TRACE("saving focused_origin of %p", vwin);
+		focused_origin = vwin; /* for returning to on abort */
 		XGrabKeyboard(display, RootWindow(display, screen_num), False, GrabModeAsync, GrabModeAsync, CurrentTime);
 		key_is_grabbed = 1;
 	}

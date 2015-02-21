@@ -140,6 +140,25 @@ XINERAMA:
 
 
 BUGS:
+- The introduction of re-Mod1 origin restoration has made some inconsistencies
+  much more visible; if you enter the shelf and try re-Mod1 to your origin,
+  nothing happens because shelf entry doesn't grab the keyboard / start a
+  "transaction".  It's probably time to revisit the categorizing of which
+  operations are grabbed vs. ungrabbed, because the utility of re-Mod1 is such
+  that unless it always does what you expect it's very unnerving/jarring,
+  because you become dependent on its remembering where you started and when
+  for whatever reason it didn't remember your origin there's a WTF GRR moment,
+  relative to how awesome it is normally.
+
+  Also the current implementation returns you to the origin *window*, if your
+  operation migrated the window and you try to return to origin, you go nowhere
+  because you brought the window with.  In this situation, you probably expected
+  it to return you to your origin *desktop*, and it should probably return you
+  there when the operation was a window migrate, for example.
+
+  Let's live with the minimal changes for now and see where all the UX rough
+  edges are before going too crazy.
+
 - The halfscreen/quarterscreen shortcuts are treated as user-configured windows
   clobbering the cached original client configuration, I don't think this is
   the right thing to do.  I'm leaning towards all the shortcutted

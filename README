@@ -119,6 +119,17 @@ Built-ins:
       Think of the Mod1 release as a transaction commit when coupled with
       the *'d commands.
 
+      If a simultaneous second Mod1 is pressed at any point during a *'d
+      command, the window (and its desktop) focused when the *'d command
+      began will immediately be refocused - but not raised.  This is
+      intentional to simplify the arranging of obscured focused windows.  If
+      you find yourself restored to a desktop full of windows where your
+      focused window is totally obscured/invisible, simply press Mod1-k to
+      raise it if desired.
+
+      At any point during a *'d operation one may (re)press a second Mod1
+      to return to the origin, it is not limited to a single use.
+
 Default launchers (configure by editing launchers.def and rebuild):
 
   Mod1-x              xterm
