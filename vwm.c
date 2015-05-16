@@ -49,28 +49,28 @@
 #include "libvmon/vmon.h"
 #include "vwm.h"
 
-#define WINDOW_BORDER_WIDTH			1
-#define CONSOLE_WM_CLASS			"VWMConsoleXTerm"		/* the class we specify to the "console" xterm */
-#define CONSOLE_SESSION_STRING			"_vwm_console.$DISPLAY"		/* the unique console screen session identifier */
+#define WINDOW_BORDER_WIDTH		1
+#define CONSOLE_WM_CLASS		"VWMConsoleXTerm"			/* the class we specify to the "console" xterm */
+#define CONSOLE_SESSION_STRING		"_vwm_console.$DISPLAY"			/* the unique console screen session identifier */
 
-#define WM_GRAB_MODIFIER			Mod1Mask			/* the modifier for invoking vwm's controls */
+#define WM_GRAB_MODIFIER		Mod1Mask				/* the modifier for invoking vwm's controls */
 										/* Mod4Mask would be the windows key instead of Alt, but there's an assumption
 										 * in the code that grabs are being activated by Alt which complicates changing it,
 										 * search for XGetModifierMapping to see where, feel free to fix it.  Or you can
 										 * just hack the code to expect the appropriate key instead of Alt, I didn't see the
 										 * value of making it modifier mapping aware if it's always Alt for me. */
-#define LAUNCHED_RELATIVE_PRIORITY		10				/* the wm priority plus this is used as the priority of launched processes */
+#define LAUNCHED_RELATIVE_PRIORITY	10					/* the wm priority plus this is used as the priority of launched processes */
 #define HONOR_OVERRIDE_REDIRECT							/* search for HONOR_OVERRIDE_REDIRECT for understanding */
 
 
-#define OVERLAY_MASK_DEPTH			8				/* XXX: 1 would save memory, but Xorg isn't good at it */
-#define OVERLAY_MASK_FORMAT			PictStandardA8
-#define OVERLAY_FIXED_FONT			"-misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1"
-#define OVERLAY_ROW_HEIGHT			15				/* this should always be larger than the font height */
-#define OVERLAY_GRAPH_MIN_WIDTH			200				/* always create graphs at least this large */
-#define OVERLAY_GRAPH_MIN_HEIGHT		(4 * OVERLAY_ROW_HEIGHT)
-#define OVERLAY_ISTHREAD_ARGV			"~"				/* use this string to mark threads in the argv field */
-#define OVERLAY_NOCOMM_ARGV			"#missed it!"			/* use this string to substitute the command when missing in argv field */
+#define OVERLAY_MASK_DEPTH		8					/* XXX: 1 would save memory, but Xorg isn't good at it */
+#define OVERLAY_MASK_FORMAT		PictStandardA8
+#define OVERLAY_FIXED_FONT		"-misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1"
+#define OVERLAY_ROW_HEIGHT		15					/* this should always be larger than the font height */
+#define OVERLAY_GRAPH_MIN_WIDTH		200					/* always create graphs at least this large */
+#define OVERLAY_GRAPH_MIN_HEIGHT	(4 * OVERLAY_ROW_HEIGHT)
+#define OVERLAY_ISTHREAD_ARGV		"~"					/* use this string to mark threads in the argv field */
+#define OVERLAY_NOCOMM_ARGV		"#missed it!"				/* use this string to substitute the command when missing in argv field */
 
 
 typedef enum _vwm_context_focus_t {
@@ -212,9 +212,9 @@ static void snowflake_row(vwm_xwindow_t *xwin, Picture pic, int copy, int row)
 	/* shift up */
 	XRenderChangePicture(display, pic, CPRepeat, &pa_no_repeat);
 	XRenderComposite(display, PictOpSrc, pic, None, pic,
-		0, (1 + row) * OVERLAY_ROW_HEIGHT,									/* src */
-		0, 0,													/* mask */
-		0, row * OVERLAY_ROW_HEIGHT,										/* dest */
+		0, (1 + row) * OVERLAY_ROW_HEIGHT,										/* src */
+		0, 0,														/* mask */
+		0, row * OVERLAY_ROW_HEIGHT,											/* dest */
 		xwin->overlay.width, (1 + xwin->overlay.heirarchy_end) * OVERLAY_ROW_HEIGHT - (1 + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
 	XRenderChangePicture(display, pic, CPRepeat, &pa_repeat);
 
@@ -855,7 +855,7 @@ static void proc_sample_callback(vmon_t *vmon, vmon_proc_t *proc, vwm_xwindow_t 
 static void sample_callback(vmon_t *_vmon)
 {
 	vmon_sys_stat_t	*sys_stat = vmon.stores[VMON_STORE_SYS_STAT];
-	this_total = 	sys_stat->user + sys_stat->nice + sys_stat->system +
+	this_total =	sys_stat->user + sys_stat->nice + sys_stat->system +
 			sys_stat->idle + sys_stat->iowait + sys_stat->irq +
 			sys_stat->softirq + sys_stat->steal + sys_stat->guest;
 
@@ -892,7 +892,7 @@ static float vwm_screen_overlaps_xwin(const vwm_screen_t *scr, vwm_xwindow_t *xw
 
 	if(scr->x_org + scr->width < xwin->attrs.x || scr->x_org > xwin->attrs.x + xwin->attrs.width ||
 	   scr->y_org + scr->height < xwin->attrs.y || scr->y_org > xwin->attrs.y + xwin->attrs.height)
-	   	goto _out;
+		goto _out;
 
 	/* they overlap, by how much? */
 	xover = MIN(scr->x_org + scr->width, xwin->attrs.x + xwin->attrs.width) - MAX(scr->x_org, xwin->attrs.x);
