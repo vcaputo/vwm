@@ -1902,8 +1902,8 @@ static vwm_window_t * vwm_win_manage_xwin(vwm_xwindow_t *xwin)
 	}
 
 	XUngrabButton(display, AnyButton, AnyModifier, xwin->id);
-	XGrabButton(display, AnyButton, Mod1Mask, xwin->id, False, (PointerMotionMask | ButtonPressMask | ButtonReleaseMask), GrabModeAsync, GrabModeAsync, None, None);
-	XGrabKey(display, AnyKey, Mod1Mask, xwin->id, False, GrabModeAsync, GrabModeAsync);
+	XGrabButton(display, AnyButton, WM_GRAB_MODIFIER, xwin->id, False, (PointerMotionMask | ButtonPressMask | ButtonReleaseMask), GrabModeAsync, GrabModeAsync, None, None);
+	XGrabKey(display, AnyKey, WM_GRAB_MODIFIER, xwin->id, False, GrabModeAsync, GrabModeAsync);
 	XSetWindowBorder(display, xwin->id, unfocused_window_border_color.pixel);
 
 	vwin->hints = XAllocSizeHints();
