@@ -2413,6 +2413,19 @@ _fail:
 	return 0;
 }
 
+/* Poll the keyboard state to see if _any_ keys are pressed */
+static int vwm_keyspressed() {
+	int	i;
+	char	state[32];
+
+	XQueryKeymap(display, state);
+
+	for(i = 0; i < sizeof(state); i++) {
+		if(state[i]) return 1;
+	}
+
+	return 0;
+}
 
 /* Called in response to KeyRelease events, for now only interesting for detecting when Mod1 is released termintaing
  * window cycling for application of MRU on the focused window */
@@ -2439,17 +2452,18 @@ static void vwm_keyreleased(Window win, XEvent *keyrelease)
 			/* make the focused desktop the most recently used */
 			if(focused_context == VWM_CONTEXT_FOCUS_DESKTOP && focused_desktop) vwm_desktop_mru(focused_desktop);
 
-			if(key_is_grabbed) {
-				XUngrabKeyboard(display, CurrentTime);
-				XFlush(display);
-				key_is_grabbed = 0;
-				fence_mask = 0;	/* reset the fence mask on release for VWM_FENCE_MASKED_VIOLATE */
-			}
 			break;
 
 		default:
 			VWM_TRACE("Unhandled keycode: %x", (unsigned int)sym);
 			break;
+	}
+
+	if(key_is_grabbed && !vwm_keyspressed()) {
+		XUngrabKeyboard(display, CurrentTime);
+		XFlush(display);
+		key_is_grabbed = 0;
+		fence_mask = 0;	/* reset the fence mask on release for VWM_FENCE_MASKED_VIOLATE */
 	}
 }
 
