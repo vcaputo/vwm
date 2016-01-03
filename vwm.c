@@ -94,7 +94,7 @@ static vwm_window_t		*console = NULL;				/* the console window */
 static vwm_window_t		*focused_origin = NULL;				/* the originating window in a grabbed operation/transaction */
 static vwm_desktop_t		*focused_desktop = NULL;			/* currently focused (virtual) desktop */
 static vwm_window_t		*focused_shelf = NULL;				/* currently focused shelved window */
-static vwm_context_focus_t	focused_context = VWM_CONTEXT_FOCUS_DESKTOP;	/* currently focused context */ 
+static vwm_context_focus_t	focused_context = VWM_CONTEXT_FOCUS_DESKTOP;	/* currently focused context */
 static vwm_compositing_mode_t	compositing_mode = VWM_COMPOSITING_OFF;		/* current compositing mode */
 static int			key_is_grabbed = 0;				/* flag for tracking keyboard grab state */
 static int			priority;					/* scheduling priority of the vwm process, launcher nices relative to this */
@@ -244,8 +244,8 @@ static void allocate_row(vwm_xwindow_t *xwin, Picture pic, int row)
 
 	/* shift everything below the row down */
 	XRenderComposite(display, PictOpSrc, pic, None, pic,
-		0, row * OVERLAY_ROW_HEIGHT, 							/* src */
-		0, 0, 										/* mask */
+		0, row * OVERLAY_ROW_HEIGHT,							/* src */
+		0, 0,										/* mask */
 		0, (1 + row) * OVERLAY_ROW_HEIGHT,						/* dest */
 		xwin->overlay.width, xwin->overlay.height - (1 + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
 	/* fill the space created with transparent pixels */
@@ -399,7 +399,7 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 			XRenderComposite(display, PictOpSrc, overlay_finish_fill, None, xwin->overlay.grapha_picture,
 					 0, 0,							/* src x, y */
 					 0, 0,							/* mask x, y */
-					 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */ 
+					 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
 					 1, OVERLAY_ROW_HEIGHT - 1);
 			XRenderComposite(display, PictOpSrc, overlay_finish_fill, None, xwin->overlay.graphb_picture,
 					 0, 0,							/* src x, y */
@@ -1059,7 +1059,7 @@ static void vwm_draw_logo(void)
 }
 
 
-	/* launching of external processes / X clients */ 
+	/* launching of external processes / X clients */
 
 /* launch a child command specified in argv, mode decides if we wait for the child to exit before returning. */
 typedef enum _vwm_launch_mode_t {
@@ -1296,7 +1296,7 @@ static inline int vwm_xwin_is_visible(vwm_xwindow_t *xwin)
 	int ret = 0;
 
 	if(!xwin->mapped) return 0;
-		
+
 	if(xwin->managed) {
 		switch(focused_context) {
 			case VWM_CONTEXT_FOCUS_SHELF:
@@ -2006,7 +2006,7 @@ static void vwm_comp_damage_event(XDamageNotifyEvent *ev)
 		return;
 	}
 
- 	region = XFixesCreateRegion(display, NULL, 0);
+	region = XFixesCreateRegion(display, NULL, 0);
 	XDamageSubtract(display, xwin->damage, None, region);
 	XFixesTranslateRegion(display, region, xwin->attrs.x + xwin->attrs.border_width, xwin->attrs.y + xwin->attrs.border_width);
 	vwm_comp_damage_add(region);
@@ -2124,7 +2124,7 @@ static void vwm_comp_paint_all()
 			XRenderComposite(display, PictOpOver, xwin->overlay.picture, None, root_buffer,
 					 0, 0, 0, 0,						/* src x,y, maxk x, y */
 					 xwin->attrs.x + xwin->attrs.border_width,		/* dst x */
-					 xwin->attrs.y + xwin->attrs.border_width,		/* dst y */ 
+					 xwin->attrs.y + xwin->attrs.border_width,		/* dst y */
 					 xwin->attrs.width, overlay_composed_height(xwin));	/* w, h */
 		}
 
@@ -2979,7 +2979,7 @@ int main(int argc, char *argv[])
 				if((sys_stat = vmon.stores[VMON_STORE_SYS_STAT])) {
 					last_user_cpu = sys_stat->user;
 					last_system_cpu = sys_stat->system;
-					last_total = 	sys_stat->user +
+					last_total =	sys_stat->user +
 							sys_stat->nice +
 							sys_stat->system +
 							sys_stat->idle +
@@ -3212,7 +3212,7 @@ int main(int argc, char *argv[])
 						if(!vwin->shelved && scr &&
 						   attrs.width == scr->width &&
 						   attrs.height == scr->height) {
-						   	VWM_TRACE("auto-allscreened window \"%s\"", vwin->xwindow->name);
+							VWM_TRACE("auto-allscreened window \"%s\"", vwin->xwindow->name);
 							changes.border_width = 0;
 							changes_mask |= CWBorderWidth;
 							vwin->autoconfigured = VWM_WIN_AUTOCONF_ALL;
@@ -3225,7 +3225,7 @@ int main(int argc, char *argv[])
 
 						XConfigureWindow(display, event.xmap.window, changes_mask, &changes);
 					}
-				
+
 					if(domap) {
 						XMapWindow(display, event.xmap.window);
 						if(vwin && vwin->desktop->focused_window == vwin) {
@@ -3285,6 +3285,6 @@ int main(int argc, char *argv[])
 	/* close connection to server */
 	XFlush(display);
 	XCloseDisplay(display);
- 
+
 	return 0;
 }
