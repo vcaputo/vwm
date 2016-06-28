@@ -3133,6 +3133,7 @@ int main(int argc, char *argv[])
 					if((xwin = vwm_xwin_lookup(event.xmap.window))) {
 						if(xwin->managed && xwin->managed->mapping) {
 							VWM_TRACE("swallowed vwm-induced MapNotify");
+							xwin->managed->mapping = 0;
 						} else {
 							/* some windows like popup dialog boxes bypass MapRequest */
 							xwin->mapped = 1;
