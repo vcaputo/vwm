@@ -170,7 +170,7 @@ static int					prev_sampling_interval = 1, sampling_interval = 1;
 
 	/* some needed prototypes */
 static vwm_xwindow_t * vwm_xwin_lookup(Window win);
-static inline int vwm_xwin_is_visible(vwm_xwindow_t *xwin);
+static inline int vwm_xwin_is_mapped(vwm_xwindow_t *xwin);
 static void vwm_comp_damage_add(XserverRegion damage);
 static vwm_xwindow_t * vwm_win_unmanage(vwm_window_t *vwin);
 static vwm_window_t * vwm_win_manage_xwin(vwm_xwindow_t *xwin);
@@ -846,8 +846,8 @@ static void proc_sample_callback(vmon_t *vmon, vmon_proc_t *proc, vwm_xwindow_t 
 
 	/* render other non-historic things and compose the various layers into an updated overlay */
 	/* this leaves everything ready to be composed with the window contents in paint_all() */
-	/* paint_all() also enters compose_overlay() to update the overlays on windows which become visible (desktop switches) */
-	if(compositing_mode && vwm_xwin_is_visible(xwin)) compose_overlay(xwin);
+	/* paint_all() also enters compose_overlay() to update the overlays on windows which become mapped (desktop switches) */
+	if(compositing_mode && vwm_xwin_is_mapped(xwin)) compose_overlay(xwin);
 }
 
 
@@ -1290,8 +1290,8 @@ static vwm_xwindow_t * vwm_xwin_lookup(Window win)
 }
 
 
-/* determine if a window is visible (vwm-mapped) according to the current context */
-static inline int vwm_xwin_is_visible(vwm_xwindow_t *xwin)
+/* determine if a window is mapped (vwm-mapped) according to the current context */
+static inline int vwm_xwin_is_mapped(vwm_xwindow_t *xwin)
 {
 	int ret = 0;
 
@@ -2065,11 +2065,11 @@ static void vwm_comp_paint_all()
 	list_for_each_entry_prev(xwin, &xwindows, xwindows) {
 		XRectangle	r;
 
-		if(!vwm_xwin_is_visible(xwin)) continue;	/* if invisible skip */
+		if(!vwm_xwin_is_mapped(xwin)) continue;	/* if !mapped skip */
 
-		/* Everything "visible" next goes through an occlusion check.
+		/* Everything mapped next goes through an occlusion check.
 		 * Since the composite extension stops delivery of VisibilityNotify events for redirected windows,
-		 * (it assumes redirected windows should be treated as transparent, and provides no api to alter this assumption)
+		 * (it assumes redirected windows should be treated as part of a potentially transparent composite, and provides no api to alter this assumption)
 		 * we can't simply select the VisibilityNotify events on all windows and cache their visibility state in vwm_xwindow_t then skip
 		 * xwin->state==VisibilityFullyObscured windows here to avoid the cost of pointlessly composing overlays and rendering fully obscured windows :(.
 		 *
@@ -2079,7 +2079,7 @@ static void vwm_comp_paint_all()
 		 * If it doesn't, compose_overlay() is called, and the window's rect is added to the occluded region.
 		 * The occluded knowledge is also cached for the XRenderComposite() loop immediately following, where we skip the rendering of
 		 * occluded windows as well.
-		 * This does technically break SHAPE windows (xeyes, xmms), but only when monitoring is enabled which covers the with rectangular overlays anyways.
+		 * This does technically break SHAPE windows (xeyes, xmms), but only when monitoring is enabled which covers them with rectangular overlays anyways.
 		 */
 		r.x = xwin->attrs.x;
 		r.y = xwin->attrs.y;
@@ -2105,7 +2105,7 @@ static void vwm_comp_paint_all()
 	list_for_each_entry_prev(xwin, &xwindows, xwindows) {
 		XRectangle		r;
 
-		if(!vwm_xwin_is_visible(xwin) || xwin->occluded) continue;	/* if invisible or occluded skip */
+		if(!vwm_xwin_is_mapped(xwin) || xwin->occluded) continue;	/* if !mapped or occluded skip */
 
 		/* these coordinates + dimensions incorporate the border (since XCompositeNameWindowPixmap is being used) */
 		r.x = xwin->attrs.x;
