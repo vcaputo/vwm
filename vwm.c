@@ -114,7 +114,7 @@ static int			screen_num;
 static GC			gc;
 static Atom			wm_delete_atom;
 static Atom			wm_protocols_atom;
-static Atom                     wm_pid_atom;
+static Atom			wm_pid_atom;
 static int			sync_event, sync_error;
 
 	/* Xinerama */
@@ -126,8 +126,8 @@ static int			randr_event, randr_error;
 	/* Compositing */
 static int			composite_event, composite_error, composite_opcode;
 static int			damage_event, damage_error;
-static XserverRegion            combined_damage = None;
-static Picture                  root_picture = None, root_buffer = None;        /* compositing gets double buffered */
+static XserverRegion		combined_damage = None;
+static Picture			root_picture = None, root_buffer = None;        /* compositing gets double buffered */
 static XWindowAttributes	root_attrs;
 static XRenderPictureAttributes pa_inferiors = { .subwindow_mode = IncludeInferiors };
 
@@ -149,7 +149,7 @@ static XRenderColor		overlay_visible_color = { 0xffff, 0xffff, 0xffff, 0xffff },
 				overlay_div_color = { 0x2000, 0x3000, 0x2000, 0x9000},
 				overlay_snowflakes_visible_color = { 0xd000, 0xd000, 0xd000, 0x8000 },
 				overlay_trans_color = {0x00, 0x00, 0x00, 0x00},
-				overlay_grapha_color  = { 0xff00, 0x0000, 0x0000, 0x3000 },	/* ~red */
+				overlay_grapha_color = { 0xff00, 0x0000, 0x0000, 0x3000 },	/* ~red */
 				overlay_graphb_color = { 0x0000, 0xffff, 0xffff, 0x3000 };	/* ~cyan */
 
 	/* libvmon */
@@ -200,7 +200,7 @@ static void snowflake_row(vwm_xwindow_t *xwin, Picture pic, int copy, int row)
 {
 	VWM_TRACE("pid=%i xwin=%p row=%i copy=%i heirarhcy_end=%i", xwin->monitor->pid, xwin, row, copy, xwin->overlay.heirarchy_end);
 
-	if(copy) {
+	if (copy) {
 		/* copy row to tmp */
 		XRenderComposite(display, PictOpSrc, pic, None, xwin->overlay.tmp_picture,
 			0, row * OVERLAY_ROW_HEIGHT,			/* src */
@@ -218,7 +218,7 @@ static void snowflake_row(vwm_xwindow_t *xwin, Picture pic, int copy, int row)
 		xwin->overlay.width, (1 + xwin->overlay.heirarchy_end) * OVERLAY_ROW_HEIGHT - (1 + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
 	XRenderChangePicture(display, pic, CPRepeat, &pa_repeat);
 
-	if(copy) {
+	if (copy) {
 		/* copy tmp to top of snowflakes */
 		XRenderComposite(display, PictOpSrc, xwin->overlay.tmp_picture, None, pic,
 			0, 0,									/* src */
@@ -291,15 +291,15 @@ static void argv2xtext(vmon_proc_t *proc, XTextItem *items, int *nr_items)	/* XX
 	int	i;
 	int	nr = 0;
 
-	if(proc->is_thread) {	/* stick the thread marker at the start of threads */
+	if (proc->is_thread) {	/* stick the thread marker at the start of threads */
 		items[0].nchars = sizeof(OVERLAY_ISTHREAD_ARGV) - 1;
-		items[0].chars =  OVERLAY_ISTHREAD_ARGV;
+		items[0].chars = OVERLAY_ISTHREAD_ARGV;
 		items[0].delta = 4;
 		items[0].font = None;
 		nr++;
 	}
 
-	if(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len) {
+	if (((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len) {
 		items[nr].nchars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len - 1;
 		items[nr].chars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.array;
 	} else {
@@ -311,7 +311,7 @@ static void argv2xtext(vmon_proc_t *proc, XTextItem *items, int *nr_items)	/* XX
 	items[nr].font = None;
 	nr++;
 
-	for(i = 1; i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
+	for (i = 1; i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
 		items[nr].chars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i];
 		items[nr].nchars = strlen(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i]);	/* TODO: libvmon should inform us of the length */
 		items[nr].delta = 4;
@@ -327,7 +327,7 @@ static int count_rows(vmon_proc_t *proc) {
 	int		count = 1; /* XXX maybe suppress proc->is_new? */
 	vmon_proc_t	*child;
 
-	if(!proc->is_thread) {
+	if (!proc->is_thread) {
 		list_for_each_entry(child, &proc->threads, threads) {
 			count += count_rows(child);
 		}
@@ -360,8 +360,8 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 	int			direction, ascent, descent;
 	XCharStruct		charstruct;
 
-	if((*row)) { /* except row 0 (Idle/IOWait graph), handle any stale and new processes/threads */
-		if(proc->is_stale) {
+	if ((*row)) { /* except row 0 (Idle/IOWait graph), handle any stale and new processes/threads */
+		if (proc->is_stale) {
 			/* what to do when a process (subtree) has gone away */
 			static int	in_stale = 0;
 			int		in_stale_entrypoint = 0;
@@ -369,8 +369,8 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 			/* I snowflake the stale processes from the leaves up for a more intuitive snowflake order...
 			 * (I expect the command at the root of the subtree to appear at the top of the snowflakes...) */
 			/* This does require that I do a separate forward recursion to determine the number of rows
-			 * so I  can correctly snowflake in reverse */
-			if(!in_stale) {
+			 * so I can correctly snowflake in reverse */
+			if (!in_stale) {
 				VWM_TRACE("entered stale at xwin=%p depth=%i row=%i", xwin, *depth, *row);
 				in_stale_entrypoint = in_stale = 1;
 				(*row) += count_rows(proc) - 1;
@@ -382,7 +382,7 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 				(*row)--;
 			}
 
-			if(!proc->is_thread) {
+			if (!proc->is_thread) {
 				list_for_each_entry_prev(child, &proc->threads, threads) {
 					draw_overlay(xwin, child, depth, row);
 					(*row)--;
@@ -423,13 +423,13 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 
 			xwin->overlay.heirarchy_end--;
 
-			if(in_stale_entrypoint) {
+			if (in_stale_entrypoint) {
 				VWM_TRACE("exited stale at xwin=%p depth=%i row=%i", xwin, *depth, *row);
 				in_stale = 0;
 			}
 
 			return;
-		} else if(proc->is_new) {
+		} else if (proc->is_new) {
 			/* what to do when a process has been introduced */
 			VWM_TRACE("%i is new", proc->pid);
 
@@ -443,13 +443,13 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 	}
 
 /* CPU utilization graphs */
-	if(!(*row)) {
+	if (!(*row)) {
 		/* XXX: sortof kludged in IOWait and Idle % @ row 0 */
 		stime_delta = iowait_delta;
 		utime_delta = idle_delta;
 	} else {
 		/* use the generation number to avoid recomputing this stuff for callbacks recurring on the same process in the same sample */
-		if(proc_ctxt->generation != vmon.generation) {
+		if (proc_ctxt->generation != vmon.generation) {
 			proc_ctxt->stime_delta = proc_stat->stime - proc_ctxt->last_stime;
 			proc_ctxt->utime_delta = proc_stat->utime - proc_ctxt->last_utime;
 			proc_ctxt->last_utime = proc_stat->utime;
@@ -458,7 +458,7 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 			proc_ctxt->generation = vmon.generation;
 		}
 
-		if(proc->is_new) {
+		if (proc->is_new) {
 			/* we need a minimum of two samples before we can compute a delta to plot,
 			 * so we suppress that and instead mark the start of monitoring with an impossible 100% of both graph contexts, a starting line. */
 			stime_delta = utime_delta = total_delta;
@@ -474,8 +474,8 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 
 	/* round up to 1 pixel when the scaled result is a fraction less than 1,
 	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
-	if(stime_delta && !a_height) a_height = 1;
-	if(utime_delta && !b_height) b_height = 1;
+	if (stime_delta && !a_height) a_height = 1;
+	if (utime_delta && !b_height) b_height = 1;
 
 	/* draw the two bars for this sample at the current phase in the graphs, note the first is ceiling-based, second floor-based */
 	XRenderFillRectangle(display, PictOpSrc, xwin->overlay.grapha_picture, &overlay_visible_color,
@@ -485,9 +485,9 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 		xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT + (OVERLAY_ROW_HEIGHT - b_height) - 1,	/* dst x, y */
 		1, b_height);										/* dst w, h */
 
-	if(!(*row)) {
+	if (!(*row)) {
 		/* here's where the Idle/IOWait row drawing concludes */
-		if(compositing_mode) {
+		if (compositing_mode) {
 			snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(sampling_interval < 0 ? 0 : 1 / sampling_intervals[sampling_interval]), &str_len);
 			/* TODO: I clear and redraw this row every time, which is unnecessary, small optimization would be to only do so when:
 			 * - overlay resized, and then constrain the clear to the affected width
@@ -508,9 +508,9 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 	}
 
 /* process heirarchy text and accompanying per-process details like wchan/pid/state... */
-	if(compositing_mode) {	/* this stuff can be skipped when monitors aren't visible */
+	if (compositing_mode) {	/* this stuff can be skipped when monitors aren't visible */
 		/* TODO: make the columns interactively configurable @ runtime */
-		if(!proc->is_new) {
+		if (!proc->is_new) {
 		/* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
 			XRenderFillRectangle(display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
 				0, (*row) * OVERLAY_ROW_HEIGHT,			/* dst x, y */
@@ -518,7 +518,7 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 		}
 
 		/* put the process' wchan, state, and PID columns @ the far right */
-		if(proc->is_thread || list_empty(&proc->threads)) {	/* only threads or non-threaded processes include the wchan and state */
+		if (proc->is_thread || list_empty(&proc->threads)) {	/* only threads or non-threaded processes include the wchan and state */
 			snprintf(str, sizeof(str), "   %.*s %5i %c %n",
 				proc_stat->wchan.len,
 				proc_stat->wchan.len == 1 && proc_stat->wchan.array[0] == '0' ? "-" : proc_stat->wchan.array,
@@ -531,14 +531,14 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 
 		XTextExtents(overlay_font, str, str_len, &direction, &ascent, &descent, &charstruct);
 
-		/* the process' comm label indented according to depth, followed with their respective argv's  */
+		/* the process' comm label indented according to depth, followed with their respective argv's */
 		argv2xtext(proc, items, &nr_items);
 		XDrawText(display, xwin->overlay.text_pixmap, text_gc,
 			  (*depth) * (OVERLAY_ROW_HEIGHT / 2), ((*row) + 1) * OVERLAY_ROW_HEIGHT - 3,			/* dst x, y */
 			  items, nr_items);
 
 		/* ensure the area for the rest of the stuff is cleared, we don't put much text into thread rows so skip it for those. */
-		if(!proc->is_thread) {
+		if (!proc->is_thread) {
 			XRenderFillRectangle(display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
 				xwin->attrs.width - charstruct.width, (*row) * OVERLAY_ROW_HEIGHT,			/* dst x,y */
 				xwin->overlay.width - (xwin->attrs.width - charstruct.width), OVERLAY_ROW_HEIGHT);	/* dst w,h */
@@ -549,7 +549,7 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 			    str, str_len);
 
 		/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
-		if(proc != xwin->monitor) {
+		if (proc != xwin->monitor) {
 			vmon_proc_t		*ancestor, *sibling, *last_sibling = NULL;
 			struct list_head	*rem;
 			int			needs_tee = 0;
@@ -560,14 +560,14 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 
 			/* walk up the ancestors until reaching xwin->monitor, any ancestors we encounter which have more siblings we draw a vertical bar for */
 			/* this draws the |'s in something like:  | |   |    | comm */
-			for(sub = 1, ancestor = proc->parent; ancestor && ancestor != xwin->monitor; ancestor = ancestor->parent) {
+			for (sub = 1, ancestor = proc->parent; ancestor && ancestor != xwin->monitor; ancestor = ancestor->parent) {
 				sub++;
 				bar_x = ((*depth) - sub) * (OVERLAY_ROW_HEIGHT / 2) + 4;
 				bar_y = ((*row) + 1) * OVERLAY_ROW_HEIGHT;
 
 				/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
-				for(rem = ancestor->siblings.next; rem != &ancestor->parent->children; rem = rem->next) {
-					if(!(list_entry(rem, vmon_proc_t, siblings)->is_stale)) {
+				for (rem = ancestor->siblings.next; rem != &ancestor->parent->children; rem = rem->next) {
+					if (!(list_entry(rem, vmon_proc_t, siblings)->is_stale)) {
 						XDrawLine(display, xwin->overlay.text_pixmap, text_gc,
 							  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
 							  bar_x, bar_y);			/* dst x2, y2 (vertical line) */
@@ -585,26 +585,26 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 
 			/* find the last sibling (this has to be done due to the potential for stale siblings at the tail, and we'd rather not repeatedly check for it) */
 			list_for_each_entry(sibling, &proc->parent->children, siblings) {
-				if(!sibling->is_stale) last_sibling = sibling;
+				if (!sibling->is_stale) last_sibling = sibling;
 			}
 
 			/* now look for siblings with non-stale children to determine if a tee is needed, ignoring the last sibling */
 			list_for_each_entry(sibling, &proc->parent->children, siblings) {
 				/* skip stale siblings, they aren't interesting as they're invisible, and the last sibling has no bearing on wether we tee or not. */
-				if(sibling->is_stale || sibling == last_sibling) continue;
+				if (sibling->is_stale || sibling == last_sibling) continue;
 
 				/* if any of the other siblings have children which are not stale, put a tee in front of our name, but ignore stale children */
 				list_for_each_entry(child, &sibling->children, siblings) {
-					if(!child->is_stale) {
+					if (!child->is_stale) {
 						needs_tee = 1;
 						break;
 					}
 				}
 
 				/* if we still don't think we need a tee, check if there are threads */
-				if(!needs_tee) {
+				if (!needs_tee) {
 					list_for_each_entry(child, &sibling->threads, threads) {
-						if(!child->is_stale) {
+						if (!child->is_stale) {
 							needs_tee = 1;
 							break;
 						}
@@ -612,11 +612,11 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 				}
 
 				/* found a tee is necessary, all that's left is to determine if the tee is a corner and draw it accordingly, stopping the search. */
-				if(needs_tee) {
+				if (needs_tee) {
 					bar_x = ((*depth) - 1) * (OVERLAY_ROW_HEIGHT / 2) + 4;
 
 					/* if we're the last sibling, corner the tee by shortening the vbar */
-					if(proc == last_sibling) {
+					if (proc == last_sibling) {
 						XDrawLine(display, xwin->overlay.text_pixmap, text_gc,
 							  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
 							  bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
@@ -642,7 +642,7 @@ static void draw_overlay(vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int
 
 	/* recur any threads first, then any children processes */
 	(*depth)++;
-	if(!proc->is_thread) {	/* XXX: the threads member serves as the list head only when not a thread */
+	if (!proc->is_thread) {	/* XXX: the threads member serves as the list head only when not a thread */
 		list_for_each_entry(child, &proc->threads, threads) {
 			draw_overlay(xwin, child, depth, row);
 		}
@@ -660,7 +660,7 @@ static void maintain_overlay(vwm_xwindow_t *xwin)
 {
 	int	row = 0, depth = 0;
 
-	if(!xwin->monitor || !xwin->monitor->stores[VMON_STORE_PROC_STAT]) return;
+	if (!xwin->monitor || !xwin->monitor->stores[VMON_STORE_PROC_STAT]) return;
 
 	/* TODO:
 	 * I side effect of responding to window resizes in this function is there's a latency proportional to the current sample_interval.
@@ -675,13 +675,13 @@ static void maintain_overlay(vwm_xwindow_t *xwin)
 	 */
 
 	/* if the window is larger than the overlays currently are, enlarge them */
-	if(xwin->attrs.width > xwin->overlay.width || xwin->attrs.height > xwin->overlay.height) {
+	if (xwin->attrs.width > xwin->overlay.width || xwin->attrs.height > xwin->overlay.height) {
 		vwm_overlay_t	existing;
 		Pixmap		pixmap;
 
 		existing = xwin->overlay;
 
-		xwin->overlay.width =  MAX(xwin->overlay.width, MAX(xwin->attrs.width, OVERLAY_GRAPH_MIN_WIDTH));
+		xwin->overlay.width = MAX(xwin->overlay.width, MAX(xwin->attrs.width, OVERLAY_GRAPH_MIN_WIDTH));
 		xwin->overlay.height = MAX(xwin->overlay.height, MAX(xwin->attrs.height, OVERLAY_GRAPH_MIN_HEIGHT));
 
 		pixmap = XCreatePixmap(display, RootWindow(display, screen_num), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
@@ -712,7 +712,7 @@ static void maintain_overlay(vwm_xwindow_t *xwin)
 		xwin->overlay.picture = XRenderCreatePicture(display, pixmap, XRenderFindStandardFormat(display, PictStandardARGB32), 0, NULL);
 		XFreePixmap(display, pixmap);
 
-		if(existing.width) {
+		if (existing.width) {
 			/* XXX: note the graph pictures are copied from their current phase in the x dimension */
 			XRenderComposite(display, PictOpSrc, existing.grapha_picture, None, xwin->overlay.grapha_picture,
 				existing.phase, 0,	/* src x, y */
@@ -776,9 +776,9 @@ static void compose_overlay(vwm_xwindow_t *xwin)
 	XRectangle	damage;
 	int		height;
 
-	if(!xwin->overlay.width) return; /* prevent winning race with maintain_overlay() and using an unready overlay... */
+	if (!xwin->overlay.width) return; /* prevent winning race with maintain_overlay() and using an unready overlay... */
 
-	if(xwin->overlay.gen_last_composed == xwin->monitor->generation) return; /* noop if no sampling occurred since last compose */
+	if (xwin->overlay.gen_last_composed == xwin->monitor->generation) return; /* noop if no sampling occurred since last compose */
 	xwin->overlay.gen_last_composed = xwin->monitor->generation; /* remember this generation */
 
 	//VWM_TRACE("composing %p", xwin);
@@ -847,7 +847,7 @@ static void proc_sample_callback(vmon_t *vmon, vmon_proc_t *proc, vwm_xwindow_t 
 	/* render other non-historic things and compose the various layers into an updated overlay */
 	/* this leaves everything ready to be composed with the window contents in paint_all() */
 	/* paint_all() also enters compose_overlay() to update the overlays on windows which become mapped (desktop switches) */
-	if(compositing_mode && vwm_xwin_is_mapped(xwin)) compose_overlay(xwin);
+	if (compositing_mode && vwm_xwin_is_mapped(xwin)) compose_overlay(xwin);
 }
 
 
@@ -876,7 +876,7 @@ static void vmon_ctor_cb(vmon_t *vmon, vmon_proc_t *proc)
 static void vmon_dtor_cb(vmon_t *vmon, vmon_proc_t *proc)
 {
 	VWM_TRACE("proc->pid=%i", proc->pid);
-	if(proc->foo) {
+	if (proc->foo) {
 		free(proc->foo);
 		proc->foo = NULL;
 	}
@@ -890,8 +890,8 @@ static float vwm_screen_overlaps_xwin(const vwm_screen_t *scr, vwm_xwindow_t *xw
 {
 	float	pct = 0, xover = 0, yover = 0;
 
-	if(scr->x_org + scr->width < xwin->attrs.x || scr->x_org > xwin->attrs.x + xwin->attrs.width ||
-	   scr->y_org + scr->height < xwin->attrs.y || scr->y_org > xwin->attrs.y + xwin->attrs.height)
+	if (scr->x_org + scr->width < xwin->attrs.x || scr->x_org > xwin->attrs.x + xwin->attrs.width ||
+	    scr->y_org + scr->height < xwin->attrs.y || scr->y_org > xwin->attrs.y + xwin->attrs.height)
 		goto _out;
 
 	/* they overlap, by how much? */
@@ -924,12 +924,12 @@ static const vwm_screen_t * vwm_screen_find(vwm_screen_rel_t rel, ...)
 	faux.width = WidthOfScreen(DefaultScreenOfDisplay(display));
 	faux.height = HeightOfScreen(DefaultScreenOfDisplay(display));
 
-	if(!xinerama_screens) goto _out;
+	if (!xinerama_screens) goto _out;
 
 #define for_each_screen(_tmp) \
-	for(i = 0, _tmp = xinerama_screens; i < xinerama_screens_cnt; _tmp = &xinerama_screens[++i])
+	for (i = 0, _tmp = xinerama_screens; i < xinerama_screens_cnt; _tmp = &xinerama_screens[++i])
 
-	switch(rel) {
+	switch (rel) {
 		case VWM_SCREEN_REL_XWIN: {
 			va_list		ap;
 			vwm_xwindow_t	*xwin;
@@ -941,7 +941,7 @@ static const vwm_screen_t * vwm_screen_find(vwm_screen_rel_t rel, ...)
 
 			for_each_screen(scr) {
 				this_pct = vwm_screen_overlaps_xwin(scr, xwin);
-				if(this_pct > best_pct) {
+				if (this_pct > best_pct) {
 					best = scr;
 					best_pct = this_pct;
 				}
@@ -958,8 +958,8 @@ static const vwm_screen_t * vwm_screen_find(vwm_screen_rel_t rel, ...)
 			XQueryPointer(display, RootWindow(display, screen_num), &root, &child, &root_x, &root_y, &win_x, &win_y, &mask);
 
 			for_each_screen(scr) {
-				if(root_x >= scr->x_org && root_x < scr->x_org + scr->width &&
-				   root_y >= scr->y_org && root_y < scr->y_org + scr->height) {
+				if (root_x >= scr->x_org && root_x < scr->x_org + scr->width &&
+				    root_y >= scr->y_org && root_y < scr->y_org + scr->height) {
 					best = scr;
 					break;
 				}
@@ -971,10 +971,10 @@ static const vwm_screen_t * vwm_screen_find(vwm_screen_rel_t rel, ...)
 			short	x1 = MAXSHORT, y1 = MAXSHORT, x2 = MINSHORT, y2 = MINSHORT;
 			/* find the smallest x_org and y_org, the highest x_org + width and y_org + height, those are the two corners of the total rect */
 			for_each_screen(scr) {
-				if(scr->x_org < x1) x1 = scr->x_org;
-				if(scr->y_org < y1) y1 = scr->y_org;
-				if(scr->x_org + scr->width > x2) x2 = scr->x_org + scr->width;
-				if(scr->y_org + scr->height > y2) y2 = scr->y_org + scr->height;
+				if (scr->x_org < x1) x1 = scr->x_org;
+				if (scr->y_org < y1) y1 = scr->y_org;
+				if (scr->x_org + scr->width > x2) x2 = scr->x_org + scr->width;
+				if (scr->y_org + scr->height > y2) y2 = scr->y_org + scr->height;
 			}
 			faux.x_org = x1;
 			faux.y_org = y1;
@@ -998,13 +998,13 @@ static int vwm_screen_is_empty(const vwm_screen_t *scr)
 	int		is_empty = 1;
 
 	list_for_each_entry(xwin, &xwindows, xwindows) {
-		if(!xwin->mapped) continue;
-		if(!xwin->managed || (xwin->managed->desktop == focused_desktop && !xwin->managed->shelved && !xwin->managed->configuring)) {
+		if (!xwin->mapped) continue;
+		if (!xwin->managed || (xwin->managed->desktop == focused_desktop && !xwin->managed->shelved && !xwin->managed->configuring)) {
 			/* XXX: it may make more sense to see what %age of the screen is overlapped by windows, and consider it empty if < some % */
 			/*      This is just seeing if any window is predominantly within the specified screen, the rationale being if you had a focusable
 			 *      window on the screen you would have used the keyboard to make windows go there; this function is only used in determining
 			 *      wether a new window should go where the pointer is or not. */
-			if(vwm_screen_overlaps_xwin(scr, xwin) >= 0.05) {
+			if (vwm_screen_overlaps_xwin(scr, xwin) >= 0.05) {
 				is_empty = 0;
 				break;
 			}
@@ -1036,9 +1036,9 @@ static void vwm_draw_logo(void)
 	height /= 3;
 
 	/* the logo gets shrunken vertically until it's essentially a flat line */
-	while(height -= 2) {
+	while (height -= 2) {
 		/* scale and center the points to the screen size */
-		for(i = 0; i < VWM_LOGO_POINTS; i++) {
+		for (i = 0; i < VWM_LOGO_POINTS; i++) {
 			points[i].x = xoff + (i * .2 * (float)width);
 			points[i].y = (i % 2 * (float)height) + yoff;
 		}
@@ -1070,13 +1070,13 @@ typedef enum _vwm_launch_mode_t {
 static void vwm_launch(char **argv, vwm_launch_mode_t mode)
 {
 	/* XXX: in BG mode I double fork and let init inherit the orphan so I don't have to collect the return status */
-	if(mode == VWM_LAUNCH_MODE_FG || !fork()) {
-		if(!fork()) {
+	if (mode == VWM_LAUNCH_MODE_FG || !fork()) {
+		if (!fork()) {
 			/* child */
 			setpriority(PRIO_PROCESS, getpid(), priority + LAUNCHED_RELATIVE_PRIORITY);
 			execvp(argv[0], argv);
 		}
-		if(mode == VWM_LAUNCH_MODE_BG) exit(0);
+		if (mode == VWM_LAUNCH_MODE_BG) exit(0);
 	}
 	wait(NULL); /* TODO: could wait for the specific pid, particularly in FG mode ... */
 }
@@ -1089,12 +1089,12 @@ static int vwm_context_focus(vwm_context_focus_t desired_context)
 {
 	vwm_context_focus_t	entry_context = focused_context;
 
-	switch(focused_context) {
+	switch (focused_context) {
 		vwm_xwindow_t	*xwin;
 		vwm_window_t	*vwin;
 
 		case VWM_CONTEXT_FOCUS_SHELF:
-			if(desired_context == VWM_CONTEXT_FOCUS_SHELF) break;
+			if (desired_context == VWM_CONTEXT_FOCUS_SHELF) break;
 
 			/* desired == DESKTOP && focused == SHELF */
 
@@ -1104,14 +1104,14 @@ static int vwm_context_focus(vwm_context_focus_t desired_context)
 
 			/* map the focused desktop, from the top of the stack down */
 			list_for_each_entry_prev(xwin, &xwindows, xwindows) {
-				if(!(vwin = xwin->managed)) continue;
-				if(vwin->desktop == focused_desktop && !vwin->shelved) {
+				if (!(vwin = xwin->managed)) continue;
+				if (vwin->desktop == focused_desktop && !vwin->shelved) {
 					VWM_TRACE("Mapping desktop window \"%s\"", xwin->name);
 					vwm_win_map(vwin);
 				}
 			}
 
-			if(focused_desktop->focused_window) {
+			if (focused_desktop->focused_window) {
 				VWM_TRACE("Focusing \"%s\"", focused_desktop->focused_window->xwindow->name);
 				XSetInputFocus(display, focused_desktop->focused_window->xwindow->id, RevertToPointerRoot, CurrentTime);
 			}
@@ -1121,16 +1121,16 @@ static int vwm_context_focus(vwm_context_focus_t desired_context)
 
 		case VWM_CONTEXT_FOCUS_DESKTOP:
 			/* unmap everything, map the shelf */
-			if(desired_context == VWM_CONTEXT_FOCUS_DESKTOP) break;
+			if (desired_context == VWM_CONTEXT_FOCUS_DESKTOP) break;
 
 			/* desired == SHELF && focused == DESKTOP */
 
 			/* there should be a focused shelf if the shelf contains any windows, we NOOP the switch if the shelf is empty. */
-			if(focused_shelf) {
+			if (focused_shelf) {
 				/* unmap everything on the current desktop */
 				list_for_each_entry(xwin, &xwindows, xwindows) {
-					if(!(vwin = xwin->managed)) continue;
-					if(vwin->desktop == focused_desktop) {
+					if (!(vwin = xwin->managed)) continue;
+					if (vwin->desktop == focused_desktop) {
 						VWM_TRACE("Unmapping desktop window \"%s\"", xwin->name);
 						vwm_win_unmap(vwin);
 					}
@@ -1174,28 +1174,28 @@ static int vwm_desktop_focus(vwm_desktop_t *desktop)
 	XSync(display, False);
 
 	/* if the context switched and the focused desktop is the desired desktop there's nothing else to do */
-	if((vwm_context_focus(VWM_CONTEXT_FOCUS_DESKTOP) && focused_desktop != desktop) || focused_desktop != desktop) {
+	if ((vwm_context_focus(VWM_CONTEXT_FOCUS_DESKTOP) && focused_desktop != desktop) || focused_desktop != desktop) {
 		vwm_xwindow_t	*xwin;
 		vwm_window_t	*vwin;
 
 		/* unmap the windows on the currently focused desktop, map those on the newly focused one */
 		list_for_each_entry(xwin, &xwindows, xwindows) {
-			if(!(vwin = xwin->managed) || vwin->shelved) continue;
-			if(vwin->desktop == focused_desktop) vwm_win_unmap(vwin);
+			if (!(vwin = xwin->managed) || vwin->shelved) continue;
+			if (vwin->desktop == focused_desktop) vwm_win_unmap(vwin);
 		}
 
 		XFlush(display);
 
 		list_for_each_entry_prev(xwin, &xwindows, xwindows) {
-			if(!(vwin = xwin->managed) || vwin->shelved) continue;
-			if(vwin->desktop == desktop) vwm_win_map(vwin);
+			if (!(vwin = xwin->managed) || vwin->shelved) continue;
+			if (vwin->desktop == desktop) vwm_win_map(vwin);
 		}
 
 		focused_desktop = desktop;
 	}
 
 	/* directly focus the desktop's focused window if there is one, we don't use vwm_win_focus() intentionally XXX */
-	if(focused_desktop->focused_window) {
+	if (focused_desktop->focused_window) {
 		VWM_TRACE("Focusing \"%s\"", focused_desktop->focused_window->xwindow->name);
 		XSetInputFocus(display, focused_desktop->focused_window->xwindow->id, RevertToPointerRoot, CurrentTime);
 	}
@@ -1212,7 +1212,7 @@ static vwm_desktop_t * vwm_desktop_create(char *name)
 	vwm_desktop_t	*desktop;
 
 	desktop = malloc(sizeof(vwm_desktop_t));
-	if(desktop == NULL) {
+	if (desktop == NULL) {
 		VWM_PERROR("Failed to allocate desktop");
 		goto _fail;
 	}
@@ -1236,14 +1236,14 @@ static void vwm_desktop_destroy(vwm_desktop_t *desktop)
 	/* silently refuse to destroy a desktop having windows (for now) */
 	/* there's _always_ a focused window on a desktop having mapped windows */
 	/* also silently refuse to destroy the last desktop (for now) */
-	if(desktop->focused_window || (desktop->desktops.next == desktop->desktops.prev)) return;
+	if (desktop->focused_window || (desktop->desktops.next == desktop->desktops.prev)) return;
 
 	/* focus the MRU desktop that isn't this one if we're the focused desktop */
-	if(desktop == focused_desktop) {
+	if (desktop == focused_desktop) {
 		vwm_desktop_t	*next_desktop;
 
 		list_for_each_entry(next_desktop, &desktops_mru, desktops_mru) {
-			if(next_desktop != desktop) {
+			if (next_desktop != desktop) {
 				vwm_desktop_focus(next_desktop);
 				break;
 			}
@@ -1280,7 +1280,7 @@ static vwm_xwindow_t * vwm_xwin_lookup(Window win)
 	vwm_xwindow_t	*tmp, *xwin = NULL;
 
 	list_for_each_entry(tmp, &xwindows, xwindows) {
-		if(tmp->id == win) {
+		if (tmp->id == win) {
 			xwin = tmp;
 			break;
 		}
@@ -1295,16 +1295,16 @@ static inline int vwm_xwin_is_mapped(vwm_xwindow_t *xwin)
 {
 	int ret = 0;
 
-	if(!xwin->mapped) return 0;
+	if (!xwin->mapped) return 0;
 
-	if(xwin->managed) {
-		switch(focused_context) {
+	if (xwin->managed) {
+		switch (focused_context) {
 			case VWM_CONTEXT_FOCUS_SHELF:
-				if(focused_shelf == xwin->managed) ret = xwin->mapped;
+				if (focused_shelf == xwin->managed) ret = xwin->mapped;
 				break;
 
 			case VWM_CONTEXT_FOCUS_DESKTOP:
-				if(focused_desktop == xwin->managed->desktop && !xwin->managed->shelved) ret = xwin->mapped;
+				if (focused_desktop == xwin->managed->desktop && !xwin->managed->shelved) ret = xwin->mapped;
 				break;
 
 			default:
@@ -1350,10 +1350,10 @@ static void vwm_xwin_monitor(vwm_xwindow_t *xwin)
 	long		*foo = NULL;
 	int		pid = -1;
 
-	if(xwin->monitor) return;
+	if (xwin->monitor) return;
 
-	if(XGetWindowProperty(display, xwin->id, wm_pid_atom, 0, 1, False, XA_CARDINAL,
-			      &type, &fmt, &nitems, &nbytes, (unsigned char **)&foo) != Success || !foo) return;
+	if (XGetWindowProperty(display, xwin->id, wm_pid_atom, 0, 1, False, XA_CARDINAL,
+			       &type, &fmt, &nitems, &nbytes, (unsigned char **)&foo) != Success || !foo) return;
 
 	pid = *foo;
 	XFree(foo);
@@ -1383,18 +1383,18 @@ static vwm_xwindow_t * vwm_xwin_create(Window win, vwm_grab_mode_t grabbed)
 	VWM_TRACE("creating %#x", (unsigned int)win);
 
 	/* prevent races */
-	if(!grabbed) {
+	if (!grabbed) {
 		XGrabServer(display);
 		XSync(display, False);
 	}
 
 	/* verify the window still exists */
-	if(!XGetWindowAttributes(display, win, &attrs)) goto _out_grabbed;
+	if (!XGetWindowAttributes(display, win, &attrs)) goto _out_grabbed;
 
 	/* don't create InputOnly windows */
-	if(attrs.class == InputOnly) goto _out_grabbed;
+	if (attrs.class == InputOnly) goto _out_grabbed;
 
-	if(!(xwin = (vwm_xwindow_t *)malloc(sizeof(vwm_xwindow_t)))) {
+	if (!(xwin = (vwm_xwindow_t *)malloc(sizeof(vwm_xwindow_t)))) {
 		VWM_PERROR("Failed to allocate xwin");
 		goto _out_grabbed;
 	}
@@ -1417,10 +1417,10 @@ static vwm_xwindow_t * vwm_xwin_create(Window win, vwm_grab_mode_t grabbed)
 
 	/* we must track the mapped-by-client state of the window independent of managed vs. unmanaged because
 	 * in the case of override_redirect windows they may be unmapped (invisible) or mapped (visible) like menus without being managed.
-	 * otherwise we could just use !xwin.managed to indicate unmapped, which is more vwm2-like, but insufficient when compositing.  */
+	 * otherwise we could just use !xwin.managed to indicate unmapped, which is more vwm2-like, but insufficient when compositing. */
 	xwin->mapped = (attrs.map_state != IsUnmapped);
 
-	if(compositing_mode) {
+	if (compositing_mode) {
 		vwm_xwin_bind_namewindow(xwin);
 		xwin->damage = XDamageCreate(display, xwin->id, XDamageReportNonEmpty);
 	}
@@ -1428,12 +1428,12 @@ static vwm_xwindow_t * vwm_xwin_create(Window win, vwm_grab_mode_t grabbed)
 	list_add_tail(&xwin->xwindows, &xwindows);	/* created windows are always placed on the top of the stacking order */
 
 #ifdef HONOR_OVERRIDE_REDIRECT
-	if(!attrs.override_redirect && xwin->mapped) vwm_win_manage_xwin(xwin);
+	if (!attrs.override_redirect && xwin->mapped) vwm_win_manage_xwin(xwin);
 #else
-	if(xwin->mapped) vwm_win_manage_xwin(xwin);
+	if (xwin->mapped) vwm_win_manage_xwin(xwin);
 #endif
 _out_grabbed:
-	if(!grabbed) XUngrabServer(display);
+	if (!grabbed) XUngrabServer(display);
 
 	return xwin;
 }
@@ -1446,14 +1446,14 @@ static void vwm_xwin_destroy(vwm_xwindow_t *xwin)
 	XGrabServer(display);
 	XSync(display, False);
 
-	if(xwin->managed) vwm_win_unmanage(xwin->managed);
+	if (xwin->managed) vwm_win_unmanage(xwin->managed);
 
 	list_del(&xwin->xwindows);
 
-	if(xwin->monitor) vmon_proc_unmonitor(&vmon, xwin->monitor, (void (*)(vmon_t *, vmon_proc_t *, void *))proc_sample_callback, xwin);
-	if(xwin->name) XFree(xwin->name);
+	if (xwin->monitor) vmon_proc_unmonitor(&vmon, xwin->monitor, (void (*)(vmon_t *, vmon_proc_t *, void *))proc_sample_callback, xwin);
+	if (xwin->name) XFree(xwin->name);
 
-	if(compositing_mode) {
+	if (compositing_mode) {
 		vwm_xwin_unbind_namewindow(xwin);
 		XDamageDestroy(display, xwin->damage);
 	}
@@ -1476,18 +1476,18 @@ void vwm_xwin_restack(vwm_xwindow_t *xwin, Window new_above)
 	}
 	fprintf(stderr, "\n");
 #endif
-	if(xwin->xwindows.prev != &xwindows) {
+	if (xwin->xwindows.prev != &xwindows) {
 		old_above = list_entry(xwin->xwindows.prev, vwm_xwindow_t, xwindows)->id;
 	} else {
 		old_above = None;
 	}
 
-	if(old_above != new_above) {
+	if (old_above != new_above) {
 		vwm_xwindow_t	*new;
 
-		if(new_above == None) {				/* to the bottom of the stack, so just above the &xwindows head */
+		if (new_above == None) {				/* to the bottom of the stack, so just above the &xwindows head */
 			list_move(&xwin->xwindows, &xwindows);
-		} else if((new = vwm_xwin_lookup(new_above))) {	/* to just above new_above */
+		} else if ((new = vwm_xwin_lookup(new_above))) {	/* to just above new_above */
 			list_move(&xwin->xwindows, &new->xwindows);
 		}
 	}
@@ -1506,7 +1506,7 @@ void vwm_xwin_restack(vwm_xwindow_t *xwin, Window new_above)
 /* unmap the specified window and set the unmapping-in-progress flag so we can discard vwm-generated UnmapNotify events */
 static void vwm_win_unmap(vwm_window_t *vwin)
 {
-	if(!vwin->xwindow->mapped) {
+	if (!vwin->xwindow->mapped) {
 		VWM_TRACE("inhibited unmap of \"%s\", not mapped by client", vwin->xwindow->name);
 		return;
 	}
@@ -1519,7 +1519,7 @@ static void vwm_win_unmap(vwm_window_t *vwin)
 /* map the specified window and set the mapping-in-progress flag so we can discard vwm-generated MapNotify events */
 static void vwm_win_map(vwm_window_t *vwin)
 {
-	if(!vwin->xwindow->mapped) {
+	if (!vwin->xwindow->mapped) {
 		VWM_TRACE("inhibited map of \"%s\", not mapped by client", vwin->xwindow->name);
 		return;
 	}
@@ -1542,7 +1542,7 @@ static vwm_window_t * vwm_win_lookup(Window win)
 	vwm_window_t	*tmp, *vwin = NULL;
 
 	list_for_each_entry(tmp, &windows_mru, windows_mru) {
-		if(tmp->xwindow->id == win) {
+		if (tmp->xwindow->id == win) {
 			vwin = tmp;
 			break;
 		}
@@ -1557,13 +1557,13 @@ static vwm_window_t * vwm_win_focused(void)
 {
 	vwm_window_t	*vwin = NULL;
 
-	switch(focused_context) {
+	switch (focused_context) {
 		case VWM_CONTEXT_FOCUS_SHELF:
 			vwin = focused_shelf;
 			break;
 
 		case VWM_CONTEXT_FOCUS_DESKTOP:
-			if(focused_desktop) vwin = focused_desktop->focused_window;
+			if (focused_desktop) vwin = focused_desktop->focused_window;
 			break;
 
 		default:
@@ -1605,16 +1605,16 @@ static void vwm_win_autoconf(vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_a
 	XWindowChanges		changes = { .border_width = WINDOW_BORDER_WIDTH };
 
 	/* remember the current configuration as the "client" configuration if it's not an autoconfigured one. */
-	if(vwin->autoconfigured == VWM_WIN_AUTOCONF_NONE) vwin->client = vwin->xwindow->attrs;
+	if (vwin->autoconfigured == VWM_WIN_AUTOCONF_NONE) vwin->client = vwin->xwindow->attrs;
 
 	scr = vwm_screen_find(rel, vwin->xwindow); /* XXX FIXME: this becomes a bug when vwm_screen_find() uses non-xwin va_args */
 	va_start(ap, conf);
-	switch(conf) {
+	switch (conf) {
 		case VWM_WIN_AUTOCONF_QUARTER: {
 			vwm_corner_t corner = va_arg(ap, vwm_corner_t);
 			changes.width = scr->width / 2 - (WINDOW_BORDER_WIDTH * 2);
 			changes.height = scr->height / 2 - (WINDOW_BORDER_WIDTH * 2);
-			switch(corner) {
+			switch (corner) {
 				case VWM_CORNER_TOP_LEFT:
 					changes.x = scr->x_org;
 					changes.y = scr->y_org;
@@ -1640,7 +1640,7 @@ static void vwm_win_autoconf(vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_a
 
 		case VWM_WIN_AUTOCONF_HALF: {
 			vwm_side_t side = va_arg(ap, vwm_side_t);
-			switch(side) {
+			switch (side) {
 				case VWM_SIDE_TOP:
 					changes.width = scr->width - (WINDOW_BORDER_WIDTH * 2);
 					changes.height = scr->height / 2 - (WINDOW_BORDER_WIDTH * 2);
@@ -1707,19 +1707,19 @@ static void vwm_win_focus(vwm_window_t *vwin)
 {
 	VWM_TRACE("focusing: %#x", (unsigned int)vwin->xwindow->id);
 
-	if(vwm_xwin_is_mapped(vwin->xwindow)) {
+	if (vwm_xwin_is_mapped(vwin->xwindow)) {
 		/* if vwin is mapped give it the input focus */
 		XSetInputFocus(display, vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
 	}
 
 	/* update the border color accordingly */
-	if(vwin->shelved) {
+	if (vwin->shelved) {
 		/* set the border of the newly focused window to the shelved color */
 		XSetWindowBorder(display, vwin->xwindow->id, vwin == console ? shelved_console_border_color.pixel : shelved_window_border_color.pixel);
 		/* fullscreen windows in the shelf when focused, since we don't intend to overlap there */
 		vwm_win_autoconf(vwin, VWM_SCREEN_REL_POINTER, VWM_WIN_AUTOCONF_FULL);	/* XXX TODO: for now the shelf follows the pointer, it's simple. */
 	} else {
-		if(vwin->desktop->focused_window) {
+		if (vwin->desktop->focused_window) {
 			/* set the border of the previously focused window on the same desktop to the unfocused color */
 			XSetWindowBorder(display, vwin->desktop->focused_window->xwindow->id, unfocused_window_border_color.pixel);
 		}
@@ -1752,27 +1752,27 @@ _retry:
 	visited_mask = 0;
 	list_for_each_entry(next, &vwin->windows_mru, windows_mru) {
 		/* searching for the next mapped window in this context, using vwin->windows as the head */
-		if(&next->windows_mru == &windows_mru) continue;	/* XXX: skip the containerless head, we're leveraging the circular list implementation */
+		if (&next->windows_mru == &windows_mru) continue;	/* XXX: skip the containerless head, we're leveraging the circular list implementation */
 
-		if((vwin->shelved && next->shelved) ||
-		   ((!vwin->shelved && !next->shelved && next->desktop == vwin->desktop) &&
-		    (fence == VWM_FENCE_IGNORE ||
-		     ((fence == VWM_FENCE_RESPECT || fence == VWM_FENCE_TRY_RESPECT) && vwm_screen_find(VWM_SCREEN_REL_XWIN, next->xwindow) == scr) ||
-		     (fence == VWM_FENCE_VIOLATE && vwm_screen_find(VWM_SCREEN_REL_XWIN, next->xwindow) != scr) ||
-		     (fence == VWM_FENCE_MASKED_VIOLATE && (next_scr = vwm_screen_find(VWM_SCREEN_REL_XWIN, next->xwindow)) != scr &&
-		      !((1UL << next_scr->screen_number) & fence_mask))
-		    ))) break;
+		if ((vwin->shelved && next->shelved) ||
+		    ((!vwin->shelved && !next->shelved && next->desktop == vwin->desktop) &&
+		     (fence == VWM_FENCE_IGNORE ||
+		      ((fence == VWM_FENCE_RESPECT || fence == VWM_FENCE_TRY_RESPECT) && vwm_screen_find(VWM_SCREEN_REL_XWIN, next->xwindow) == scr) ||
+		      (fence == VWM_FENCE_VIOLATE && vwm_screen_find(VWM_SCREEN_REL_XWIN, next->xwindow) != scr) ||
+		      (fence == VWM_FENCE_MASKED_VIOLATE && (next_scr = vwm_screen_find(VWM_SCREEN_REL_XWIN, next->xwindow)) != scr &&
+		       !((1UL << next_scr->screen_number) & fence_mask))
+		   ))) break;
 
-		  if(fence == VWM_FENCE_MASKED_VIOLATE && next_scr && next_scr != scr) visited_mask |= (1UL << next_scr->screen_number);
+		if (fence == VWM_FENCE_MASKED_VIOLATE && next_scr && next_scr != scr) visited_mask |= (1UL << next_scr->screen_number);
 	}
 
-	if(fence == VWM_FENCE_TRY_RESPECT && next == vwin) {
+	if (fence == VWM_FENCE_TRY_RESPECT && next == vwin) {
 		/* if we tried to respect the fence and failed to find a next, fallback to ignoring the fence and try again */
 		fence = VWM_FENCE_IGNORE;
 		goto _retry;
-	} else if(fence == VWM_FENCE_MASKED_VIOLATE && next_scr) {
+	} else if (fence == VWM_FENCE_MASKED_VIOLATE && next_scr) {
 		/* if we did a masked violate update the mask with the potentially new screen number */
-		if(next == vwin && visited_mask) {
+		if (next == vwin && visited_mask) {
 			/* if we failed to find a next window on a different screen but had candidates we've exhausted screens and need to reset the mask then retry */
 			VWM_TRACE("all candidate screens masked @ 0x%lx, resetting mask", fence_mask);
 			fence_mask = 0;
@@ -1782,8 +1782,8 @@ _retry:
 		VWM_TRACE("VWM_FENCE_MASKED_VIOLATE fence_mask now: 0x%lx\n", fence_mask);
 	}
 
-	if(vwin->shelved) {
-		if(next != focused_shelf) {
+	if (vwin->shelved) {
+		if (next != focused_shelf) {
 			/* shelf switch, unmap the focused shelf and take it over */
 			/* TODO FIXME: this makes assumptions about the shelf being focused calling unmap/map directly.. */
 			vwm_win_unmap(focused_shelf);
@@ -1795,7 +1795,7 @@ _retry:
 			vwm_win_focus(next);
 		}
 	} else {
-		if(next != next->desktop->focused_window) {
+		if (next != next->desktop->focused_window) {
 			/* focus the changed window */
 			vwm_win_focus(next);
 			XRaiseWindow(display, next->xwindow->id);
@@ -1812,14 +1812,14 @@ _retry:
 static void vwm_win_shelve(vwm_window_t *vwin)
 {
 	/* already shelved, NOOP */
-	if(vwin->shelved) return;
+	if (vwin->shelved) return;
 
 	/* shelving focused window, focus the next window */
-	if(vwin == vwin->desktop->focused_window) {
+	if (vwin == vwin->desktop->focused_window) {
 		vwm_win_mru(vwm_win_focus_next(vwin, VWM_FENCE_RESPECT));
 	}
 
-	if(vwin == vwin->desktop->focused_window) {
+	if (vwin == vwin->desktop->focused_window) {
 		/* TODO: we can probably put this into vwm_win_focus_next() and have it always handled there... */
 		vwin->desktop->focused_window = NULL;
 	}
@@ -1839,11 +1839,11 @@ static void vwm_win_unfocus(vwm_window_t *vwin)
 {
 	/* if we're the focused shelved window, cycle the focus to the next shelved window if possible, if there's no more shelf, switch to the desktop */
 	/* TODO: there's probably some icky behaviors for focused windows unmapping/destroying in unfocused contexts, we probably jump contexts suddenly. */
-	if(vwin == focused_shelf) {
+	if (vwin == focused_shelf) {
 		VWM_TRACE("unfocusing focused shelf");
 		vwm_win_focus_next(vwin, VWM_FENCE_IGNORE);
 
-		if(vwin == focused_shelf) {
+		if (vwin == focused_shelf) {
 			VWM_TRACE("shelf empty, leaving");
 			/* no other shelved windows, exit the shelf context */
 			vwm_context_focus(VWM_CONTEXT_FOCUS_DESKTOP);
@@ -1852,12 +1852,12 @@ static void vwm_win_unfocus(vwm_window_t *vwin)
 	}
 
 	/* if we're the focused window cycle the focus to the next window on the desktop if possible */
-	if(vwin->desktop->focused_window == vwin) {
+	if (vwin->desktop->focused_window == vwin) {
 		VWM_TRACE("unfocusing focused window");
 		vwm_win_focus_next(vwin, VWM_FENCE_TRY_RESPECT);
 	}
 
-	if(vwin->desktop->focused_window == vwin) {
+	if (vwin->desktop->focused_window == vwin) {
 		VWM_TRACE("desktop empty");
 		vwin->desktop->focused_window = NULL;
 	}
@@ -1871,8 +1871,8 @@ static vwm_xwindow_t * vwm_win_unmanage(vwm_window_t *vwin)
 	vwm_win_unfocus(vwin);
 	list_del(&vwin->windows_mru);
 
-	if(vwin == console) console = NULL;
-	if(vwin == focused_origin) focused_origin = NULL;
+	if (vwin == console) console = NULL;
+	if (vwin == focused_origin) focused_origin = NULL;
 
 	vwin->xwindow->managed = NULL;
 
@@ -1885,12 +1885,12 @@ static vwm_window_t * vwm_win_manage_xwin(vwm_xwindow_t *xwin)
 {
 	vwm_window_t	*focused, *vwin = NULL;
 
-	if(xwin->managed) {
+	if (xwin->managed) {
 		VWM_TRACE("suppressed re-management of xwin=%p", xwin);
 		goto _fail;
 	}
 
-	if(!(vwin = (vwm_window_t *)malloc(sizeof(vwm_window_t)))) {
+	if (!(vwin = (vwm_window_t *)malloc(sizeof(vwm_window_t)))) {
 		VWM_PERROR("Failed to allocate vwin");
 		goto _fail;
 	}
@@ -1901,7 +1901,7 @@ static vwm_window_t * vwm_win_manage_xwin(vwm_xwindow_t *xwin)
 	XSetWindowBorder(display, xwin->id, unfocused_window_border_color.pixel);
 
 	vwin->hints = XAllocSizeHints();
-	if(!vwin->hints) {
+	if (!vwin->hints) {
 		VWM_PERROR("Failed to allocate WM hints");
 		goto _fail;
 	}
@@ -1926,13 +1926,13 @@ static vwm_window_t * vwm_win_manage_xwin(vwm_xwindow_t *xwin)
 			vwin->hints->base_width, vwin->hints->base_height,
 			vwin->hints->win_gravity);
 
-	if((vwin->hints_supplied & (USSize | PSize))) {
+	if ((vwin->hints_supplied & (USSize | PSize))) {
 		vwin->client.width = vwin->hints->base_width;
 		vwin->client.height = vwin->hints->base_height;
 	}
 
 	/* put it on the global windows_mru list, if there's a focused window insert the new one after it */
-	if(!list_empty(&windows_mru) && (focused = vwm_win_focused())) {
+	if (!list_empty(&windows_mru) && (focused = vwm_win_focused())) {
 		/* insert the vwin immediately after the focused window, so Mod1+Tab goes to the new window */
 		list_add(&vwin->windows_mru, &focused->windows_mru);
 	} else {
@@ -1943,7 +1943,7 @@ static vwm_window_t * vwm_win_manage_xwin(vwm_xwindow_t *xwin)
 	XRaiseWindow(display, xwin->id);
 
 	/* if the desktop has no focused window yet, automatically focus the newly managed one, provided we're on the desktop context */
-	if(!focused_desktop->focused_window && focused_context == VWM_CONTEXT_FOCUS_DESKTOP) {
+	if (!focused_desktop->focused_window && focused_context == VWM_CONTEXT_FOCUS_DESKTOP) {
 		VWM_TRACE("Mapped new window \"%s\" is alone on desktop \"%s\", focusing", xwin->name, focused_desktop->name);
 		vwm_win_focus(vwin);
 	}
@@ -1951,8 +1951,8 @@ static vwm_window_t * vwm_win_manage_xwin(vwm_xwindow_t *xwin)
 	return vwin;
 
 _fail:
-	if(vwin) {
-		if(vwin->hints) XFree(vwin->hints);
+	if (vwin) {
+		if (vwin->hints) XFree(vwin->hints);
 		free(vwin);
 	}
 	return NULL;
@@ -1979,7 +1979,7 @@ static void vwm_win_migrate(vwm_window_t *vwin, vwm_desktop_t *desktop)
 /* add damage to the global combined damage queue where we accumulate damage between calls to paint_all() */
 static void vwm_comp_damage_add(XserverRegion damage)
 {
-	if(combined_damage != None) {
+	if (combined_damage != None) {
 		XFixesUnionRegion(display, combined_damage, combined_damage, damage);
 		XFixesDestroyRegion(display, damage);
 	} else {
@@ -1995,7 +1995,7 @@ static void vwm_comp_damage_event(XDamageNotifyEvent *ev)
 	vwm_xwindow_t		*xwin;
 
 	xwin = vwm_xwin_lookup(ev->drawable);
-	if(!xwin) {
+	if (!xwin) {
 		VWM_ERROR("damaged unknown drawable %x", (unsigned int)ev->drawable);
 		return;
 	}
@@ -2024,9 +2024,9 @@ static void vwm_comp_damage_win(vwm_xwindow_t *xwin)
 /* used in response to screen configuration changes... */
 static void vwm_comp_invalidate_root()
 {
-	if(root_picture) XRenderFreePicture(display, root_picture);
+	if (root_picture) XRenderFreePicture(display, root_picture);
 	root_picture = None;
-	if(root_buffer) XRenderFreePicture(display, root_picture);
+	if (root_buffer) XRenderFreePicture(display, root_picture);
 	root_buffer = None;
 }
 
@@ -2040,10 +2040,10 @@ static void vwm_comp_paint_all()
 	Region			occluded = XCreateRegion();
 	static XserverRegion	undamage_region = None;
 
-	if(!undamage_region) undamage_region = XFixesCreateRegion(display, NULL, 0);
+	if (!undamage_region) undamage_region = XFixesCreateRegion(display, NULL, 0);
 
 	/* (re)create the root picture from the root window and allocate a double buffer for the off-screen composition of the damaged contents */
-	if(root_picture == None) {
+	if (root_picture == None) {
 		Pixmap	root_pixmap;
 
 		XGetWindowAttributes(display, RootWindow(display, screen_num), &root_attrs);
@@ -2059,7 +2059,7 @@ static void vwm_comp_paint_all()
 	list_for_each_entry_prev(xwin, &xwindows, xwindows) {
 		XRectangle	r;
 
-		if(!vwm_xwin_is_mapped(xwin)) continue;	/* if !mapped skip */
+		if (!vwm_xwin_is_mapped(xwin)) continue;	/* if !mapped skip */
 
 		/* Everything mapped next goes through an occlusion check.
 		 * Since the composite extension stops delivery of VisibilityNotify events for redirected windows,
@@ -2079,9 +2079,9 @@ static void vwm_comp_paint_all()
 		r.y = xwin->attrs.y;
 		r.width = xwin->attrs.width + xwin->attrs.border_width * 2;
 		r.height = xwin->attrs.height + xwin->attrs.border_width * 2;
-		if(XRectInRegion(occluded, r.x, r.y, r.width, r.height) != RectangleIn) {
+		if (XRectInRegion(occluded, r.x, r.y, r.width, r.height) != RectangleIn) {
 			/* the window isn't fully occluded, compose it and add it to occluded */
-			if(xwin->monitor && !xwin->attrs.override_redirect) compose_overlay(xwin);
+			if (xwin->monitor && !xwin->attrs.override_redirect) compose_overlay(xwin);
 			XUnionRectWithRegion(&r, occluded, occluded);
 			xwin->occluded = 0;
 		} else {
@@ -2099,7 +2099,7 @@ static void vwm_comp_paint_all()
 	list_for_each_entry_prev(xwin, &xwindows, xwindows) {
 		XRectangle		r;
 
-		if(!vwm_xwin_is_mapped(xwin) || xwin->occluded) continue;	/* if !mapped or occluded skip */
+		if (!vwm_xwin_is_mapped(xwin) || xwin->occluded) continue;	/* if !mapped or occluded skip */
 
 		/* these coordinates + dimensions incorporate the border (since XCompositeNameWindowPixmap is being used) */
 		r.x = xwin->attrs.x;
@@ -2113,7 +2113,7 @@ static void vwm_comp_paint_all()
 				 r.x, r.y, /* dst x, y */
 				 r.width, r.height);
 
-		if(xwin->monitor && !xwin->attrs.override_redirect && xwin->overlay.width) {
+		if (xwin->monitor && !xwin->attrs.override_redirect && xwin->overlay.width) {
 			/* draw the monitoring overlay atop the window, note we stay within the window borders here. */
 			XRenderComposite(display, PictOpOver, xwin->overlay.picture, None, root_buffer,
 					 0, 0, 0, 0,						/* src x,y, maxk x, y */
@@ -2132,8 +2132,8 @@ static void vwm_comp_paint_all()
 	XRenderFillRectangle(display, PictOpSrc, root_buffer, &bgcolor, 0, 0, root_attrs.width, root_attrs.height);
 
 	/* discard the root_buffer clip region and copy root_buffer to root_picture, root_picture still has the combined damage as its clip region */
-        XFixesSetPictureClipRegion(display, root_buffer, 0, 0, None);
-        XRenderComposite(display, PictOpSrc, root_buffer, None, root_picture, 0, 0, 0, 0, 0, 0, root_attrs.width, root_attrs.height);
+	XFixesSetPictureClipRegion(display, root_buffer, 0, 0, None);
+	XRenderComposite(display, PictOpSrc, root_buffer, None, root_picture, 0, 0, 0, 0, 0, 0, root_attrs.width, root_attrs.height);
 
 	/* fin */
 	XFixesDestroyRegion(display, combined_damage);
@@ -2149,7 +2149,7 @@ static void vwm_comp_toggle(void)
 	XGrabServer(display);
 	XSync(display, False);
 
-	switch(compositing_mode) {
+	switch (compositing_mode) {
 		case VWM_COMPOSITING_OFF:
 			VWM_TRACE("enabling compositing");
 			compositing_mode = VWM_COMPOSITING_MONITORS;
@@ -2176,11 +2176,11 @@ static void vwm_comp_toggle(void)
 			vwm_comp_invalidate_root();
 
 			/* if there's any damage queued up discard it so we don't enter paint_all() until compositing is reenabled again. */
-			if(combined_damage) {
+			if (combined_damage) {
 				XFixesDestroyRegion(display, combined_damage);
 				combined_damage = None;
 			}
-			while(XCheckTypedEvent(display, damage_event + XDamageNotify, &ev) != False);
+			while (XCheckTypedEvent(display, damage_event + XDamageNotify, &ev) != False);
 			break;
 		}
 	}
@@ -2216,44 +2216,44 @@ static void compute_resize(vwm_clickety_t *clickety, XEvent *terminus, XWindowAt
 	int		width_inc = 1, height_inc = 1;
 
 	/* TODO: there's a problem here WRT border width, I should be considering it, I just haven't bothered to fix it since it doesn't seem to matter */
-	if((vwin = clickety->vwin) && vwin->hints) {
-		if((vwin->hints_supplied & PMinSize)) {
+	if ((vwin = clickety->vwin) && vwin->hints) {
+		if ((vwin->hints_supplied & PMinSize)) {
 			min_width = vwin->hints->min_width;
 			min_height = vwin->hints->min_height;
 			VWM_TRACE("window size hints exist and minimum sizes are w=%i h=%i", min_width, min_height);
 		}
 
-		if((vwin->hints_supplied & PResizeInc)) {
+		if ((vwin->hints_supplied & PResizeInc)) {
 			width_inc = vwin->hints->width_inc;
 			height_inc = vwin->hints->height_inc;
 			VWM_TRACE("window size hints exist and resize increments are w=%i h=%i", width_inc, height_inc);
-			if(!width_inc) width_inc = 1;
-			if(!height_inc) height_inc = 1;
+			if (!width_inc) width_inc = 1;
+			if (!height_inc) height_inc = 1;
 		}
 	}
 
 	xdelta = xdelta / width_inc * width_inc;
 	ydelta = ydelta / height_inc * height_inc;
 
-	if(clickety->impetus_x < dw && clickety->impetus_y < dh) {
+	if (clickety->impetus_x < dw && clickety->impetus_y < dh) {
 		/* grabbed top left */
 		new->x = clickety->orig.x + xdelta;
 		new->y = clickety->orig.y + ydelta;
 		new->width = clickety->orig.width - xdelta;
 		new->height = clickety->orig.height - ydelta;
-	} else if(clickety->impetus_x > dw && clickety->impetus_y < dh) {
+	} else if (clickety->impetus_x > dw && clickety->impetus_y < dh) {
 		/* grabbed top right */
 		new->x = clickety->orig.x;
 		new->y = clickety->orig.y + ydelta;
 		new->width = clickety->orig.width + xdelta;
 		new->height = clickety->orig.height - ydelta;
-	} else if(clickety->impetus_x < dw && clickety->impetus_y > dh) {
+	} else if (clickety->impetus_x < dw && clickety->impetus_y > dh) {
 		/* grabbed bottom left */
 		new->x = clickety->orig.x + xdelta;
 		new->y = clickety->orig.y;
 		new->width = clickety->orig.width - xdelta;
 		new->height = clickety->orig.height + ydelta;
-	} else if(clickety->impetus_x > dw && clickety->impetus_y > dh) {
+	} else if (clickety->impetus_x > dw && clickety->impetus_y > dh) {
 		/* grabbed bottom right */
 		new->x = clickety->orig.x;
 		new->y = clickety->orig.y;
@@ -2262,13 +2262,13 @@ static void compute_resize(vwm_clickety_t *clickety, XEvent *terminus, XWindowAt
 	}
 
 	/* constrain the width and height of the window according to the minimums */
-	if(new->width < min_width) {
-		if(clickety->orig.x != new->x) new->x -= (min_width - new->width);
+	if (new->width < min_width) {
+		if (clickety->orig.x != new->x) new->x -= (min_width - new->width);
 		new->width = min_width;
 	}
 
-	if(new->height < min_height) {
-		if(clickety->orig.y != new->y) new->y -= (min_height - new->height);
+	if (new->height < min_height) {
+		if (clickety->orig.y != new->y) new->y -= (min_height - new->height);
 		new->height = min_height;
 	}
 }
@@ -2278,10 +2278,10 @@ static void vwm_clickety_motion(vwm_clickety_t *clickety, Window win, XMotionEve
 {
 	XWindowChanges	changes = { .border_width = WINDOW_BORDER_WIDTH };
 
-	if(!clickety->vwin) return;
+	if (!clickety->vwin) return;
 
 	/* TODO: verify win matches clickety->vwin? */
-	switch(clickety->mode) {
+	switch (clickety->mode) {
 		case VWM_ADJUST_MOVE:
 			changes.x = clickety->orig.x + (motion->x_root - clickety->impetus_x_root);
 			changes.y = clickety->orig.y + (motion->y_root - clickety->impetus_y_root);
@@ -2314,9 +2314,9 @@ static void vwm_clickety_released(vwm_clickety_t *clickety, Window win, XButtonP
 {
 	XWindowChanges	changes = { .border_width = WINDOW_BORDER_WIDTH };
 
-	if(!clickety->vwin) return;
+	if (!clickety->vwin) return;
 
-	switch(clickety->mode) {
+	switch (clickety->mode) {
 		case VWM_ADJUST_MOVE:
 			changes.x = clickety->orig.x + (terminus->x_root - clickety->impetus_x_root);
 			changes.y = clickety->orig.y + (terminus->y_root - clickety->impetus_y_root);
@@ -2356,20 +2356,20 @@ static int vwm_clickety_pressed(vwm_clickety_t *clickety, Window win, XButtonPre
 	vwm_window_t	*vwin;
 
 	/* verify the window still exists */
-	if(!XGetWindowAttributes(display, win, &clickety->orig)) goto _fail;
+	if (!XGetWindowAttributes(display, win, &clickety->orig)) goto _fail;
 
-	if(!(vwin = vwm_win_lookup(win))) goto _fail;
+	if (!(vwin = vwm_win_lookup(win))) goto _fail;
 
-	if(impetus->state & WM_GRAB_MODIFIER) {
+	if (impetus->state & WM_GRAB_MODIFIER) {
 
 		/* always set the input focus to the clicked window, note if we allow this to happen on the root window, it enters sloppy focus mode
 		 * until a non-root window is clicked, which is an interesting hybrid but not how I prefer it. */
-		if(vwin != focused_desktop->focused_window && vwin->xwindow->id != RootWindow(display, screen_num)) {
+		if (vwin != focused_desktop->focused_window && vwin->xwindow->id != RootWindow(display, screen_num)) {
 			vwm_win_focus(vwin);
 			vwm_win_mru(vwin);
 		}
 
-		switch(impetus->button) {
+		switch (impetus->button) {
 			case Button1:
 				/* immediately raise the window if we're relocating,
 				 * resizes are supported without raising (which also enables NULL resizes to focus without raising) */
@@ -2414,8 +2414,8 @@ static int vwm_keyspressed() {
 
 	XQueryKeymap(display, state);
 
-	for(i = 0; i < sizeof(state); i++) {
-		if(state[i]) return 1;
+	for (i = 0; i < sizeof(state); i++) {
+		if (state[i]) return 1;
 	}
 
 	return 0;
@@ -2428,23 +2428,23 @@ static void vwm_keyreleased(Window win, XEvent *keyrelease)
 	vwm_window_t	*vwin;
 	KeySym		sym;
 
-	switch((sym = XLookupKeysym(&keyrelease->xkey, 0))) {
+	switch ((sym = XLookupKeysym(&keyrelease->xkey, 0))) {
 		case XK_Alt_R:
 		case XK_Alt_L:	/* TODO: actually use the modifier mapping, for me XK_Alt_[LR] is Mod1.  XGetModifierMapping()... */
 			VWM_TRACE("XK_Alt_[LR] released");
 
 			/* aborted? try restore focused_origin */
-			if(key_is_grabbed > 1 && focused_origin) {
+			if (key_is_grabbed > 1 && focused_origin) {
 				VWM_TRACE("restoring %p on %p", focused_origin, focused_origin->desktop);
 				vwm_desktop_focus(focused_origin->desktop);
 				vwm_win_focus(focused_origin);
 			}
 
 			/* make the focused window the most recently used */
-			if((vwin = vwm_win_focused())) vwm_win_mru(vwin);
+			if ((vwin = vwm_win_focused())) vwm_win_mru(vwin);
 
 			/* make the focused desktop the most recently used */
-			if(focused_context == VWM_CONTEXT_FOCUS_DESKTOP && focused_desktop) vwm_desktop_mru(focused_desktop);
+			if (focused_context == VWM_CONTEXT_FOCUS_DESKTOP && focused_desktop) vwm_desktop_mru(focused_desktop);
 
 			break;
 
@@ -2453,7 +2453,7 @@ static void vwm_keyreleased(Window win, XEvent *keyrelease)
 			break;
 	}
 
-	if(key_is_grabbed && !vwm_keyspressed()) {
+	if (key_is_grabbed && !vwm_keyspressed()) {
 		XUngrabKeyboard(display, CurrentTime);
 		XFlush(display);
 		key_is_grabbed = 0;
@@ -2476,7 +2476,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 	sym = XLookupKeysym(&keypress->xkey, 0);
 
 	/* detect repeaters, note repeaters do not span interrupted Mod1 sequences! */
-	if(key_is_grabbed && sym == last_sym && keypress->xkey.state == last_state) {
+	if (key_is_grabbed && sym == last_sym && keypress->xkey.state == last_state) {
 		repeat_cnt++;
 	} else {
 		repeat_cnt = 0;
@@ -2484,7 +2484,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 
 	vwin = vwm_win_focused();
 
-	switch(sym) {
+	switch (sym) {
 
 #define launcher(_sym, _label, _argv)\
 		case _sym:	\
@@ -2497,7 +2497,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 #undef launcher
 		case XK_Alt_L: /* transaction abort */
 		case XK_Alt_R:
-			if(key_is_grabbed) key_is_grabbed++;
+			if (key_is_grabbed) key_is_grabbed++;
 			VWM_TRACE("aborting with origin %p", focused_origin);
 			break;
 
@@ -2509,8 +2509,8 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			do_grab = 1; /* update MRU window on commit (Mod1 release) */
 
 			/* focus the next window, note this doesn't affect MRU yet, that happens on Mod1 release */
-			if(vwin) {
-				if(keypress->xkey.state & ShiftMask) {
+			if (vwin) {
+				if (keypress->xkey.state & ShiftMask) {
 					vwm_win_focus_next(vwin, VWM_FENCE_MASKED_VIOLATE);
 				} else {
 					vwm_win_focus_next(vwin, VWM_FENCE_RESPECT);
@@ -2523,9 +2523,9 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
-			if(keypress->xkey.state & ShiftMask) {
+			if (keypress->xkey.state & ShiftMask) {
 				/* migrate the focused window with the desktop focus to the most recently used desktop */
-				if(vwin) vwm_win_migrate(vwin, next_desktop);
+				if (vwin) vwm_win_migrate(vwin, next_desktop);
 			} else {
 				vwm_desktop_focus(next_desktop);
 			}
@@ -2533,13 +2533,13 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 		}
 
 		case XK_d: /* destroy focused */
-			if(vwin) {
-				if(keypress->xkey.state & ShiftMask) {  /* brutally destroy the focused window */
+			if (vwin) {
+				if (keypress->xkey.state & ShiftMask) {  /* brutally destroy the focused window */
 					XKillClient(display, vwin->xwindow->id);
 				} else { /* kindly destroy the focused window */
 					vwm_xwin_message(vwin->xwindow, wm_protocols_atom, wm_delete_atom);
 				}
-			} else if(focused_context == VWM_CONTEXT_FOCUS_DESKTOP) {
+			} else if (focused_context == VWM_CONTEXT_FOCUS_DESKTOP) {
 				/* destroy the focused desktop when destroy occurs without any windows */
 				vwm_desktop_destroy(focused_desktop);
 			}
@@ -2548,7 +2548,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 		case XK_Escape: /* leave VWM rudely, after triple press */
 			do_grab = 1;
 
-			if(repeat_cnt == 2) {
+			if (repeat_cnt == 2) {
 				vwm_launch(quit_console_args, VWM_LAUNCH_MODE_FG);
 				exit(42);
 			}
@@ -2557,8 +2557,8 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 		case XK_v: /* instantiate (and focus) a new (potentially empty, unless migrating) virtual desktop */
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
-			if(keypress->xkey.state & ShiftMask) {
-				if(vwin) {
+			if (keypress->xkey.state & ShiftMask) {
+				if (vwin) {
 					/* migrate the focused window to a newly created virtual desktop, focusing the new desktop simultaneously */
 					vwm_win_migrate(vwin, vwm_desktop_create(NULL));
 				}
@@ -2571,16 +2571,16 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 		case XK_h: /* previous virtual desktop, if we're in the shelf context this will simply switch to desktop context */
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
-			if(keypress->xkey.state & ShiftMask) {
-				if(vwin && vwin->desktop->desktops.prev != &desktops) {
+			if (keypress->xkey.state & ShiftMask) {
+				if (vwin && vwin->desktop->desktops.prev != &desktops) {
 					/* migrate the focused window with the desktop focus to the previous desktop */
 					vwm_win_migrate(vwin, list_entry(vwin->desktop->desktops.prev, vwm_desktop_t, desktops));
 				}
 			} else {
-				if(focused_context == VWM_CONTEXT_FOCUS_SHELF) {
+				if (focused_context == VWM_CONTEXT_FOCUS_SHELF) {
 					/* focus the focused desktop instead of the shelf */
 					vwm_context_focus(VWM_CONTEXT_FOCUS_DESKTOP);
-				} else if(focused_desktop->desktops.prev != &desktops) {
+				} else if (focused_desktop->desktops.prev != &desktops) {
 					/* focus the previous desktop */
 					vwm_desktop_focus(list_entry(focused_desktop->desktops.prev, vwm_desktop_t, desktops));
 				}
@@ -2590,16 +2590,16 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 		case XK_l: /* next virtual desktop, if we're in the shelf context this will simply switch to desktop context */
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
-			if(keypress->xkey.state & ShiftMask) {
-				if(vwin && vwin->desktop->desktops.next != &desktops) {
+			if (keypress->xkey.state & ShiftMask) {
+				if (vwin && vwin->desktop->desktops.next != &desktops) {
 					/* migrate the focused window with the desktop focus to the next desktop */
 					vwm_win_migrate(vwin, list_entry(vwin->desktop->desktops.next, vwm_desktop_t, desktops));
 				}
 			} else {
-				if(focused_context == VWM_CONTEXT_FOCUS_SHELF) {
+				if (focused_context == VWM_CONTEXT_FOCUS_SHELF) {
 					/* focus the focused desktop instead of the shelf */
 					vwm_context_focus(VWM_CONTEXT_FOCUS_DESKTOP);
-				} else if(focused_desktop->desktops.next != &desktops) {
+				} else if (focused_desktop->desktops.next != &desktops) {
 					/* focus the next desktop */
 					vwm_desktop_focus(list_entry(focused_desktop->desktops.next, vwm_desktop_t, desktops));
 				}
@@ -2607,9 +2607,9 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_k: /* raise or shelve the focused window */
-			if(vwin) {
-				if(keypress->xkey.state & ShiftMask) { /* shelf the window and focus the shelf */
-					if(focused_context != VWM_CONTEXT_FOCUS_SHELF) {
+			if (vwin) {
+				if (keypress->xkey.state & ShiftMask) { /* shelf the window and focus the shelf */
+					if (focused_context != VWM_CONTEXT_FOCUS_SHELF) {
 						/* shelve the focused window while focusing the shelf */
 						vwm_win_shelve(vwin);
 						vwm_context_focus(VWM_CONTEXT_FOCUS_SHELF);
@@ -2619,17 +2619,17 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 
 					XRaiseWindow(display, vwin->xwindow->id);
 
-					if(repeat_cnt == 1) {
+					if (repeat_cnt == 1) {
 						/* double: reraise & fullscreen */
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
-					} else if(repeat_cnt == 2) {
+					} else if (repeat_cnt == 2) {
 						 /* triple: reraise & fullscreen w/borders obscured by screen perimiter */
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_ALL);
-					} else if(xinerama_screens_cnt > 1) {
-						if(repeat_cnt == 3) {
+					} else if (xinerama_screens_cnt > 1) {
+						if (repeat_cnt == 3) {
 							 /* triple: reraise & fullscreen across all screens */
 							vwm_win_autoconf(vwin, VWM_SCREEN_REL_TOTAL, VWM_WIN_AUTOCONF_FULL);
-						} else if(repeat_cnt == 4) {
+						} else if (repeat_cnt == 4) {
 							 /* quadruple: reraise & fullscreen w/borders obscured by screen perimiter */
 							vwm_win_autoconf(vwin, VWM_SCREEN_REL_TOTAL, VWM_WIN_AUTOCONF_ALL);
 						}
@@ -2640,14 +2640,14 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_j: /* lower or unshelve the focused window */
-			if(vwin) {
-				if(keypress->xkey.state & ShiftMask) { /* unshelf the window to the focused desktop, and focus the desktop */
-					if(focused_context == VWM_CONTEXT_FOCUS_SHELF) {
+			if (vwin) {
+				if (keypress->xkey.state & ShiftMask) { /* unshelf the window to the focused desktop, and focus the desktop */
+					if (focused_context == VWM_CONTEXT_FOCUS_SHELF) {
 						/* unshelve the focused window, focus the desktop it went to */
 						vwm_win_migrate(vwin, focused_desktop);
 					}
 				} else {
-					if(vwin->autoconfigured == VWM_WIN_AUTOCONF_ALL) {
+					if (vwin->autoconfigured == VWM_WIN_AUTOCONF_ALL) {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
 					} else {
 						XLowerWindow(display, vwin->xwindow->id);
@@ -2658,8 +2658,8 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_Return: /* (full-screen / restore) focused window */
-			if(vwin) {
-				if(vwin->autoconfigured) {
+			if (vwin) {
+				if (vwin->autoconfigured) {
 					vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_NONE);
 				} else {
 					vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
@@ -2668,21 +2668,21 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_s: /* shelve focused window */
-			if(vwin && !vwin->shelved) vwm_win_shelve(vwin);
+			if (vwin && !vwin->shelved) vwm_win_shelve(vwin);
 			break;
 
 		case XK_bracketleft:	/* reconfigure the focused window to occupy the left or top half of the screen or left quarters on repeat */
-			if(vwin) {
+			if (vwin) {
 				do_grab = 1;
 
-				if(keypress->xkey.state & ShiftMask) {
-					if(!repeat_cnt) {
+				if (keypress->xkey.state & ShiftMask) {
+					if (!repeat_cnt) {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_HALF, VWM_SIDE_TOP);
 					} else {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_QUARTER, VWM_CORNER_TOP_LEFT);
 					}
 				} else {
-					if(!repeat_cnt) {
+					if (!repeat_cnt) {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_HALF, VWM_SIDE_LEFT);
 					} else {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_QUARTER, VWM_CORNER_BOTTOM_LEFT);
@@ -2692,17 +2692,17 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_bracketright:	/* reconfigure the focused window to occupy the right or bottom half of the screen or right quarters on repeat */
-			if(vwin) {
+			if (vwin) {
 				do_grab = 1;
 
-				if(keypress->xkey.state & ShiftMask) {
-					if(!repeat_cnt) {
+				if (keypress->xkey.state & ShiftMask) {
+					if (!repeat_cnt) {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_HALF, VWM_SIDE_BOTTOM);
 					} else {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_QUARTER, VWM_CORNER_BOTTOM_RIGHT);
 					}
 				} else {
-					if(!repeat_cnt) {
+					if (!repeat_cnt) {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_HALF, VWM_SIDE_RIGHT);
 					} else {
 						vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_QUARTER, VWM_CORNER_TOP_RIGHT);
@@ -2716,18 +2716,18 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			break;
 
 		case XK_apostrophe:	/* reset snowflakes of the focused window, suppressed when not compositing */
-			if(vwin && compositing_mode && vwin->xwindow->overlay.snowflakes_cnt) {
+			if (vwin && compositing_mode && vwin->xwindow->overlay.snowflakes_cnt) {
 				vwin->xwindow->overlay.snowflakes_cnt = 0;
 				vwm_comp_damage_win(vwin->xwindow);
 			}
 			break;
 
 		case XK_Right:	/* increase sampling frequency */
-			if(sampling_interval + 1 < sizeof(sampling_intervals) / sizeof(sampling_intervals[0])) sampling_interval++;
+			if (sampling_interval + 1 < sizeof(sampling_intervals) / sizeof(sampling_intervals[0])) sampling_interval++;
 			break;
 
 		case XK_Left:	/* decrease sampling frequency, -1 pauses */
-			if(sampling_interval >= 0) sampling_interval--;
+			if (sampling_interval >= 0) sampling_interval--;
 			break;
 		default:
 			VWM_TRACE("Unhandled keycode: %x", (unsigned int)sym);
@@ -2735,7 +2735,7 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 	}
 
 	/* if what we're doing requests a grab, if not already grabbed, grab keyboard */
-	if(!key_is_grabbed && do_grab) {
+	if (!key_is_grabbed && do_grab) {
 		VWM_TRACE("saving focused_origin of %p", vwin);
 		focused_origin = vwin; /* for returning to on abort */
 		XGrabKeyboard(display, RootWindow(display, screen_num), False, GrabModeAsync, GrabModeAsync, CurrentTime);
@@ -2761,22 +2761,22 @@ static int vwm_manage_existing(void)
 	XSync(display, False);
 	XQueryTree(display, RootWindow(display, screen_num), &root, &parent, &children, &n_children);
 
-	for(i = 0; i < n_children; i++) {
-		if(children[i] == None) continue;
+	for (i = 0; i < n_children; i++) {
+		if (children[i] == None) continue;
 
-		if((vwm_xwin_create(children[i], VWM_GRABBED) == NULL)) goto _fail_grabbed;
+		if ((vwm_xwin_create(children[i], VWM_GRABBED) == NULL)) goto _fail_grabbed;
 	}
 
 	XUngrabServer(display);
 
-	if(children) XFree(children);
+	if (children) XFree(children);
 
 	return 1;
 
 _fail_grabbed:
 	XUngrabServer(display);
 
-	if(children) XFree(children);
+	if (children) XFree(children);
 
 	return 0;
 }
@@ -2816,7 +2816,7 @@ int main(int argc, char *argv[])
 
 #define reterr_if(_cond, _fmt, _args...) \
 	err++;\
-	if(_cond) {\
+	if (_cond) {\
 		VWM_ERROR(_fmt, ##_args);\
 		return err;\
 	}
@@ -2836,16 +2836,16 @@ int main(int argc, char *argv[])
 
 	reterr_if(!XQueryExtension (display, COMPOSITE_NAME, &composite_opcode, &composite_event, &composite_error), "No composite extension available");
 	reterr_if(!XDamageQueryExtension(display, &damage_event, &damage_error), "No damage extension available");
-	if(XSyncQueryExtension(display, &sync_event, &sync_error)) {
+	if (XSyncQueryExtension(display, &sync_event, &sync_error)) {
 		/* set the window manager to the maximum X client priority */
 		XSyncSetPriority(display, RootWindow(display, screen_num), 0x7fffffff);
 	}
 
-	if(XineramaQueryExtension(display, &xinerama_event, &xinerama_error)) {
+	if (XineramaQueryExtension(display, &xinerama_event, &xinerama_error)) {
 		xinerama_screens = XineramaQueryScreens(display, &xinerama_screens_cnt);
 	}
 
-	if(XRRQueryExtension(display, &randr_event, &randr_error)) {
+	if (XRRQueryExtension(display, &randr_event, &randr_error)) {
 		XRRSelectInput(display, RootWindow(display, screen_num), RRScreenChangeNotifyMask);
 	}
 
@@ -2876,7 +2876,7 @@ int main(int argc, char *argv[])
 	vmon.sample_cb = sample_callback;
 
 	/* get all the text and graphics stuff setup for overlays */
-        reterr_if(!(overlay_font = XLoadQueryFont(display, OVERLAY_FIXED_FONT)), "failed to open font: " OVERLAY_FIXED_FONT);
+	reterr_if(!(overlay_font = XLoadQueryFont(display, OVERLAY_FIXED_FONT)), "failed to open font: " OVERLAY_FIXED_FONT);
 
 	/* create a GC for rendering the text using Xlib into the text overlay stencils */
 	bitmask = XCreatePixmap(display, RootWindow(display, screen_num), 1, 1, OVERLAY_MASK_DEPTH);
@@ -2948,29 +2948,29 @@ int main(int argc, char *argv[])
 	pfd.fd = ConnectionNumber(display);
 
 	gettimeofday(&this_sample, NULL);
-	while(!done) {
+	while (!done) {
 		do {
 			static int	sampling_paused = 0;
 			static int	contiguous_drops = 0;
 			float		this_delta;
 
 			gettimeofday(&maybe_sample, NULL);
-			if((sampling_interval == -1 && !sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
-			   (sampling_interval != -1 && ((this_delta = delta(&maybe_sample, &this_sample)) >= sampling_intervals[sampling_interval]))) {
+			if ((sampling_interval == -1 && !sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
+			    (sampling_interval != -1 && ((this_delta = delta(&maybe_sample, &this_sample)) >= sampling_intervals[sampling_interval]))) {
 				vmon_sys_stat_t	*sys_stat;
 
 				/* automatically lower the sample rate if we can't keep up with the current sample rate */
-				if(sampling_interval != -1 && sampling_interval <= prev_sampling_interval &&
-				   this_delta >= (sampling_intervals[sampling_interval] * 1.5)) {
+				if (sampling_interval != -1 && sampling_interval <= prev_sampling_interval &&
+				    this_delta >= (sampling_intervals[sampling_interval] * 1.5)) {
 					contiguous_drops++;
 					/* require > 1 contiguous drops before lowering the rate, tolerates spurious one-off stalls */
-					if(contiguous_drops > 2) sampling_interval--;
+					if (contiguous_drops > 2) sampling_interval--;
 				} else contiguous_drops = 0;
 
 				/* age the sys-wide sample data into "last" variables, before the new sample overwrites them. */
 				last_sample = this_sample;
 				this_sample = maybe_sample;
-				if((sys_stat = vmon.stores[VMON_STORE_SYS_STAT])) {
+				if ((sys_stat = vmon.stores[VMON_STORE_SYS_STAT])) {
 					last_user_cpu = sys_stat->user;
 					last_system_cpu = sys_stat->system;
 					last_total =	sys_stat->user +
@@ -2995,13 +2995,13 @@ int main(int argc, char *argv[])
 
 			XFlush(display);
 
-			if(!XPending(display)) {
+			if (!XPending(display)) {
 				/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
-				if(poll(&pfd, 1, sampling_interval != -1 ? sampling_intervals[sampling_interval] * 300.0 : -1) == 0) break;
+				if (poll(&pfd, 1, sampling_interval != -1 ? sampling_intervals[sampling_interval] * 300.0 : -1) == 0) break;
 			}
 
 			XNextEvent(display, &event);
-			switch(event.type) {
+			switch (event.type) {
 				case KeyPress:
 					VWM_TRACE("keypress");
 					vwm_keypressed(event.xkey.window, &event);
@@ -3035,7 +3035,7 @@ int main(int argc, char *argv[])
 				case DestroyNotify: {
 					vwm_xwindow_t	*xwin;
 					VWM_TRACE("destroynotify");
-					if((xwin = vwm_xwin_lookup(event.xdestroywindow.window))) {
+					if ((xwin = vwm_xwin_lookup(event.xdestroywindow.window))) {
 						vwm_xwin_destroy(xwin);
 					}
 					break;
@@ -3055,7 +3055,7 @@ int main(int argc, char *argv[])
 					/* XXX: windows raising themselves is annoying, so discard CWSibling and CWStackMode. */
 					VWM_TRACE("configurerequest x=%i y=%i w=%i h=%i", changes.x, changes.y, changes.width, changes.height);
 
-					if((xwin = vwm_xwin_lookup(event.xconfigure.window)) &&
+					if ((xwin = vwm_xwin_lookup(event.xconfigure.window)) &&
 					    xwin->managed &&
 					    xwin->managed->autoconfigured == VWM_WIN_AUTOCONF_ALL) {
 						/* this is to allow auto-allscreen to succeed in getting a borderless window configured */
@@ -3069,11 +3069,11 @@ int main(int argc, char *argv[])
 				case ConfigureNotify: {
 					vwm_xwindow_t	*xwin;
 					VWM_TRACE("configurenotify");
-					if((xwin = vwm_xwin_lookup(event.xconfigure.window))) {
+					if ((xwin = vwm_xwin_lookup(event.xconfigure.window))) {
 						XWindowAttributes	attrs;
 						vwm_xwin_restack(xwin, event.xconfigure.above);
 						XGetWindowAttributes(display, event.xconfigure.window, &attrs);
-						if(compositing_mode) {
+						if (compositing_mode) {
 							/* damage the old and new window areas */
 							XserverRegion	region;
 							XRectangle	rects[2] = {	{	xwin->attrs.x,
@@ -3101,9 +3101,9 @@ int main(int argc, char *argv[])
 					vwm_xwindow_t	*xwin;
 					VWM_TRACE("unmapnotify");
 					/* unlike MapRequest, we simply are notified when a window is unmapped. */
-					if((xwin = vwm_xwin_lookup(event.xunmap.window))) {
-						if(xwin->managed) {
-							if(xwin->managed->unmapping) {
+					if ((xwin = vwm_xwin_lookup(event.xunmap.window))) {
+						if (xwin->managed) {
+							if (xwin->managed->unmapping) {
 								VWM_TRACE("swallowed vwm-induced UnmapNotify");
 								xwin->managed->unmapping = 0;
 							} else {
@@ -3116,7 +3116,7 @@ int main(int argc, char *argv[])
 							xwin->mapped = 0;
 						}
 
-						if(compositing_mode) vwm_comp_damage_win(xwin);
+						if (compositing_mode) vwm_comp_damage_win(xwin);
 					}
 					break;
 				}
@@ -3124,8 +3124,8 @@ int main(int argc, char *argv[])
 				case MapNotify: {
 					vwm_xwindow_t	*xwin;
 					VWM_TRACE("mapnotify");
-					if((xwin = vwm_xwin_lookup(event.xmap.window))) {
-						if(xwin->managed && xwin->managed->mapping) {
+					if ((xwin = vwm_xwin_lookup(event.xmap.window))) {
+						if (xwin->managed && xwin->managed->mapping) {
 							VWM_TRACE("swallowed vwm-induced MapNotify");
 							xwin->managed->mapping = 0;
 						} else {
@@ -3133,7 +3133,7 @@ int main(int argc, char *argv[])
 							xwin->mapped = 1;
 						}
 
-						if(compositing_mode) {
+						if (compositing_mode) {
 							vwm_comp_damage_win(xwin);
 							vwm_xwin_unbind_namewindow(xwin);
 							vwm_xwin_bind_namewindow(xwin);
@@ -3147,8 +3147,8 @@ int main(int argc, char *argv[])
 					vwm_window_t	*vwin = NULL;
 					int		domap = 1;
 					VWM_TRACE("maprequest");
-					if((xwin = vwm_xwin_lookup(event.xmap.window)) &&
-					   ((vwin = xwin->managed) || (vwin = vwm_win_manage_xwin(xwin)))) {
+					if ((xwin = vwm_xwin_lookup(event.xmap.window)) &&
+					    ((vwin = xwin->managed) || (vwin = vwm_win_manage_xwin(xwin)))) {
 						XWindowAttributes	attrs;
 						XWindowChanges		changes = {.x = 0, .y = 0};
 						unsigned		changes_mask = (CWX | CWY);
@@ -3158,30 +3158,30 @@ int main(int argc, char *argv[])
 						xwin->mapped = 1;	/* note that the client mapped the window */
 
 						/* figure out if the window is the console */
-						if((classhint = XAllocClassHint())) {
-							if(XGetClassHint(display, event.xmap.window, classhint) && !strcmp(classhint->res_class, CONSOLE_WM_CLASS)) {
+						if ((classhint = XAllocClassHint())) {
+							if (XGetClassHint(display, event.xmap.window, classhint) && !strcmp(classhint->res_class, CONSOLE_WM_CLASS)) {
 								console = vwin;
 								vwm_win_shelve(vwin);
 								vwm_win_autoconf(vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
 								domap = 0;
 							}
 
-							if(classhint->res_class) XFree(classhint->res_class);
-							if(classhint->res_name) XFree(classhint->res_name);
+							if (classhint->res_class) XFree(classhint->res_class);
+							if (classhint->res_name) XFree(classhint->res_name);
 							XFree(classhint);
 						}
 
 						/* TODO: this is a good place to hook in a window placement algo */
 
 						/* on client-requested mapping we place the window */
-						if(!vwin->shelved) {
+						if (!vwin->shelved) {
 							/* we place the window on the screen containing the the pointer only if that screen is empty,
 							 * otherwise we place windows on the screen containing the currently focused window */
 							/* since we query the geometry of windows in determining where to place them, a configuring
 							 * flag is used to exclude the window being configured from those queries */
 							scr = vwm_screen_find(VWM_SCREEN_REL_POINTER);
 							vwin->configuring = 1;
-							if(vwm_screen_is_empty(scr)) {
+							if (vwm_screen_is_empty(scr)) {
 								/* focus the new window if it isn't already focused when it's going to an empty screen */
 								VWM_TRACE("window \"%s\" is alone on screen \"%i\", focusing", vwin->xwindow->name, scr->screen_number);
 								vwm_win_focus(vwin);
@@ -3192,7 +3192,7 @@ int main(int argc, char *argv[])
 
 							changes.x = scr->x_org;
 							changes.y = scr->y_org;
-						} else if(focused_context == VWM_CONTEXT_FOCUS_SHELF) {
+						} else if (focused_context == VWM_CONTEXT_FOCUS_SHELF) {
 							scr = vwm_screen_find(VWM_SCREEN_REL_XWIN, focused_shelf->xwindow);
 							changes.x = scr->x_org;
 							changes.y = scr->y_org;
@@ -3204,9 +3204,9 @@ int main(int argc, char *argv[])
 
 
 						/* if the window size is precisely the screen size then directly "allscreen" the window right here */
-						if(!vwin->shelved && scr &&
-						   attrs.width == scr->width &&
-						   attrs.height == scr->height) {
+						if (!vwin->shelved && scr &&
+						    attrs.width == scr->width &&
+						    attrs.height == scr->height) {
 							VWM_TRACE("auto-allscreened window \"%s\"", vwin->xwindow->name);
 							changes.border_width = 0;
 							changes_mask |= CWBorderWidth;
@@ -3221,9 +3221,9 @@ int main(int argc, char *argv[])
 						XConfigureWindow(display, event.xmap.window, changes_mask, &changes);
 					}
 
-					if(domap) {
+					if (domap) {
 						XMapWindow(display, event.xmap.window);
-						if(vwin && vwin->desktop->focused_window == vwin) {
+						if (vwin && vwin->desktop->focused_window == vwin) {
 							XSync(display, False);
 							XSetInputFocus(display, vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
 						}
@@ -3234,9 +3234,9 @@ int main(int argc, char *argv[])
 				case PropertyNotify: {
 					vwm_xwindow_t	*xwin;
 					VWM_TRACE("property notify");
-					if((xwin = vwm_xwin_lookup(event.xproperty.window)) &&
-					   event.xproperty.atom == wm_pid_atom &&
-					   event.xproperty.state == PropertyNewValue) vwm_xwin_monitor(xwin);
+					if ((xwin = vwm_xwin_lookup(event.xproperty.window)) &&
+					    event.xproperty.atom == wm_pid_atom &&
+					    event.xproperty.state == PropertyNewValue) vwm_xwin_monitor(xwin);
 					break;
 				}
 
@@ -3255,13 +3255,13 @@ int main(int argc, char *argv[])
 					VWM_TRACE("reparentnotify");
 					break;
 				default:
-					if(event.type == randr_event + RRScreenChangeNotify) {
+					if (event.type == randr_event + RRScreenChangeNotify) {
 						VWM_TRACE("rrscreenchangenotify");
-						if(xinerama_screens) XFree(xinerama_screens);
+						if (xinerama_screens) XFree(xinerama_screens);
 						xinerama_screens = XineramaQueryScreens(display, &xinerama_screens_cnt);
 
-						if(compositing_mode) vwm_comp_invalidate_root();
-					} else if(event.type == damage_event + XDamageNotify) {
+						if (compositing_mode) vwm_comp_invalidate_root();
+					} else if (event.type == damage_event + XDamageNotify) {
 						//VWM_TRACE("damagenotify");
 						vwm_comp_damage_event((XDamageNotifyEvent *)&event);
 					} else {
@@ -3269,9 +3269,9 @@ int main(int argc, char *argv[])
 					}
 					break;
 			}
-		} while(QLength(display));
+		} while (QLength(display));
 
-		if(combined_damage != None) { /* if there's damage to repaint, do it, this only happens when compositing for overlays is enabled */
+		if (combined_damage != None) { /* if there's damage to repaint, do it, this only happens when compositing for overlays is enabled */
 			vwm_comp_paint_all();
 			XSync(display, False);
 		}
