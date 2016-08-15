@@ -1702,13 +1702,15 @@ static void vwm_win_autoconf(vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_a
 
 
 /* focus a window */
-/* this updates window border color as needed and the X input focus */
+/* this updates window border color as needed and the X input focus if mapped */
 static void vwm_win_focus(vwm_window_t *vwin)
 {
 	VWM_TRACE("focusing: %#x", (unsigned int)vwin->xwindow->id);
 
-	/* change the focus to the new window */
-	XSetInputFocus(display, vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
+	if(vwm_xwin_is_mapped(vwin->xwindow)) {
+		/* if vwin is mapped give it the input focus */
+		XSetInputFocus(display, vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
+	}
 
 	/* update the border color accordingly */
 	if(vwin->shelved) {
@@ -1717,17 +1719,16 @@ static void vwm_win_focus(vwm_window_t *vwin)
 		/* fullscreen windows in the shelf when focused, since we don't intend to overlap there */
 		vwm_win_autoconf(vwin, VWM_SCREEN_REL_POINTER, VWM_WIN_AUTOCONF_FULL);	/* XXX TODO: for now the shelf follows the pointer, it's simple. */
 	} else {
-		if(vwin->desktop == focused_desktop && focused_desktop->focused_window) {
-			/* if we've changed focus within the same desktop, set the currently focused window border to the
-			 * unfocused color.  Otherwise, we want to leave the focused color on the old window on the old desktop */
-			XSetWindowBorder(display, focused_desktop->focused_window->xwindow->id, unfocused_window_border_color.pixel);
+		if(vwin->desktop->focused_window) {
+			/* set the border of the previously focused window on the same desktop to the unfocused color */
+			XSetWindowBorder(display, vwin->desktop->focused_window->xwindow->id, unfocused_window_border_color.pixel);
 		}
 
 		/* set the border of the newly focused window to the focused color */
 		XSetWindowBorder(display, vwin->xwindow->id, focused_window_border_color.pixel);
 
 		/* persist this on a per-desktop basis so it can be restored on desktop switches */
-		focused_desktop->focused_window = vwin;
+		vwin->desktop->focused_window = vwin;
 	}
 }
 
