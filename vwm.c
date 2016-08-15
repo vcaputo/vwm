@@ -170,7 +170,7 @@ static int					prev_sampling_interval = 1, sampling_interval = 1;
 
 	/* some needed prototypes */
 static vwm_xwindow_t * vwm_xwin_lookup(Window win);
-static inline int vwm_xwin_is_visible(vwm_xwindow_t *xwin);
+static inline int vwm_xwin_is_mapped(vwm_xwindow_t *xwin);
 static void vwm_comp_damage_add(XserverRegion damage);
 static vwm_xwindow_t * vwm_win_unmanage(vwm_window_t *vwin);
 static vwm_window_t * vwm_win_manage_xwin(vwm_xwindow_t *xwin);
@@ -846,8 +846,8 @@ static void proc_sample_callback(vmon_t *vmon, vmon_proc_t *proc, vwm_xwindow_t 
 
 	/* render other non-historic things and compose the various layers into an updated overlay */
 	/* this leaves everything ready to be composed with the window contents in paint_all() */
-	/* paint_all() also enters compose_overlay() to update the overlays on windows which become visible (desktop switches) */
-	if(compositing_mode && vwm_xwin_is_visible(xwin)) compose_overlay(xwin);
+	/* paint_all() also enters compose_overlay() to update the overlays on windows which become mapped (desktop switches) */
+	if(compositing_mode && vwm_xwin_is_mapped(xwin)) compose_overlay(xwin);
 }
 
 
@@ -1290,8 +1290,8 @@ static vwm_xwindow_t * vwm_xwin_lookup(Window win)
 }
 
 
-/* determine if a window is visible (vwm-mapped) according to the current context */
-static inline int vwm_xwin_is_visible(vwm_xwindow_t *xwin)
+/* determine if a window is mapped (vwm-mapped) according to the current context */
+static inline int vwm_xwin_is_mapped(vwm_xwindow_t *xwin)
 {
 	int ret = 0;
 
@@ -1702,13 +1702,15 @@ static void vwm_win_autoconf(vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_a
 
 
 /* focus a window */
-/* this updates window border color as needed and the X input focus */
+/* this updates window border color as needed and the X input focus if mapped */
 static void vwm_win_focus(vwm_window_t *vwin)
 {
 	VWM_TRACE("focusing: %#x", (unsigned int)vwin->xwindow->id);
 
-	/* change the focus to the new window */
-	XSetInputFocus(display, vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
+	if(vwm_xwin_is_mapped(vwin->xwindow)) {
+		/* if vwin is mapped give it the input focus */
+		XSetInputFocus(display, vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
+	}
 
 	/* update the border color accordingly */
 	if(vwin->shelved) {
@@ -1717,17 +1719,16 @@ static void vwm_win_focus(vwm_window_t *vwin)
 		/* fullscreen windows in the shelf when focused, since we don't intend to overlap there */
 		vwm_win_autoconf(vwin, VWM_SCREEN_REL_POINTER, VWM_WIN_AUTOCONF_FULL);	/* XXX TODO: for now the shelf follows the pointer, it's simple. */
 	} else {
-		if(vwin->desktop == focused_desktop && focused_desktop->focused_window) {
-			/* if we've changed focus within the same desktop, set the currently focused window border to the
-			 * unfocused color.  Otherwise, we want to leave the focused color on the old window on the old desktop */
-			XSetWindowBorder(display, focused_desktop->focused_window->xwindow->id, unfocused_window_border_color.pixel);
+		if(vwin->desktop->focused_window) {
+			/* set the border of the previously focused window on the same desktop to the unfocused color */
+			XSetWindowBorder(display, vwin->desktop->focused_window->xwindow->id, unfocused_window_border_color.pixel);
 		}
 
 		/* set the border of the newly focused window to the focused color */
 		XSetWindowBorder(display, vwin->xwindow->id, focused_window_border_color.pixel);
 
 		/* persist this on a per-desktop basis so it can be restored on desktop switches */
-		focused_desktop->focused_window = vwin;
+		vwin->desktop->focused_window = vwin;
 	}
 }
 
@@ -1741,7 +1742,7 @@ typedef enum _vwm_fence_t {
 	VWM_FENCE_MASKED_VIOLATE	/* leave the screen for any other not masked */
 } vwm_fence_t;
 
-static vwm_window_t * vwm_win_focus_next(vwm_window_t *vwin, vwm_context_focus_t context, vwm_fence_t fence)
+static vwm_window_t * vwm_win_focus_next(vwm_window_t *vwin, vwm_fence_t fence)
 {
 	const vwm_screen_t	*scr = vwm_screen_find(VWM_SCREEN_REL_XWIN, vwin->xwindow), *next_scr = NULL;
 	vwm_window_t		*next;
@@ -1753,8 +1754,8 @@ _retry:
 		/* searching for the next mapped window in this context, using vwin->windows as the head */
 		if(&next->windows_mru == &windows_mru) continue;	/* XXX: skip the containerless head, we're leveraging the circular list implementation */
 
-		if((context == VWM_CONTEXT_FOCUS_SHELF && next->shelved) ||
-		   ((context == VWM_CONTEXT_FOCUS_DESKTOP && !next->shelved && next->desktop == focused_desktop) &&
+		if((vwin->shelved && next->shelved) ||
+		   ((!vwin->shelved && !next->shelved && next->desktop == vwin->desktop) &&
 		    (fence == VWM_FENCE_IGNORE ||
 		     ((fence == VWM_FENCE_RESPECT || fence == VWM_FENCE_TRY_RESPECT) && vwm_screen_find(VWM_SCREEN_REL_XWIN, next->xwindow) == scr) ||
 		     (fence == VWM_FENCE_VIOLATE && vwm_screen_find(VWM_SCREEN_REL_XWIN, next->xwindow) != scr) ||
@@ -1781,31 +1782,24 @@ _retry:
 		VWM_TRACE("VWM_FENCE_MASKED_VIOLATE fence_mask now: 0x%lx\n", fence_mask);
 	}
 
-	switch(context) {
-		case VWM_CONTEXT_FOCUS_DESKTOP:
-			if(next != next->desktop->focused_window) {
-				/* focus the changed window */
-				vwm_win_focus(next);
-				XRaiseWindow(display, next->xwindow->id);
-			}
-			break;
+	if(vwin->shelved) {
+		if(next != focused_shelf) {
+			/* shelf switch, unmap the focused shelf and take it over */
+			/* TODO FIXME: this makes assumptions about the shelf being focused calling unmap/map directly.. */
+			vwm_win_unmap(focused_shelf);
 
-		case VWM_CONTEXT_FOCUS_SHELF:
-			if(next != focused_shelf) {
-				/* shelf switch, unmap the focused shelf and take it over */
-				vwm_win_unmap(focused_shelf);
+			XFlush(display);
 
-				XFlush(display);
-
-				vwm_win_map(next);
-				focused_shelf = next;
-				vwm_win_focus(next);
-			}
-			break;
-
-		default:
-			VWM_ERROR("Unhandled focus context %#x", context);
-			break;
+			vwm_win_map(next);
+			focused_shelf = next;
+			vwm_win_focus(next);
+		}
+	} else {
+		if(next != next->desktop->focused_window) {
+			/* focus the changed window */
+			vwm_win_focus(next);
+			XRaiseWindow(display, next->xwindow->id);
+		}
 	}
 
 	VWM_TRACE("vwin=%p xwin=%p name=\"%s\"", next, next->xwindow, next->xwindow->name);
@@ -1822,7 +1816,7 @@ static void vwm_win_shelve(vwm_window_t *vwin)
 
 	/* shelving focused window, focus the next window */
 	if(vwin == vwin->desktop->focused_window) {
-		vwm_win_mru(vwm_win_focus_next(vwin, VWM_CONTEXT_FOCUS_DESKTOP, VWM_FENCE_RESPECT));
+		vwm_win_mru(vwm_win_focus_next(vwin, VWM_FENCE_RESPECT));
 	}
 
 	if(vwin == vwin->desktop->focused_window) {
@@ -1843,11 +1837,11 @@ static void vwm_win_shelve(vwm_window_t *vwin)
 /* helper for (idempotently) unfocusing a window, deals with context switching etc... */
 static void vwm_win_unfocus(vwm_window_t *vwin)
 {
-	/* if we're the shelved window, cycle the focus to the next shelved window if possible, if there's no more shelf, switch to the desktop */
+	/* if we're the focused shelved window, cycle the focus to the next shelved window if possible, if there's no more shelf, switch to the desktop */
 	/* TODO: there's probably some icky behaviors for focused windows unmapping/destroying in unfocused contexts, we probably jump contexts suddenly. */
 	if(vwin == focused_shelf) {
 		VWM_TRACE("unfocusing focused shelf");
-		vwm_win_focus_next(vwin, VWM_CONTEXT_FOCUS_SHELF, VWM_FENCE_IGNORE);
+		vwm_win_focus_next(vwin, VWM_FENCE_IGNORE);
 
 		if(vwin == focused_shelf) {
 			VWM_TRACE("shelf empty, leaving");
@@ -1860,7 +1854,7 @@ static void vwm_win_unfocus(vwm_window_t *vwin)
 	/* if we're the focused window cycle the focus to the next window on the desktop if possible */
 	if(vwin->desktop->focused_window == vwin) {
 		VWM_TRACE("unfocusing focused window");
-		vwm_win_focus_next(vwin, VWM_CONTEXT_FOCUS_DESKTOP, VWM_FENCE_TRY_RESPECT);
+		vwm_win_focus_next(vwin, VWM_FENCE_TRY_RESPECT);
 	}
 
 	if(vwin->desktop->focused_window == vwin) {
@@ -2065,11 +2059,11 @@ static void vwm_comp_paint_all()
 	list_for_each_entry_prev(xwin, &xwindows, xwindows) {
 		XRectangle	r;
 
-		if(!vwm_xwin_is_visible(xwin)) continue;	/* if invisible skip */
+		if(!vwm_xwin_is_mapped(xwin)) continue;	/* if !mapped skip */
 
-		/* Everything "visible" next goes through an occlusion check.
+		/* Everything mapped next goes through an occlusion check.
 		 * Since the composite extension stops delivery of VisibilityNotify events for redirected windows,
-		 * (it assumes redirected windows should be treated as transparent, and provides no api to alter this assumption)
+		 * (it assumes redirected windows should be treated as part of a potentially transparent composite, and provides no api to alter this assumption)
 		 * we can't simply select the VisibilityNotify events on all windows and cache their visibility state in vwm_xwindow_t then skip
 		 * xwin->state==VisibilityFullyObscured windows here to avoid the cost of pointlessly composing overlays and rendering fully obscured windows :(.
 		 *
@@ -2079,7 +2073,7 @@ static void vwm_comp_paint_all()
 		 * If it doesn't, compose_overlay() is called, and the window's rect is added to the occluded region.
 		 * The occluded knowledge is also cached for the XRenderComposite() loop immediately following, where we skip the rendering of
 		 * occluded windows as well.
-		 * This does technically break SHAPE windows (xeyes, xmms), but only when monitoring is enabled which covers the with rectangular overlays anyways.
+		 * This does technically break SHAPE windows (xeyes, xmms), but only when monitoring is enabled which covers them with rectangular overlays anyways.
 		 */
 		r.x = xwin->attrs.x;
 		r.y = xwin->attrs.y;
@@ -2105,7 +2099,7 @@ static void vwm_comp_paint_all()
 	list_for_each_entry_prev(xwin, &xwindows, xwindows) {
 		XRectangle		r;
 
-		if(!vwm_xwin_is_visible(xwin) || xwin->occluded) continue;	/* if invisible or occluded skip */
+		if(!vwm_xwin_is_mapped(xwin) || xwin->occluded) continue;	/* if !mapped or occluded skip */
 
 		/* these coordinates + dimensions incorporate the border (since XCompositeNameWindowPixmap is being used) */
 		r.x = xwin->attrs.x;
@@ -2517,9 +2511,9 @@ static void vwm_keypressed(Window win, XEvent *keypress)
 			/* focus the next window, note this doesn't affect MRU yet, that happens on Mod1 release */
 			if(vwin) {
 				if(keypress->xkey.state & ShiftMask) {
-					vwm_win_focus_next(vwin, focused_context, VWM_FENCE_MASKED_VIOLATE);
+					vwm_win_focus_next(vwin, VWM_FENCE_MASKED_VIOLATE);
 				} else {
-					vwm_win_focus_next(vwin, focused_context, VWM_FENCE_RESPECT);
+					vwm_win_focus_next(vwin, VWM_FENCE_RESPECT);
 				}
 			}
 			break;
