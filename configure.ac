@@ -1,0 +1,16 @@
+AC_INIT([vwm], [3.0], [vcaputo@gnugeneration.com])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AC_PROG_CC
+AM_PROG_AR
+AC_PROG_RANLIB
+AC_CONFIG_HEADERS([config.h])
+AM_SILENT_RULES([yes])
+
+PKG_CHECK_MODULES(VWM, x11 xext xinerama xrandr xcomposite xfixes xdamage xrender)
+
+AC_CONFIG_FILES([
+ Makefile
+ src/Makefile
+ src/libvmon/Makefile
+])
+AC_OUTPUT
