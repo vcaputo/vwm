@@ -252,11 +252,9 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 
 	/* text variables */
 	char			str[256];
-	int			str_len;
+	int			str_len, str_width;
 	XTextItem		items[1024]; /* XXX TODO: dynamically allocate this and just keep it at the high water mark.. create a struct to encapsulate this, nr_items, and alloc_items... */
 	int			nr_items;
-	int			direction, ascent, descent;
-	XCharStruct		charstruct;
 
 	if ((*row)) { /* except row 0 (Idle/IOWait graph), handle any stale and new processes/threads */
 		if (proc->is_stale) {
@@ -394,9 +392,9 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 			XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
 				0, 0,					/* dst x, y */
 				xwin->attrs.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
-			XTextExtents(overlay_font, str, str_len, &direction, &ascent, &descent, &charstruct);
+			str_width = XTextWidth(overlay_font, str, str_len);
 			XDrawString(vwm->display, xwin->overlay.text_pixmap, text_gc,
-				    xwin->attrs.width - charstruct.width, OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
+				    xwin->attrs.width - str_width, OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
 				    str, str_len);
 			shadow_row(vwm, xwin, 0);
 		}
@@ -426,8 +424,7 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 		} else { /* we're a process having threads, suppress the wchan and state, as they will be displayed for the thread of same pid */
 			snprintf(str, sizeof(str), "  %5i   %n", proc->pid, &str_len);
 		}
-
-		XTextExtents(overlay_font, str, str_len, &direction, &ascent, &descent, &charstruct);
+		str_width = XTextWidth(overlay_font, str, str_len);
 
 		/* the process' comm label indented according to depth, followed with their respective argv's */
 		argv2xtext(proc, items, &nr_items);
@@ -438,12 +435,12 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 		/* ensure the area for the rest of the stuff is cleared, we don't put much text into thread rows so skip it for those. */
 		if (!proc->is_thread) {
 			XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
-				xwin->attrs.width - charstruct.width, (*row) * OVERLAY_ROW_HEIGHT,			/* dst x,y */
-				xwin->overlay.width - (xwin->attrs.width - charstruct.width), OVERLAY_ROW_HEIGHT);	/* dst w,h */
+				xwin->attrs.width - str_width, (*row) * OVERLAY_ROW_HEIGHT,			/* dst x,y */
+				xwin->overlay.width - (xwin->attrs.width - str_width), OVERLAY_ROW_HEIGHT);	/* dst w,h */
 		}
 
 		XDrawString(vwm->display, xwin->overlay.text_pixmap, text_gc,
-			    xwin->attrs.width - charstruct.width, ((*row) + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
+			    xwin->attrs.width - str_width, ((*row) + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
 			    str, str_len);
 
 		/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
