@@ -542,13 +542,9 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 	/* IOWait and Idle % @ row 0 */
 	draw_bars(vwm, xwin, *row, iowait_delta, total_delta, idle_delta, total_delta);
 
-	/* here's where the Idle/IOWait row drawing concludes */
-	if (1 /* FIXME TODO compositing_mode*/) {
+	/* only draw the \/\/\ and HZ if necessary */
+	if (xwin->overlay.redraw_needed || prev_sampling_interval != sampling_interval) {
 		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(sampling_interval < 0 ? 0 : 1 / sampling_intervals[sampling_interval]), &str_len);
-		/* TODO: I clear and redraw this row every time, which is unnecessary, small optimization would be to only do so when:
-		 * - overlay resized, and then constrain the clear to the affected width
-		 * - Hz changed
-		 */
 		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
 			0, 0,					/* dst x, y */
 			xwin->attrs.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
@@ -561,6 +557,8 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 	(*row)++;
 
 	draw_overlay_rest(vwm, xwin, proc, depth, row);
+
+	xwin->overlay.redraw_needed = 0;
 
 	return;
 }
@@ -584,6 +582,8 @@ static void maintain_overlay(vwm_t *vwm, vwm_xwindow_t *xwin)
 	 * from anywhere, and have it detect if it's being called on the same generation or if the generation has advanced.
 	 * For now, the monitors will just be a little latent in window resizes which is pretty harmless artifact.
 	 */
+
+	if (xwin->attrs.width != xwin->overlay.width || xwin->attrs.height != xwin->overlay.height) xwin->overlay.redraw_needed = 1;
 
 	/* if the window is larger than the overlays currently are, enlarge them */
 	if (xwin->attrs.width > xwin->overlay.width || xwin->attrs.height > xwin->overlay.height) {
