@@ -238,16 +238,37 @@ static int count_rows(vmon_proc_t *proc) {
 	return count;
 }
 
+/* helper for drawing the vertical bars in the graph layers */
+static void draw_bars(vwm_t *vwm, vwm_xwindow_t *xwin, int row, double a_fraction, double a_total, double b_fraction, double b_total)
+{
+	int	a_height, b_height;
 
-/* recursive draw function for the consolidated version of the overlay rendering which also implements snowflakes */
-static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int *row)
+	/* compute the bar heights for this sample */
+	a_height = (a_fraction / a_total * (double)(OVERLAY_ROW_HEIGHT - 1)); /* give up 1 pixel for the div */
+	b_height = (b_fraction / b_total * (double)(OVERLAY_ROW_HEIGHT - 1));
+
+	/* round up to 1 pixel when the scaled result is a fraction less than 1,
+	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
+	if (a_fraction && !a_height) a_height = 1;
+	if (b_fraction && !b_height) b_height = 1;
+
+	/* draw the two bars for this sample at the current phase in the graphs, note the first is ceiling-based, second floor-based */
+	XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.grapha_picture, &overlay_visible_color,
+		xwin->overlay.phase, row * OVERLAY_ROW_HEIGHT,					/* dst x, y */
+		1, a_height);										/* dst w, h */
+	XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.graphb_picture, &overlay_visible_color,
+		xwin->overlay.phase, row * OVERLAY_ROW_HEIGHT + (OVERLAY_ROW_HEIGHT - b_height) - 1,	/* dst x, y */
+		1, b_height);										/* dst w, h */
+}
+
+/* recursive draw function for "rest" of overlay: the per-process rows (heirarchy, argv, state, wchan, pid...) */
+static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int *row)
 {
 	vmon_proc_t		*child;
 	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
 
 	/* graph variables */
-	int			a_height, b_height;
 	double			utime_delta, stime_delta;
 
 	/* text variables */
@@ -256,152 +277,107 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 	XTextItem		items[1024]; /* XXX TODO: dynamically allocate this and just keep it at the high water mark.. create a struct to encapsulate this, nr_items, and alloc_items... */
 	int			nr_items;
 
-	if ((*row)) { /* except row 0 (Idle/IOWait graph), handle any stale and new processes/threads */
-		if (proc->is_stale) {
-			/* what to do when a process (subtree) has gone away */
-			static int	in_stale = 0;
-			int		in_stale_entrypoint = 0;
+	if (proc->is_stale) {
+		/* what to do when a process (subtree) has gone away */
+		static int	in_stale = 0;
+		int		in_stale_entrypoint = 0;
 
-			/* I snowflake the stale processes from the leaves up for a more intuitive snowflake order...
-			 * (I expect the command at the root of the subtree to appear at the top of the snowflakes...) */
-			/* This does require that I do a separate forward recursion to determine the number of rows
-			 * so I can correctly snowflake in reverse */
-			if (!in_stale) {
-				VWM_TRACE("entered stale at xwin=%p depth=%i row=%i", xwin, *depth, *row);
-				in_stale_entrypoint = in_stale = 1;
-				(*row) += count_rows(proc) - 1;
-			}
+		/* I snowflake the stale processes from the leaves up for a more intuitive snowflake order...
+		 * (I expect the command at the root of the subtree to appear at the top of the snowflakes...) */
+		/* This does require that I do a separate forward recursion to determine the number of rows
+		 * so I can correctly snowflake in reverse */
+		if (!in_stale) {
+			VWM_TRACE("entered stale at xwin=%p depth=%i row=%i", xwin, *depth, *row);
+			in_stale_entrypoint = in_stale = 1;
+			(*row) += count_rows(proc) - 1;
+		}
 
-			(*depth)++;
-			list_for_each_entry_prev(child, &proc->children, siblings) {
-				draw_overlay(vwm, xwin, child, depth, row);
+		(*depth)++;
+		list_for_each_entry_prev(child, &proc->children, siblings) {
+			draw_overlay_rest(vwm, xwin, child, depth, row);
+			(*row)--;
+		}
+
+		if (!proc->is_thread) {
+			list_for_each_entry_prev(child, &proc->threads, threads) {
+				draw_overlay_rest(vwm, xwin, child, depth, row);
 				(*row)--;
 			}
-
-			if (!proc->is_thread) {
-				list_for_each_entry_prev(child, &proc->threads, threads) {
-					draw_overlay(vwm, xwin, child, depth, row);
-					(*row)--;
-				}
-			}
-			(*depth)--;
-
-			VWM_TRACE("%i (%.*s) is stale @ depth %i row %i is_thread=%i", proc->pid,
-				((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len - 1,
-				((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.array,
-				(*depth), (*row), proc->is_thread);
-
-			/* stamp the graphs with the finish line */
-			XRenderComposite(vwm->display, PictOpSrc, overlay_finish_fill, None, xwin->overlay.grapha_picture,
-					 0, 0,							/* src x, y */
-					 0, 0,							/* mask x, y */
-					 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
-					 1, OVERLAY_ROW_HEIGHT - 1);
-			XRenderComposite(vwm->display, PictOpSrc, overlay_finish_fill, None, xwin->overlay.graphb_picture,
-					 0, 0,							/* src x, y */
-					 0, 0,							/* mask x, y */
-					 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
-					 1, OVERLAY_ROW_HEIGHT - 1);
-
-			/* extract the row from the various layers */
-			snowflake_row(vwm, xwin, xwin->overlay.grapha_picture, 1, (*row));
-			snowflake_row(vwm, xwin, xwin->overlay.graphb_picture, 1, (*row));
-			snowflake_row(vwm, xwin, xwin->overlay.text_picture, 0, (*row));
-			snowflake_row(vwm, xwin, xwin->overlay.shadow_picture, 0, (*row));
-			xwin->overlay.snowflakes_cnt++;
-
-			/* stamp the name (and whatever else we include) into overlay.text_picture */
-			argv2xtext(proc, items, &nr_items);
-			XDrawText(vwm->display, xwin->overlay.text_pixmap, text_gc,
-				  5, (xwin->overlay.heirarchy_end + 1) * OVERLAY_ROW_HEIGHT - 3,/* dst x, y */
-				  items, nr_items);
-			shadow_row(vwm, xwin, xwin->overlay.heirarchy_end);
-
-			xwin->overlay.heirarchy_end--;
-
-			if (in_stale_entrypoint) {
-				VWM_TRACE("exited stale at xwin=%p depth=%i row=%i", xwin, *depth, *row);
-				in_stale = 0;
-			}
-
-			return;
-		} else if (proc->is_new) {
-			/* what to do when a process has been introduced */
-			VWM_TRACE("%i is new", proc->pid);
-
-			allocate_row(vwm, xwin, xwin->overlay.grapha_picture, (*row));
-			allocate_row(vwm, xwin, xwin->overlay.graphb_picture, (*row));
-			allocate_row(vwm, xwin, xwin->overlay.text_picture, (*row));
-			allocate_row(vwm, xwin, xwin->overlay.shadow_picture, (*row));
-
-			xwin->overlay.heirarchy_end++;
 		}
+		(*depth)--;
+
+		VWM_TRACE("%i (%.*s) is stale @ depth %i row %i is_thread=%i", proc->pid,
+			((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len - 1,
+			((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.array,
+			(*depth), (*row), proc->is_thread);
+
+		/* stamp the graphs with the finish line */
+		XRenderComposite(vwm->display, PictOpSrc, overlay_finish_fill, None, xwin->overlay.grapha_picture,
+				 0, 0,							/* src x, y */
+				 0, 0,							/* mask x, y */
+				 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
+				 1, OVERLAY_ROW_HEIGHT - 1);
+		XRenderComposite(vwm->display, PictOpSrc, overlay_finish_fill, None, xwin->overlay.graphb_picture,
+				 0, 0,							/* src x, y */
+				 0, 0,							/* mask x, y */
+				 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
+				 1, OVERLAY_ROW_HEIGHT - 1);
+
+		/* extract the row from the various layers */
+		snowflake_row(vwm, xwin, xwin->overlay.grapha_picture, 1, (*row));
+		snowflake_row(vwm, xwin, xwin->overlay.graphb_picture, 1, (*row));
+		snowflake_row(vwm, xwin, xwin->overlay.text_picture, 0, (*row));
+		snowflake_row(vwm, xwin, xwin->overlay.shadow_picture, 0, (*row));
+		xwin->overlay.snowflakes_cnt++;
+
+		/* stamp the name (and whatever else we include) into overlay.text_picture */
+		argv2xtext(proc, items, &nr_items);
+		XDrawText(vwm->display, xwin->overlay.text_pixmap, text_gc,
+			  5, (xwin->overlay.heirarchy_end + 1) * OVERLAY_ROW_HEIGHT - 3,/* dst x, y */
+			  items, nr_items);
+		shadow_row(vwm, xwin, xwin->overlay.heirarchy_end);
+
+		xwin->overlay.heirarchy_end--;
+
+		if (in_stale_entrypoint) {
+			VWM_TRACE("exited stale at xwin=%p depth=%i row=%i", xwin, *depth, *row);
+			in_stale = 0;
+		}
+
+		return;
+	} else if (proc->is_new) {
+		/* what to do when a process has been introduced */
+		VWM_TRACE("%i is new", proc->pid);
+
+		allocate_row(vwm, xwin, xwin->overlay.grapha_picture, (*row));
+		allocate_row(vwm, xwin, xwin->overlay.graphb_picture, (*row));
+		allocate_row(vwm, xwin, xwin->overlay.text_picture, (*row));
+		allocate_row(vwm, xwin, xwin->overlay.shadow_picture, (*row));
+
+		xwin->overlay.heirarchy_end++;
 	}
 
 /* CPU utilization graphs */
-	if (!(*row)) {
-		/* XXX: sortof kludged in IOWait and Idle % @ row 0 */
-		stime_delta = iowait_delta;
-		utime_delta = idle_delta;
+	/* use the generation number to avoid recomputing this stuff for callbacks recurring on the same process in the same sample */
+	if (proc_ctxt->generation != vmon.generation) {
+		proc_ctxt->stime_delta = proc_stat->stime - proc_ctxt->last_stime;
+		proc_ctxt->utime_delta = proc_stat->utime - proc_ctxt->last_utime;
+		proc_ctxt->last_utime = proc_stat->utime;
+		proc_ctxt->last_stime = proc_stat->stime;
+
+		proc_ctxt->generation = vmon.generation;
+	}
+
+	if (proc->is_new) {
+		/* we need a minimum of two samples before we can compute a delta to plot,
+		 * so we suppress that and instead mark the start of monitoring with an impossible 100% of both graph contexts, a starting line. */
+		stime_delta = utime_delta = total_delta;
 	} else {
-		/* use the generation number to avoid recomputing this stuff for callbacks recurring on the same process in the same sample */
-		if (proc_ctxt->generation != vmon.generation) {
-			proc_ctxt->stime_delta = proc_stat->stime - proc_ctxt->last_stime;
-			proc_ctxt->utime_delta = proc_stat->utime - proc_ctxt->last_utime;
-			proc_ctxt->last_utime = proc_stat->utime;
-			proc_ctxt->last_stime = proc_stat->stime;
-
-			proc_ctxt->generation = vmon.generation;
-		}
-
-		if (proc->is_new) {
-			/* we need a minimum of two samples before we can compute a delta to plot,
-			 * so we suppress that and instead mark the start of monitoring with an impossible 100% of both graph contexts, a starting line. */
-			stime_delta = utime_delta = total_delta;
-		} else {
-			stime_delta = proc_ctxt->stime_delta;
-			utime_delta = proc_ctxt->utime_delta;
-		}
+		stime_delta = proc_ctxt->stime_delta;
+		utime_delta = proc_ctxt->utime_delta;
 	}
 
-	/* compute the bar heights for this sample */
-	a_height = (stime_delta / total_delta * (double)(OVERLAY_ROW_HEIGHT - 1)); /* give up 1 pixel for the div */
-	b_height = (utime_delta / total_delta * (double)(OVERLAY_ROW_HEIGHT - 1));
-
-	/* round up to 1 pixel when the scaled result is a fraction less than 1,
-	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
-	if (stime_delta && !a_height) a_height = 1;
-	if (utime_delta && !b_height) b_height = 1;
-
-	/* draw the two bars for this sample at the current phase in the graphs, note the first is ceiling-based, second floor-based */
-	XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.grapha_picture, &overlay_visible_color,
-		xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,					/* dst x, y */
-		1, a_height);										/* dst w, h */
-	XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.graphb_picture, &overlay_visible_color,
-		xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT + (OVERLAY_ROW_HEIGHT - b_height) - 1,	/* dst x, y */
-		1, b_height);										/* dst w, h */
-
-	if (!(*row)) {
-		/* here's where the Idle/IOWait row drawing concludes */
-		if (1 /* FIXME TODO compositing_mode*/) {
-			snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(sampling_interval < 0 ? 0 : 1 / sampling_intervals[sampling_interval]), &str_len);
-			/* TODO: I clear and redraw this row every time, which is unnecessary, small optimization would be to only do so when:
-			 * - overlay resized, and then constrain the clear to the affected width
-			 * - Hz changed
-			 */
-			XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
-				0, 0,					/* dst x, y */
-				xwin->attrs.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
-			str_width = XTextWidth(overlay_font, str, str_len);
-			XDrawString(vwm->display, xwin->overlay.text_pixmap, text_gc,
-				    xwin->attrs.width - str_width, OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
-				    str, str_len);
-			shadow_row(vwm, xwin, 0);
-		}
-		(*row)++;
-		draw_overlay(vwm, xwin, proc, depth, row);
-		return;
-	}
+	draw_bars(vwm, xwin, *row, stime_delta, total_delta, utime_delta, total_delta);
 
 /* process heirarchy text and accompanying per-process details like wchan/pid/state... */
 	if (1 /* FIXME TODO compositing_mode */) {	/* this stuff can be skipped when monitors aren't visible */
@@ -539,14 +515,54 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 	(*depth)++;
 	if (!proc->is_thread) {	/* XXX: the threads member serves as the list head only when not a thread */
 		list_for_each_entry(child, &proc->threads, threads) {
-			draw_overlay(vwm, xwin, child, depth, row);
+			draw_overlay_rest(vwm, xwin, child, depth, row);
 		}
 	}
 
 	list_for_each_entry(child, &proc->children, siblings) {
-		draw_overlay(vwm, xwin, child, depth, row);
+		draw_overlay_rest(vwm, xwin, child, depth, row);
 	}
 	(*depth)--;
+}
+
+
+
+/* recursive draw function entrypoint, draws the IOWait/Idle/HZ row, then enters draw_overlay_rest() */
+static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int *row)
+{
+	vmon_proc_t		*child;
+	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
+	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
+
+	/* text variables */
+	char			str[256];
+	int			str_len, str_width;
+
+/* CPU utilization graphs */
+	/* IOWait and Idle % @ row 0 */
+	draw_bars(vwm, xwin, *row, iowait_delta, total_delta, idle_delta, total_delta);
+
+	/* here's where the Idle/IOWait row drawing concludes */
+	if (1 /* FIXME TODO compositing_mode*/) {
+		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(sampling_interval < 0 ? 0 : 1 / sampling_intervals[sampling_interval]), &str_len);
+		/* TODO: I clear and redraw this row every time, which is unnecessary, small optimization would be to only do so when:
+		 * - overlay resized, and then constrain the clear to the affected width
+		 * - Hz changed
+		 */
+		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
+			0, 0,					/* dst x, y */
+			xwin->attrs.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
+		str_width = XTextWidth(overlay_font, str, str_len);
+		XDrawString(vwm->display, xwin->overlay.text_pixmap, text_gc,
+			    xwin->attrs.width - str_width, OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
+			    str, str_len);
+		shadow_row(vwm, xwin, 0);
+	}
+	(*row)++;
+
+	draw_overlay_rest(vwm, xwin, proc, depth, row);
+
+	return;
 }
 
 
