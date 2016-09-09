@@ -1344,6 +1344,8 @@ static void sample(vmon_t *vmon, vmon_proc_t *proc)
 {
 	int	i, wants, cur;
 
+	proc->children_changed = proc->threads_changed = 0;
+
 	/* load this process monitors wants, or inherit the default */
 	wants = proc->wants ? proc->wants : vmon->proc_wants;
 
