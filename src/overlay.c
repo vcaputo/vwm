@@ -261,6 +261,148 @@ static void draw_bars(vwm_t *vwm, vwm_xwindow_t *xwin, int row, double a_fractio
 		1, b_height);										/* dst w, h */
 }
 
+
+/* draws proc in a row of the process heirarchy */
+static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int depth, int row)
+{
+	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
+	vmon_proc_t		*child;
+	char			str[256];
+	int			str_len, str_width;
+	XTextItem		items[1024]; /* XXX TODO: dynamically allocate this and just keep it at the high water mark.. create a struct to encapsulate this, nr_items, and alloc_items... */
+	int			nr_items;
+
+/* process heirarchy text and accompanying per-process details like wchan/pid/state... */
+	/* this stuff can be skipped when monitors aren't visible */
+	/* TODO: make the columns interactively configurable @ runtime */
+	if (!proc->is_new) {
+	/* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
+		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
+			0, row * OVERLAY_ROW_HEIGHT,			/* dst x, y */
+			xwin->overlay.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
+	}
+
+	/* put the process' wchan, state, and PID columns @ the far right */
+	if (proc->is_thread || list_empty(&proc->threads)) {	/* only threads or non-threaded processes include the wchan and state */
+		snprintf(str, sizeof(str), "   %.*s %5i %c %n",
+			proc_stat->wchan.len,
+			proc_stat->wchan.len == 1 && proc_stat->wchan.array[0] == '0' ? "-" : proc_stat->wchan.array,
+			proc->pid,
+			proc_stat->state,
+			&str_len);
+	} else { /* we're a process having threads, suppress the wchan and state, as they will be displayed for the thread of same pid */
+		snprintf(str, sizeof(str), "  %5i   %n", proc->pid, &str_len);
+	}
+	str_width = XTextWidth(overlay_font, str, str_len);
+
+	/* the process' comm label indented according to depth, followed with their respective argv's */
+	argv2xtext(proc, items, &nr_items);
+	XDrawText(vwm->display, xwin->overlay.text_pixmap, text_gc,
+		  depth * (OVERLAY_ROW_HEIGHT / 2), (row + 1) * OVERLAY_ROW_HEIGHT - 3,			/* dst x, y */
+		  items, nr_items);
+
+	/* ensure the area for the rest of the stuff is cleared, we don't put much text into thread rows so skip it for those. */
+	if (!proc->is_thread) {
+		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
+			xwin->attrs.width - str_width, row * OVERLAY_ROW_HEIGHT,			/* dst x,y */
+			xwin->overlay.width - (xwin->attrs.width - str_width), OVERLAY_ROW_HEIGHT);	/* dst w,h */
+	}
+
+	XDrawString(vwm->display, xwin->overlay.text_pixmap, text_gc,
+		    xwin->attrs.width - str_width, (row + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
+		    str, str_len);
+
+	/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
+	if (proc != xwin->monitor) {
+		vmon_proc_t		*ancestor, *sibling, *last_sibling = NULL;
+		struct list_head	*rem;
+		int			needs_tee = 0;
+		int			bar_x = 0, bar_y = 0;
+		int			sub;
+
+		/* XXX: everything done in this code block only dirties _this_ process' row in the rendered overlay output */
+
+		/* walk up the ancestors until reaching xwin->monitor, any ancestors we encounter which have more siblings we draw a vertical bar for */
+		/* this draws the |'s in something like:  | |   |    | comm */
+		for (sub = 1, ancestor = proc->parent; ancestor && ancestor != xwin->monitor; ancestor = ancestor->parent) {
+			sub++;
+			bar_x = (depth - sub) * (OVERLAY_ROW_HEIGHT / 2) + 4;
+			bar_y = (row + 1) * OVERLAY_ROW_HEIGHT;
+
+			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
+			for (rem = ancestor->siblings.next; rem != &ancestor->parent->children; rem = rem->next) {
+				if (!(list_entry(rem, vmon_proc_t, siblings)->is_stale)) {
+					XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
+						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
+						  bar_x, bar_y);			/* dst x2, y2 (vertical line) */
+					break; /* stop looking for more siblings at this ancestor when we find one that isn't stale */
+				}
+			}
+		}
+
+		/* determine if _any_ of our siblings have children requiring us to draw a tee immediately before our comm string.
+		 * The only sibling which doesn't cause this to happen is the last one in the children list, if it has children it has no impact on its remaining
+		 * siblings, as there are none.
+		 *
+		 * This draws the + in something like:  | |    |  |    +comm
+		 */
+
+		/* find the last sibling (this has to be done due to the potential for stale siblings at the tail, and we'd rather not repeatedly check for it) */
+		list_for_each_entry(sibling, &proc->parent->children, siblings) {
+			if (!sibling->is_stale) last_sibling = sibling;
+		}
+
+		/* now look for siblings with non-stale children to determine if a tee is needed, ignoring the last sibling */
+		list_for_each_entry(sibling, &proc->parent->children, siblings) {
+			/* skip stale siblings, they aren't interesting as they're invisible, and the last sibling has no bearing on wether we tee or not. */
+			if (sibling->is_stale || sibling == last_sibling) continue;
+
+			/* if any of the other siblings have children which are not stale, put a tee in front of our name, but ignore stale children */
+			list_for_each_entry(child, &sibling->children, siblings) {
+				if (!child->is_stale) {
+					needs_tee = 1;
+					break;
+				}
+			}
+
+			/* if we still don't think we need a tee, check if there are threads */
+			if (!needs_tee) {
+				list_for_each_entry(child, &sibling->threads, threads) {
+					if (!child->is_stale) {
+						needs_tee = 1;
+						break;
+					}
+				}
+			}
+
+			/* found a tee is necessary, all that's left is to determine if the tee is a corner and draw it accordingly, stopping the search. */
+			if (needs_tee) {
+				bar_x = (depth - 1) * (OVERLAY_ROW_HEIGHT / 2) + 4;
+
+				/* if we're the last sibling, corner the tee by shortening the vbar */
+				if (proc == last_sibling) {
+					XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
+						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
+						  bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
+				} else {
+					XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
+						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
+						  bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
+				}
+
+				XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
+					  bar_x, bar_y - 4,				/* dst x1, y1 */
+					  bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
+
+				/* terminate the outer sibling loop upon drawing the tee... */
+				break;
+			}
+		}
+	}
+	shadow_row(vwm, xwin, row);
+}
+
+
 /* recursive draw function for "rest" of overlay: the per-process rows (heirarchy, argv, state, wchan, pid...) */
 static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int *row)
 {
@@ -272,10 +414,13 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 	double			utime_delta, stime_delta;
 
 	/* text variables */
-	char			str[256];
-	int			str_len, str_width;
 	XTextItem		items[1024]; /* XXX TODO: dynamically allocate this and just keep it at the high water mark.. create a struct to encapsulate this, nr_items, and alloc_items... */
 	int			nr_items;
+
+	/* Some parts of this we must do on every sample to maintain coherence in the graphs, since they're incrementally kept
+	 * in sync with the process heirarchy, allocating and shifting the rows as processes are created and destroyed.  Everything
+	 * else we should be able to skip doing unless overlay.redraw_needed or their contents changed.
+	 */
 
 	if (proc->is_stale) {
 		/* what to do when a process (subtree) has gone away */
@@ -379,135 +524,7 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 
 	draw_bars(vwm, xwin, *row, stime_delta, total_delta, utime_delta, total_delta);
 
-/* process heirarchy text and accompanying per-process details like wchan/pid/state... */
-	if (1 /* FIXME TODO compositing_mode */) {	/* this stuff can be skipped when monitors aren't visible */
-		/* TODO: make the columns interactively configurable @ runtime */
-		if (!proc->is_new) {
-		/* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
-			XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
-				0, (*row) * OVERLAY_ROW_HEIGHT,			/* dst x, y */
-				xwin->overlay.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
-		}
-
-		/* put the process' wchan, state, and PID columns @ the far right */
-		if (proc->is_thread || list_empty(&proc->threads)) {	/* only threads or non-threaded processes include the wchan and state */
-			snprintf(str, sizeof(str), "   %.*s %5i %c %n",
-				proc_stat->wchan.len,
-				proc_stat->wchan.len == 1 && proc_stat->wchan.array[0] == '0' ? "-" : proc_stat->wchan.array,
-				proc->pid,
-				proc_stat->state,
-				&str_len);
-		} else { /* we're a process having threads, suppress the wchan and state, as they will be displayed for the thread of same pid */
-			snprintf(str, sizeof(str), "  %5i   %n", proc->pid, &str_len);
-		}
-		str_width = XTextWidth(overlay_font, str, str_len);
-
-		/* the process' comm label indented according to depth, followed with their respective argv's */
-		argv2xtext(proc, items, &nr_items);
-		XDrawText(vwm->display, xwin->overlay.text_pixmap, text_gc,
-			  (*depth) * (OVERLAY_ROW_HEIGHT / 2), ((*row) + 1) * OVERLAY_ROW_HEIGHT - 3,			/* dst x, y */
-			  items, nr_items);
-
-		/* ensure the area for the rest of the stuff is cleared, we don't put much text into thread rows so skip it for those. */
-		if (!proc->is_thread) {
-			XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
-				xwin->attrs.width - str_width, (*row) * OVERLAY_ROW_HEIGHT,			/* dst x,y */
-				xwin->overlay.width - (xwin->attrs.width - str_width), OVERLAY_ROW_HEIGHT);	/* dst w,h */
-		}
-
-		XDrawString(vwm->display, xwin->overlay.text_pixmap, text_gc,
-			    xwin->attrs.width - str_width, ((*row) + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
-			    str, str_len);
-
-		/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
-		if (proc != xwin->monitor) {
-			vmon_proc_t		*ancestor, *sibling, *last_sibling = NULL;
-			struct list_head	*rem;
-			int			needs_tee = 0;
-			int			bar_x = 0, bar_y = 0;
-			int			sub;
-
-			/* XXX: everything done in this code block only dirties _this_ process' row in the rendered overlay output */
-
-			/* walk up the ancestors until reaching xwin->monitor, any ancestors we encounter which have more siblings we draw a vertical bar for */
-			/* this draws the |'s in something like:  | |   |    | comm */
-			for (sub = 1, ancestor = proc->parent; ancestor && ancestor != xwin->monitor; ancestor = ancestor->parent) {
-				sub++;
-				bar_x = ((*depth) - sub) * (OVERLAY_ROW_HEIGHT / 2) + 4;
-				bar_y = ((*row) + 1) * OVERLAY_ROW_HEIGHT;
-
-				/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
-				for (rem = ancestor->siblings.next; rem != &ancestor->parent->children; rem = rem->next) {
-					if (!(list_entry(rem, vmon_proc_t, siblings)->is_stale)) {
-						XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
-							  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
-							  bar_x, bar_y);			/* dst x2, y2 (vertical line) */
-						break; /* stop looking for more siblings at this ancestor when we find one that isn't stale */
-					}
-				}
-			}
-
-			/* determine if _any_ of our siblings have children requiring us to draw a tee immediately before our comm string.
-			 * The only sibling which doesn't cause this to happen is the last one in the children list, if it has children it has no impact on its remaining
-			 * siblings, as there are none.
-			 *
-			 * This draws the + in something like:  | |    |  |    +comm
-			 */
-
-			/* find the last sibling (this has to be done due to the potential for stale siblings at the tail, and we'd rather not repeatedly check for it) */
-			list_for_each_entry(sibling, &proc->parent->children, siblings) {
-				if (!sibling->is_stale) last_sibling = sibling;
-			}
-
-			/* now look for siblings with non-stale children to determine if a tee is needed, ignoring the last sibling */
-			list_for_each_entry(sibling, &proc->parent->children, siblings) {
-				/* skip stale siblings, they aren't interesting as they're invisible, and the last sibling has no bearing on wether we tee or not. */
-				if (sibling->is_stale || sibling == last_sibling) continue;
-
-				/* if any of the other siblings have children which are not stale, put a tee in front of our name, but ignore stale children */
-				list_for_each_entry(child, &sibling->children, siblings) {
-					if (!child->is_stale) {
-						needs_tee = 1;
-						break;
-					}
-				}
-
-				/* if we still don't think we need a tee, check if there are threads */
-				if (!needs_tee) {
-					list_for_each_entry(child, &sibling->threads, threads) {
-						if (!child->is_stale) {
-							needs_tee = 1;
-							break;
-						}
-					}
-				}
-
-				/* found a tee is necessary, all that's left is to determine if the tee is a corner and draw it accordingly, stopping the search. */
-				if (needs_tee) {
-					bar_x = ((*depth) - 1) * (OVERLAY_ROW_HEIGHT / 2) + 4;
-
-					/* if we're the last sibling, corner the tee by shortening the vbar */
-					if (proc == last_sibling) {
-						XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
-							  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
-							  bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
-					} else {
-						XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
-							  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
-							  bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
-					}
-
-					XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
-						  bar_x, bar_y - 4,				/* dst x1, y1 */
-						  bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
-
-					/* terminate the outer sibling loop upon drawing the tee... */
-					break;
-				}
-			}
-		}
-		shadow_row(vwm, xwin, (*row));
-	}
+	draw_heirarchy_row(vwm, xwin, proc, *depth, *row);
 
 	(*row)++;
 
