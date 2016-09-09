@@ -238,6 +238,27 @@ static int count_rows(vmon_proc_t *proc) {
 	return count;
 }
 
+
+/* helper for detecting if any children/threads in the process heirarchy rooted @ proc are new/stale this sample */
+static int proc_heirarchy_changed(vmon_proc_t *proc) {
+	vmon_proc_t	*child;
+
+	if (proc->children_changed || proc->threads_changed) return 1;
+
+	if (!proc->is_thread) {
+		list_for_each_entry(child, &proc->threads, threads) {
+			if (proc_heirarchy_changed(child)) return 1;
+		}
+	}
+
+	list_for_each_entry(child, &proc->children, siblings) {
+		if (proc_heirarchy_changed(child)) return 1;
+	}
+
+	return 0;
+}
+
+
 /* helper for drawing the vertical bars in the graph layers */
 static void draw_bars(vwm_t *vwm, vwm_xwindow_t *xwin, int row, double a_fraction, double a_total, double b_fraction, double b_total)
 {
@@ -263,7 +284,7 @@ static void draw_bars(vwm_t *vwm, vwm_xwindow_t *xwin, int row, double a_fractio
 
 
 /* draws proc in a row of the process heirarchy */
-static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int depth, int row)
+static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int depth, int row, int heirarchy_changed)
 {
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
 	vmon_proc_t		*child;
@@ -273,7 +294,15 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 	int			nr_items;
 
 /* process heirarchy text and accompanying per-process details like wchan/pid/state... */
-	/* this stuff can be skipped when monitors aren't visible */
+
+	/* skip if obviously unnecessary (this can be further improved, but this makes a big difference as-is) */
+	if (!xwin->overlay.redraw_needed &&
+	    !heirarchy_changed &&
+	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_WCHAN) &&
+	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_PID) &&
+	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_STATE) &&
+	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_ARGV)) return;
+
 	/* TODO: make the columns interactively configurable @ runtime */
 	if (!proc->is_new) {
 	/* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
@@ -399,12 +428,13 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 			}
 		}
 	}
+
 	shadow_row(vwm, xwin, row);
 }
 
 
 /* recursive draw function for "rest" of overlay: the per-process rows (heirarchy, argv, state, wchan, pid...) */
-static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int *row)
+static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int *depth, int *row, int heirarchy_changed)
 {
 	vmon_proc_t		*child;
 	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
@@ -439,13 +469,13 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 
 		(*depth)++;
 		list_for_each_entry_prev(child, &proc->children, siblings) {
-			draw_overlay_rest(vwm, xwin, child, depth, row);
+			draw_overlay_rest(vwm, xwin, child, depth, row, heirarchy_changed);
 			(*row)--;
 		}
 
 		if (!proc->is_thread) {
 			list_for_each_entry_prev(child, &proc->threads, threads) {
-				draw_overlay_rest(vwm, xwin, child, depth, row);
+				draw_overlay_rest(vwm, xwin, child, depth, row, heirarchy_changed);
 				(*row)--;
 			}
 		}
@@ -524,7 +554,7 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 
 	draw_bars(vwm, xwin, *row, stime_delta, total_delta, utime_delta, total_delta);
 
-	draw_heirarchy_row(vwm, xwin, proc, *depth, *row);
+	draw_heirarchy_row(vwm, xwin, proc, *depth, *row, heirarchy_changed);
 
 	(*row)++;
 
@@ -532,12 +562,12 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 	(*depth)++;
 	if (!proc->is_thread) {	/* XXX: the threads member serves as the list head only when not a thread */
 		list_for_each_entry(child, &proc->threads, threads) {
-			draw_overlay_rest(vwm, xwin, child, depth, row);
+			draw_overlay_rest(vwm, xwin, child, depth, row, heirarchy_changed);
 		}
 	}
 
 	list_for_each_entry(child, &proc->children, siblings) {
-		draw_overlay_rest(vwm, xwin, child, depth, row);
+		draw_overlay_rest(vwm, xwin, child, depth, row, heirarchy_changed);
 	}
 	(*depth)--;
 }
@@ -554,6 +584,8 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 	/* text variables */
 	char			str[256];
 	int			str_len, str_width;
+
+	int			heirarchy_changed = 0;
 
 /* CPU utilization graphs */
 	/* IOWait and Idle % @ row 0 */
@@ -573,7 +605,10 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 	}
 	(*row)++;
 
-	draw_overlay_rest(vwm, xwin, proc, depth, row);
+	if (!xwin->overlay.redraw_needed) heirarchy_changed = proc_heirarchy_changed(proc);
+
+
+	draw_overlay_rest(vwm, xwin, proc, depth, row, heirarchy_changed);
 
 	xwin->overlay.redraw_needed = 0;
 
