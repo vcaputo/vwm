@@ -57,10 +57,13 @@ void vwm_key_released(vwm_t *vwm, Window win, XKeyReleasedEvent *keyrelease)
 			VWM_TRACE("XK_Alt_[LR] released");
 
 			/* aborted? try restore focused_origin */
-			if (key_is_grabbed > 1 && vwm->focused_origin) {
-				VWM_TRACE("restoring %p on %p", vwm->focused_origin, vwm->focused_origin->desktop);
-				vwm_desktop_focus(vwm, vwm->focused_origin->desktop);
-				vwm_win_focus(vwm, vwm->focused_origin);
+			if (key_is_grabbed > 1) {
+				key_is_grabbed--;	/* This is important to prevent treating the final lone Alt release as another cancel/rollback. */
+				if (vwm->focused_origin) {
+					VWM_TRACE("restoring %p on %p", vwm->focused_origin, vwm->focused_origin->desktop);
+					vwm_desktop_focus(vwm, vwm->focused_origin->desktop);
+					vwm_win_focus(vwm, vwm->focused_origin);
+				}
 			}
 
 			/* make the focused window the most recently used */
