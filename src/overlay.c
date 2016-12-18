@@ -41,6 +41,7 @@
 #define OVERLAY_GRAPH_MIN_HEIGHT	(4 * OVERLAY_ROW_HEIGHT)
 #define OVERLAY_ISTHREAD_ARGV		"~"					/* use this string to mark threads in the argv field */
 #define OVERLAY_NOCOMM_ARGV		"#missed it!"				/* use this string to substitute the command when missing in argv field */
+#define OVERLAY_MAX_ARGC		512					/* this is a huge amount */
 
 
 /* libvmon */
@@ -184,7 +185,7 @@ static void shadow_row(vwm_t *vwm, vwm_xwindow_t *xwin, int row)
 
 
 /* simple helper to map the vmon per-proc argv array into an XTextItem array, deals with threads vs. processes and the possibility of the comm field not getting read in before the process exited... */
-static void argv2xtext(vmon_proc_t *proc, XTextItem *items, int *nr_items)	/* XXX TODO: reallocate items when too small... */
+static void argv2xtext(vmon_proc_t *proc, XTextItem *items, int max_items, int *nr_items)
 {
 	int	i;
 	int	nr = 0;
@@ -209,7 +210,7 @@ static void argv2xtext(vmon_proc_t *proc, XTextItem *items, int *nr_items)	/* XX
 	items[nr].font = None;
 	nr++;
 
-	for (i = 1; i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
+	for (i = 1; nr < max_items && i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
 		items[nr].chars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i];
 		items[nr].nchars = strlen(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i]);	/* TODO: libvmon should inform us of the length */
 		items[nr].delta = 4;
@@ -290,7 +291,7 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 	vmon_proc_t		*child;
 	char			str[256];
 	int			str_len, str_width;
-	XTextItem		items[1024]; /* XXX TODO: dynamically allocate this and just keep it at the high water mark.. create a struct to encapsulate this, nr_items, and alloc_items... */
+	XTextItem		items[OVERLAY_MAX_ARGC];
 	int			nr_items;
 
 /* process heirarchy text and accompanying per-process details like wchan/pid/state... */
@@ -325,7 +326,7 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 	str_width = XTextWidth(overlay_font, str, str_len);
 
 	/* the process' comm label indented according to depth, followed with their respective argv's */
-	argv2xtext(proc, items, &nr_items);
+	argv2xtext(proc, items, NELEMS(items), &nr_items);
 	XDrawText(vwm->display, xwin->overlay.text_pixmap, text_gc,
 		  depth * (OVERLAY_ROW_HEIGHT / 2), (row + 1) * OVERLAY_ROW_HEIGHT - 3,			/* dst x, y */
 		  items, nr_items);
@@ -444,7 +445,7 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 	double			utime_delta, stime_delta;
 
 	/* text variables */
-	XTextItem		items[1024]; /* XXX TODO: dynamically allocate this and just keep it at the high water mark.. create a struct to encapsulate this, nr_items, and alloc_items... */
+	XTextItem		items[OVERLAY_MAX_ARGC];
 	int			nr_items;
 
 	/* Some parts of this we must do on every sample to maintain coherence in the graphs, since they're incrementally kept
@@ -506,7 +507,7 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 		xwin->overlay.snowflakes_cnt++;
 
 		/* stamp the name (and whatever else we include) into overlay.text_picture */
-		argv2xtext(proc, items, &nr_items);
+		argv2xtext(proc, items, NELEMS(items), &nr_items);
 		XDrawText(vwm->display, xwin->overlay.text_pixmap, text_gc,
 			  5, (xwin->overlay.heirarchy_end + 1) * OVERLAY_ROW_HEIGHT - 3,/* dst x, y */
 			  items, nr_items);

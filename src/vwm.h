@@ -39,6 +39,7 @@
 
 #define MIN(_a, _b)			((_a) < (_b) ? (_a) : (_b))
 #define MAX(_a, _b)			((_a) > (_b) ? (_a) : (_b))
+#define NELEMS(_a)			(sizeof(_a) / sizeof(_a[0]))
 
 typedef struct _vwm_window_t vwm_window_t;
 typedef struct _vwm_desktop_t vwm_desktop_t;
