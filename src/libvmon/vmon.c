@@ -489,7 +489,7 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow_threads_t **store)
 {
 	int		changes = 0;
-	struct dirent	dentry, *dentry_res;
+	struct dirent	*dentry;
 	list_head_t	*cur, *start;
 	vmon_proc_t	*tmp, *_tmp;
 	int		found;
@@ -537,15 +537,15 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 	}
 
 	start = &proc->threads;
-	while(!readdir_r((*store)->task_dir, &dentry, &dentry_res) && dentry_res) {
+	while((dentry = readdir((*store)->task_dir))) {
 		int	tid;
 
-		if(dentry.d_name[0] == '.' && (dentry.d_name[1] == '\0' || (dentry.d_name[1] == '.' && dentry.d_name[2] == '\0'))) {
+		if(dentry->d_name[0] == '.' && (dentry->d_name[1] == '\0' || (dentry->d_name[1] == '.' && dentry->d_name[2] == '\0'))) {
 			/* skip . and .. */
 			continue;
 		}
 
-		tid = atoi(dentry.d_name);
+		tid = atoi(dentry->d_name);
 
 		found = 0;
 		list_for_each(cur, start) {
@@ -693,7 +693,7 @@ static void del_fd(vmon_t *vmon, vmon_proc_fd_t *fd)
 static sample_ret_t proc_sample_files(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_files_t **store)
 {
 	int			changes = 0;
-	struct dirent		dentry, *dentry_res;
+	struct dirent		*dentry;
 	int			fdnum;
 	list_head_t		*cur, *start;
 	vmon_proc_fd_t		*fd, *_fd;
@@ -743,13 +743,13 @@ static sample_ret_t proc_sample_files(vmon_t *vmon, vmon_proc_t *proc, vmon_proc
 	}
 
 	start = &(*store)->fds;
-	while(!readdir_r((*store)->fd_dir, &dentry, &dentry_res) && dentry_res) {
-		if(dentry.d_name[0] == '.' && (dentry.d_name[1] == '\0' || (dentry.d_name[1] == '.' && dentry.d_name[2] == '\0'))) {
+	while((dentry = readdir((*store)->fd_dir))) {
+		if(dentry->d_name[0] == '.' && (dentry->d_name[1] == '\0' || (dentry->d_name[1] == '.' && dentry->d_name[2] == '\0'))) {
 			/* skip . and .. */
 			continue;
 		}
 
-		fdnum = atoi(dentry.d_name);
+		fdnum = atoi(dentry->d_name);
 
 		/* search the process' files list for this fdnum */
 		fd = NULL;
@@ -782,7 +782,7 @@ static sample_ret_t proc_sample_files(vmon_t *vmon, vmon_proc_t *proc, vmon_proc
 		/* Always readlink the fd path, since we have no way of knowing if it's a repurposed fdnum even when we've found a match.
 		 * It would be nice if say.. the mtime of the /proc/$pid/fd directory changed if there's been any fd activity so we could skip the entire
 		 * readdir+readlink loop in idle times, worth investigating. */
-		readlinkf(vmon, &fd->object_path, vmon->proc_dir, "%i/fd/%s", proc->pid, dentry.d_name);
+		readlinkf(vmon, &fd->object_path, vmon->proc_dir, "%i/fd/%s", proc->pid, dentry->d_name);
 
 		cur_object = fd->object; /* stow the current object reference before we potentially replace it so we may unreference it if needed  */
 		fd->object = fobject_lookup_hinted(vmon, fd->object_path.array, cur_object);
@@ -1508,22 +1508,22 @@ int vmon_sample(vmon_t *vmon)
 	/* first manage the "all processes monitored" use case, this doesn't do any sampling, it just maintains the top-level list of processes being monitored */
 	/* note this doesn't cover threads, as linux doesn't expose threads in the readdir of /proc, even though you can directly look them up at /proc/$tid */
 	if((vmon->flags & VMON_FLAG_PROC_ALL)) {
-		struct dirent	dentry, *dentry_res;
+		struct dirent	*dentry;
 		list_head_t	*tmp, *_tmp = &vmon->processes;
 
 		/* if VMON_FLAG_PROC_ALL flag is set, quite a different code path is used which simply readdir()'s /proc, treating every numeric directory found
 		 * as a process to monitor.  The list of toplevel processes being monitored is kept in sync with these, automatically monitoring
 		 * new processes found, and unmonitoring processes now absent, in a fashion very similar to the proc_sample_files() code. */
 		seekdir(vmon->proc_dir, 0);
-		while(!readdir_r(vmon->proc_dir, &dentry, &dentry_res) && dentry_res) {
+		while((dentry = readdir(vmon->proc_dir))) {
 			int	pid, found;
 
-			if(dentry.d_type != DT_DIR || dentry.d_name[0] < '0' || dentry.d_name[0] > '9') {
+			if(dentry->d_type != DT_DIR || dentry->d_name[0] < '0' || dentry->d_name[0] > '9') {
 				/* skip non-directories and non-numeric directories */
 				continue;
 			}
 
-			pid = atoi(dentry.d_name);
+			pid = atoi(dentry->d_name);
 
 			found = 0;
 			list_for_each(tmp, _tmp) { /* note how we use _tmp as the head for the processes iteration, resuming from the last process' node */
