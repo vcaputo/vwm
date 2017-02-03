@@ -3,7 +3,6 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_PROG_CC
 AM_PROG_AR
 AC_PROG_RANLIB
-AC_CONFIG_HEADERS([config.h])
 AM_SILENT_RULES([yes])
 
 PKG_CHECK_MODULES(VWM, x11 xext xinerama xrandr xcomposite xfixes xdamage xrender)
