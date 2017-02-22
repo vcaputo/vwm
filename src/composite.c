@@ -173,7 +173,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 {
 	vwm_xwindow_t		*xwin;
 	XRenderColor		bgcolor = {0x0000, 0x00, 0x00, 0xffff};
-	Region			occluded = XCreateRegion();
+	Region			occluded;
 	static XserverRegion	undamage_region = None;
 
 	/* if there's no damage to repaint, short-circuit, this happens when compositing for overlays is disabled. */
@@ -196,6 +196,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 		XFreePixmap(vwm->display, root_pixmap);
 	}
 
+	occluded = XCreateRegion();
 	/* compose overlays for all visible windows up front in a separate pass (kind of lame, but it's simpler since compose_overlay() adds to combined_damage) */
 	list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
 		XRectangle	r;
