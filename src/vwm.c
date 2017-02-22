@@ -69,11 +69,11 @@ static int errhandler(Display *display, XErrorEvent *err)
 int main(int argc, char *argv[])
 {
 	int		err = 0;
-	int		done = 0;
 	XEvent		event;
 	Cursor		pointer;
 	struct pollfd	pfd;
 	char		*console_args[] = {"xterm", "-class", CONSOLE_WM_CLASS, "-e", "/bin/sh", "-c", "screen -D -RR " CONSOLE_SESSION_STRING, NULL};
+	char		*quit_console_args[] = {"/bin/sh", "-c", "screen -dr " CONSOLE_SESSION_STRING " -X quit", NULL};
 
 #define reterr_if(_cond, _fmt, _args...) \
 	err++;\
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
 	pfd.revents = 0;
 	pfd.fd = ConnectionNumber(vwm.display);
 
-	while (!done) {
+	while (!vwm.done) {
 		do {
 			int	delay;
 
@@ -282,6 +282,9 @@ int main(int argc, char *argv[])
 
 		vwm_composite_paint_all(&vwm);
 	}
+
+	/* tear down console */
+	vwm_launch(&vwm, quit_console_args, VWM_LAUNCH_MODE_FG);
 
 	/* close connection to server */
 	XFlush(vwm.display);

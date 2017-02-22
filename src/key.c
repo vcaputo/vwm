@@ -97,7 +97,6 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 	static typeof(keypress->state)		last_state;
 	static int				repeat_cnt = 0;
 	int					do_grab = 0;
-	char					*quit_console_args[] = {"/bin/sh", "-c", "screen -dr " CONSOLE_SESSION_STRING " -X quit", NULL};
 
 	sym = XLookupKeysym(keypress, 0);
 
@@ -174,10 +173,8 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 		case XK_Escape: /* leave VWM rudely, after triple press */
 			do_grab = 1;
 
-			if (repeat_cnt == 2) {
-				vwm_launch(vwm, quit_console_args, VWM_LAUNCH_MODE_FG);
-				exit(42);
-			}
+			if (repeat_cnt == 2)
+				vwm->done = 1;
 			break;
 
 		case XK_v: /* instantiate (and focus) a new (potentially empty, unless migrating) virtual desktop */
