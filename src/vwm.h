@@ -53,6 +53,7 @@ typedef struct _vwm_t {
 	Atom			wm_protocols_atom;
 	Atom			wm_pid_atom;
 	int			damage_event, damage_error;
+	int			done;			/* global flag to cause vwm to quit */
 
 	list_head_t		desktops;		/* global list of all (virtual) desktops in spatial created-in order */
 	list_head_t		desktops_mru;		/* global list of all (virtual) desktops in MRU order */
