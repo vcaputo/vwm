@@ -1,15 +1,14 @@
-#ifndef _UTIL_H
-#define _UTIL_H
+#ifndef _VWM_H
+#define _VWM_H
 
-#include <stdio.h>
 // #include <X11/Xlib.h>
 // #include <X11/Xutil.h>
-#include <errno.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/Xinerama.h>
 
 #include "context.h"
 #include "list.h"
+#include "util.h"
 
 #define WINDOW_BORDER_WIDTH	1
 #define WM_GRAB_MODIFIER	Mod1Mask	/* the modifier for invoking vwm's controls */
@@ -22,24 +21,6 @@
 #define CONSOLE_WM_CLASS	"VWMConsoleXTerm"		/* the class we specify to the "console" xterm */
 #define CONSOLE_SESSION_STRING	"_vwm_console.$DISPLAY"		/* the unique console screen session identifier */
 
-
-#define VWM_ERROR(_fmt, _args...)	fprintf(stderr, "%s:%i\t%s() "_fmt"\n", __FILE__, __LINE__, __FUNCTION__, ##_args)
-#define VWM_PERROR(_fmt, _args...)	fprintf(stderr, "%s:%i\t%s() "_fmt"; %s\n", __FILE__, __LINE__, __FUNCTION__, ##_args, strerror(errno))
-#define VWM_BUG(_fmt, _args...)		fprintf(stderr, "BUG %s:%i\t%s() "_fmt"; %s\n", __FILE__, __LINE__, __FUNCTION__, ##_args, strerror(errno))
-
-#ifdef TRACE
-#define VWM_TRACE(_fmt, _args...)	fprintf(stderr, "%s:%i\t%s() "_fmt"\n", __FILE__, __LINE__, __FUNCTION__, ##_args)
-#else
-#define VWM_TRACE(_fmt, _args...)	do { } while(0)
-#endif
-
-#define VWM_XROOT(_vwm)			RootWindow((_vwm)->display, (_vwm)->screen_num)
-#define VWM_XVISUAL(_vwm)		DefaultVisual((_vwm)->display, (_vwm)->screen_num)
-#define VWM_XDEPTH(_vwm)		DefaultDepth((_vwm)->display, (_vwm)->screen_num)
-
-#define MIN(_a, _b)			((_a) < (_b) ? (_a) : (_b))
-#define MAX(_a, _b)			((_a) > (_b) ? (_a) : (_b))
-#define NELEMS(_a)			(sizeof(_a) / sizeof(_a[0]))
 
 typedef struct _vwm_window_t vwm_window_t;
 typedef struct _vwm_desktop_t vwm_desktop_t;
