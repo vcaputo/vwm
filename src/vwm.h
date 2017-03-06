@@ -9,6 +9,7 @@
 #include "context.h"
 #include "list.h"
 #include "util.h"
+#include "xserver.h"
 
 #define WINDOW_BORDER_WIDTH	1
 #define WM_GRAB_MODIFIER	Mod1Mask	/* the modifier for invoking vwm's controls */
@@ -21,15 +22,21 @@
 #define CONSOLE_WM_CLASS	"VWMConsoleXTerm"		/* the class we specify to the "console" xterm */
 #define CONSOLE_SESSION_STRING	"_vwm_console.$DISPLAY"		/* the unique console screen session identifier */
 
+#define VWM_XCMAP(_vwm)		(_vwm)->xserver->cmap
+#define VWM_XDISPLAY(_vwm)	(_vwm)->xserver->display
+#define VWM_XGC(_vwm)		(_vwm)->xserver->gc
+#define VWM_XSCREENNUM(_vwm)	(_vwm)->xserver->screen_num
+#define VWM_XROOT(_vwm)		XSERVER_XROOT((_vwm)->xserver)
+#define VWM_XVISUAL(_vwm)	XSERVER_XVISUAL((_vwm)->xserver)
+#define VWM_XDEPTH(_vwm)	XSERVER_XDEPTH((_vwm)->xserver)
 
 typedef struct _vwm_window_t vwm_window_t;
 typedef struct _vwm_desktop_t vwm_desktop_t;
 
 typedef struct _vwm_t {
-	Display			*display;
-	Colormap		cmap;
-	int			screen_num;
-	GC			gc;
+	vwm_xserver_t		*xserver;		/* global xserver instance */
+
+	/* extra X stuff needed by vwm */
 	Atom			wm_delete_atom;
 	Atom			wm_protocols_atom;
 	Atom			wm_pid_atom;

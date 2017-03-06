@@ -35,7 +35,7 @@ static int keys_pressed(vwm_t *vwm) {
 	int	i;
 	char	state[32];
 
-	XQueryKeymap(vwm->display, state);
+	XQueryKeymap(VWM_XDISPLAY(vwm), state);
 
 	for (i = 0; i < sizeof(state); i++) {
 		if (state[i]) return 1;
@@ -80,8 +80,8 @@ void vwm_key_released(vwm_t *vwm, Window win, XKeyReleasedEvent *keyrelease)
 	}
 
 	if (key_is_grabbed && !keys_pressed(vwm)) {
-		XUngrabKeyboard(vwm->display, CurrentTime);
-		XFlush(vwm->display);
+		XUngrabKeyboard(VWM_XDISPLAY(vwm), CurrentTime);
+		XFlush(VWM_XDISPLAY(vwm));
 		key_is_grabbed = 0;
 		vwm->fence_mask = 0;	/* reset the fence mask on release for VWM_FENCE_MASKED_VIOLATE */
 	}
@@ -160,7 +160,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 		case XK_d: /* destroy focused */
 			if (vwin) {
 				if (keypress->state & ShiftMask) {  /* brutally destroy the focused window */
-					XKillClient(vwm->display, vwin->xwindow->id);
+					XKillClient(VWM_XDISPLAY(vwm), vwin->xwindow->id);
 				} else { /* kindly destroy the focused window */
 					vwm_xwin_message(vwm, vwin->xwindow, vwm->wm_protocols_atom, vwm->wm_delete_atom);
 				}
@@ -240,7 +240,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 				} else {
 					do_grab = 1;
 
-					XRaiseWindow(vwm->display, vwin->xwindow->id);
+					XRaiseWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id);
 
 					if (repeat_cnt == 1) {
 						/* double: reraise & fullscreen */
@@ -257,7 +257,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 							vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_TOTAL, VWM_WIN_AUTOCONF_ALL);
 						}
 					}
-					XFlush(vwm->display);
+					XFlush(VWM_XDISPLAY(vwm));
 				}
 			}
 			break;
@@ -273,9 +273,9 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 					if (vwin->autoconfigured == VWM_WIN_AUTOCONF_ALL) {
 						vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
 					} else {
-						XLowerWindow(vwm->display, vwin->xwindow->id);
+						XLowerWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id);
 					}
-					XFlush(vwm->display);
+					XFlush(VWM_XDISPLAY(vwm));
 				}
 			}
 			break;
@@ -361,7 +361,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 	if (!key_is_grabbed && do_grab) {
 		VWM_TRACE("saving focused_origin of %p", vwin);
 		vwm->focused_origin = vwin; /* for returning to on abort */
-		XGrabKeyboard(vwm->display, VWM_XROOT(vwm), False, GrabModeAsync, GrabModeAsync, CurrentTime);
+		XGrabKeyboard(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), False, GrabModeAsync, GrabModeAsync, CurrentTime);
 		key_is_grabbed = 1;
 	}
 

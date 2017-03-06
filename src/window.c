@@ -36,7 +36,7 @@ void vwm_win_unmap(vwm_t *vwm, vwm_window_t *vwin)
 	}
 	VWM_TRACE("Unmapping \"%s\"", vwin->xwindow->name);
 	vwin->unmapping = 1;
-	XUnmapWindow(vwm->display, vwin->xwindow->id);
+	XUnmapWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id);
 }
 
 
@@ -49,7 +49,7 @@ void vwm_win_map(vwm_t *vwm, vwm_window_t *vwin)
 	}
 	VWM_TRACE("Mapping \"%s\"", vwin->xwindow->name);
 	vwin->mapping = 1;
-	XMapWindow(vwm->display, vwin->xwindow->id);
+	XMapWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id);
 }
 
 
@@ -198,7 +198,7 @@ void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_
 	}
 	va_end(ap);
 
-	XConfigureWindow(vwm->display, vwin->xwindow->id, CWX | CWY | CWWidth | CWHeight | CWBorderWidth, &changes);
+	XConfigureWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id, CWX | CWY | CWWidth | CWHeight | CWBorderWidth, &changes);
 	vwin->autoconfigured = conf;
 }
 
@@ -211,23 +211,23 @@ void vwm_win_focus(vwm_t *vwm, vwm_window_t *vwin)
 
 	if (vwm_xwin_is_mapped(vwm, vwin->xwindow)) {
 		/* if vwin is mapped give it the input focus */
-		XSetInputFocus(vwm->display, vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
+		XSetInputFocus(VWM_XDISPLAY(vwm), vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
 	}
 
 	/* update the border color accordingly */
 	if (vwin->shelved) {
 		/* set the border of the newly focused window to the shelved color */
-		XSetWindowBorder(vwm->display, vwin->xwindow->id, vwin == vwm->console ? vwm->colors.shelved_console_border_color.pixel : vwm->colors.shelved_window_border_color.pixel);
+		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwin == vwm->console ? vwm->colors.shelved_console_border_color.pixel : vwm->colors.shelved_window_border_color.pixel);
 		/* fullscreen windows in the shelf when focused, since we don't intend to overlap there */
 		vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_POINTER, VWM_WIN_AUTOCONF_FULL);	/* XXX TODO: for now the shelf follows the pointer, it's simple. */
 	} else {
 		if (vwin->desktop->focused_window) {
 			/* set the border of the previously focused window on the same desktop to the unfocused color */
-			XSetWindowBorder(vwm->display, vwin->desktop->focused_window->xwindow->id, vwm->colors.unfocused_window_border_color.pixel);
+			XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->desktop->focused_window->xwindow->id, vwm->colors.unfocused_window_border_color.pixel);
 		}
 
 		/* set the border of the newly focused window to the focused color */
-		XSetWindowBorder(vwm->display, vwin->xwindow->id, vwm->colors.focused_window_border_color.pixel);
+		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwm->colors.focused_window_border_color.pixel);
 
 		/* persist this on a per-desktop basis so it can be restored on desktop switches */
 		vwin->desktop->focused_window = vwin;
@@ -282,7 +282,7 @@ _retry:
 			/* TODO FIXME: this makes assumptions about the shelf being focused calling unmap/map directly.. */
 			vwm_win_unmap(vwm, vwm->focused_shelf);
 
-			XFlush(vwm->display);
+			XFlush(VWM_XDISPLAY(vwm));
 
 			vwm_win_map(vwm, next);
 			vwm->focused_shelf = next;
@@ -292,7 +292,7 @@ _retry:
 		if (next != next->desktop->focused_window) {
 			/* focus the changed window */
 			vwm_win_focus(vwm, next);
-			XRaiseWindow(vwm->display, next->xwindow->id);
+			XRaiseWindow(VWM_XDISPLAY(vwm), next->xwindow->id);
 		}
 	}
 
@@ -389,17 +389,17 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 		goto _fail;
 	}
 
-	XUngrabButton(vwm->display, AnyButton, AnyModifier, xwin->id);
-	XGrabButton(vwm->display, AnyButton, WM_GRAB_MODIFIER, xwin->id, False, (PointerMotionMask | ButtonPressMask | ButtonReleaseMask), GrabModeAsync, GrabModeAsync, None, None);
-	XGrabKey(vwm->display, AnyKey, WM_GRAB_MODIFIER, xwin->id, False, GrabModeAsync, GrabModeAsync);
-	XSetWindowBorder(vwm->display, xwin->id, vwm->colors.unfocused_window_border_color.pixel);
+	XUngrabButton(VWM_XDISPLAY(vwm), AnyButton, AnyModifier, xwin->id);
+	XGrabButton(VWM_XDISPLAY(vwm), AnyButton, WM_GRAB_MODIFIER, xwin->id, False, (PointerMotionMask | ButtonPressMask | ButtonReleaseMask), GrabModeAsync, GrabModeAsync, None, None);
+	XGrabKey(VWM_XDISPLAY(vwm), AnyKey, WM_GRAB_MODIFIER, xwin->id, False, GrabModeAsync, GrabModeAsync);
+	XSetWindowBorder(VWM_XDISPLAY(vwm), xwin->id, vwm->colors.unfocused_window_border_color.pixel);
 
 	vwin->hints = XAllocSizeHints();
 	if (!vwin->hints) {
 		VWM_PERROR("Failed to allocate WM hints");
 		goto _fail;
 	}
-	XGetWMNormalHints(vwm->display, xwin->id, vwin->hints, &vwin->hints_supplied);
+	XGetWMNormalHints(VWM_XDISPLAY(vwm), xwin->id, vwin->hints, &vwin->hints_supplied);
 
 	xwin->managed = vwin;
 	vwin->xwindow = xwin;
@@ -434,7 +434,7 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 	}
 
 	/* always raise newly managed windows so we know about them. */
-	XRaiseWindow(vwm->display, xwin->id);
+	XRaiseWindow(VWM_XDISPLAY(vwm), xwin->id);
 
 	/* if the desktop has no focused window yet, automatically focus the newly managed one, provided we're on the desktop context */
 	if (!vwm->focused_desktop->focused_window && vwm->focused_context == VWM_CONTEXT_DESKTOP) {
@@ -464,5 +464,5 @@ void vwm_win_migrate(vwm_t *vwm, vwm_window_t *vwin, vwm_desktop_t *desktop)
 	vwm_win_focus(vwm, vwin);			/* focus the window so borders get updated */
 	vwm_win_mru(vwm, vwin); /* TODO: is this right? shouldn't the Mod1 release be what's responsible for this? I migrate so infrequently it probably doesn't matter */
 
-	XRaiseWindow(vwm->display, vwin->xwindow->id); /* ensure the window is raised */
+	XRaiseWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id); /* ensure the window is raised */
 }

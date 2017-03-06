@@ -58,8 +58,8 @@ const vwm_screen_t * vwm_screen_find(vwm_t *vwm, vwm_screen_rel_t rel, ...)
 	faux.screen_number = 0;
 	faux.x_org = 0;
 	faux.y_org = 0;
-	faux.width = WidthOfScreen(DefaultScreenOfDisplay(vwm->display));
-	faux.height = HeightOfScreen(DefaultScreenOfDisplay(vwm->display));
+	faux.width = WidthOfScreen(DefaultScreenOfDisplay(VWM_XDISPLAY(vwm)));
+	faux.height = HeightOfScreen(DefaultScreenOfDisplay(VWM_XDISPLAY(vwm)));
 
 	if (!vwm->xinerama_screens) goto _out;
 
@@ -92,7 +92,7 @@ const vwm_screen_t * vwm_screen_find(vwm_t *vwm, vwm_screen_rel_t rel, ...)
 			Window		root, child;
 
 			/* get the pointer coordinates and find which screen it's in */
-			XQueryPointer(vwm->display, VWM_XROOT(vwm), &root, &child, &root_x, &root_y, &win_x, &win_y, &mask);
+			XQueryPointer(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), &root, &child, &root_x, &root_y, &win_x, &win_y, &mask);
 
 			for_each_screen(scr) {
 				if (root_x >= scr->x_org && root_x < scr->x_org + scr->width &&

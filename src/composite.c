@@ -44,17 +44,17 @@ static int			repaint_needed;
 /* bind the window to a "namewindowpixmap" and create a picture from it (compositing) */
 static void bind_namewindow(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
-	xwin->pixmap = XCompositeNameWindowPixmap(vwm->display, xwin->id);
-	xwin->picture = XRenderCreatePicture(vwm->display, xwin->pixmap,
-					     XRenderFindVisualFormat(vwm->display, xwin->attrs.visual),
+	xwin->pixmap = XCompositeNameWindowPixmap(VWM_XDISPLAY(vwm), xwin->id);
+	xwin->picture = XRenderCreatePicture(VWM_XDISPLAY(vwm), xwin->pixmap,
+					     XRenderFindVisualFormat(VWM_XDISPLAY(vwm), xwin->attrs.visual),
 					     CPSubwindowMode, &pa_inferiors);
-	XFreePixmap(vwm->display, xwin->pixmap);
+	XFreePixmap(VWM_XDISPLAY(vwm), xwin->pixmap);
 }
 
 /* free the window's picture for accessing its redirected contents (compositing) */
 static void unbind_namewindow(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
-	XRenderFreePicture(vwm->display, xwin->picture);
+	XRenderFreePicture(VWM_XDISPLAY(vwm), xwin->picture);
 }
 
 void vwm_composite_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
@@ -62,7 +62,7 @@ void vwm_composite_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 	if (!compositing_mode) return;
 
 	bind_namewindow(vwm, xwin);
-	xwin->damage = XDamageCreate(vwm->display, xwin->id, XDamageReportNonEmpty);
+	xwin->damage = XDamageCreate(VWM_XDISPLAY(vwm), xwin->id, XDamageReportNonEmpty);
 }
 
 void vwm_composite_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
@@ -70,15 +70,15 @@ void vwm_composite_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
 	if (!compositing_mode) return;
 
 	unbind_namewindow(vwm, xwin);
-	XDamageDestroy(vwm->display, xwin->damage);
+	XDamageDestroy(VWM_XDISPLAY(vwm), xwin->damage);
 }
 
 /* add damage to the global combined damage queue where we accumulate damage between calls to paint_all() */
 void vwm_composite_damage_add(vwm_t *vwm, XserverRegion damage)
 {
 	if (combined_damage != None) {
-		XFixesUnionRegion(vwm->display, combined_damage, combined_damage, damage);
-		XFixesDestroyRegion(vwm->display, damage);
+		XFixesUnionRegion(VWM_XDISPLAY(vwm), combined_damage, combined_damage, damage);
+		XFixesDestroyRegion(VWM_XDISPLAY(vwm), damage);
 	} else {
 		combined_damage = damage;
 	}
@@ -95,7 +95,7 @@ void vwm_composite_damage_win(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 	if (!compositing_mode) return;
 
-	region = XFixesCreateRegion(vwm->display, &rect, 1);
+	region = XFixesCreateRegion(VWM_XDISPLAY(vwm), &rect, 1);
 	vwm_composite_damage_add(vwm, region);
 }
 
@@ -114,7 +114,7 @@ void vwm_composite_handle_configure(vwm_t *vwm, vwm_xwindow_t *xwin, XWindowAttr
 						new_attrs->width + new_attrs->border_width * 2,
 						new_attrs->height + new_attrs->border_width * 2 } };
 
-	region = XFixesCreateRegion(vwm->display, rects, 2);
+	region = XFixesCreateRegion(VWM_XDISPLAY(vwm), rects, 2);
 	vwm_composite_damage_add(vwm, region);
 	unbind_namewindow(vwm, xwin);
 	bind_namewindow(vwm, xwin);
@@ -141,9 +141,9 @@ void vwm_composite_damage_event(vwm_t *vwm, XDamageNotifyEvent *ev)
 		return;
 	}
 
-	region = XFixesCreateRegion(vwm->display, NULL, 0);
-	XDamageSubtract(vwm->display, xwin->damage, None, region);
-	XFixesTranslateRegion(vwm->display, region, xwin->attrs.x + xwin->attrs.border_width, xwin->attrs.y + xwin->attrs.border_width);
+	region = XFixesCreateRegion(VWM_XDISPLAY(vwm), NULL, 0);
+	XDamageSubtract(VWM_XDISPLAY(vwm), xwin->damage, None, region);
+	XFixesTranslateRegion(VWM_XDISPLAY(vwm), region, xwin->attrs.x + xwin->attrs.border_width, xwin->attrs.y + xwin->attrs.border_width);
 	vwm_composite_damage_add(vwm, region);
 }
 
@@ -154,9 +154,9 @@ void vwm_composite_invalidate_root(vwm_t *vwm)
 {
 	if (!compositing_mode) return;
 
-	if (root_picture) XRenderFreePicture(vwm->display, root_picture);
+	if (root_picture) XRenderFreePicture(VWM_XDISPLAY(vwm), root_picture);
 	root_picture = None;
-	if (root_buffer) XRenderFreePicture(vwm->display, root_picture);
+	if (root_buffer) XRenderFreePicture(VWM_XDISPLAY(vwm), root_picture);
 	root_buffer = None;
 }
 
@@ -181,19 +181,19 @@ void vwm_composite_paint_all(vwm_t *vwm)
 
 	repaint_needed = 0;
 
-	if (!undamage_region) undamage_region = XFixesCreateRegion(vwm->display, NULL, 0);
+	if (!undamage_region) undamage_region = XFixesCreateRegion(VWM_XDISPLAY(vwm), NULL, 0);
 
 	/* (re)create the root picture from the root window and allocate a double buffer for the off-screen composition of the damaged contents */
 	if (root_picture == None) {
 		Pixmap	root_pixmap;
 
-		XGetWindowAttributes(vwm->display, VWM_XROOT(vwm), &root_attrs);
-		root_picture = XRenderCreatePicture(vwm->display, VWM_XROOT(vwm),
-						    XRenderFindVisualFormat(vwm->display, VWM_XVISUAL(vwm)),
+		XGetWindowAttributes(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), &root_attrs);
+		root_picture = XRenderCreatePicture(VWM_XDISPLAY(vwm), VWM_XROOT(vwm),
+						    XRenderFindVisualFormat(VWM_XDISPLAY(vwm), VWM_XVISUAL(vwm)),
 						    CPSubwindowMode, &pa_inferiors);
-		root_pixmap = XCreatePixmap(vwm->display, VWM_XROOT(vwm), root_attrs.width, root_attrs.height, VWM_XDEPTH(vwm));
-		root_buffer = XRenderCreatePicture(vwm->display, root_pixmap, XRenderFindVisualFormat(vwm->display, VWM_XVISUAL(vwm)), 0, 0);
-		XFreePixmap(vwm->display, root_pixmap);
+		root_pixmap = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), root_attrs.width, root_attrs.height, VWM_XDEPTH(vwm));
+		root_buffer = XRenderCreatePicture(VWM_XDISPLAY(vwm), root_pixmap, XRenderFindVisualFormat(VWM_XDISPLAY(vwm), VWM_XVISUAL(vwm)), 0, 0);
+		XFreePixmap(VWM_XDISPLAY(vwm), root_pixmap);
 	}
 
 	occluded = XCreateRegion();
@@ -234,8 +234,8 @@ void vwm_composite_paint_all(vwm_t *vwm)
 	XDestroyRegion(occluded);
 
 	/* start with the clip regions set to the damaged area accumulated since the previous paint_all() */
-	XFixesSetPictureClipRegion(vwm->display, root_buffer, 0, 0, combined_damage);	/* this is the double buffer where the in-flight screen contents are staged */
-	XFixesSetPictureClipRegion(vwm->display, root_picture, 0, 0, combined_damage);	/* this is the visible root window */
+	XFixesSetPictureClipRegion(VWM_XDISPLAY(vwm), root_buffer, 0, 0, combined_damage);	/* this is the double buffer where the in-flight screen contents are staged */
+	XFixesSetPictureClipRegion(VWM_XDISPLAY(vwm), root_picture, 0, 0, combined_damage);	/* this is the visible root window */
 
 	/* since translucent windows aren't supported in vwm, I can do this more efficiently */
 	list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
@@ -250,14 +250,14 @@ void vwm_composite_paint_all(vwm_t *vwm)
 		r.height = xwin->attrs.height + xwin->attrs.border_width * 2;
 
 		/* render the redirected window contents into root_buffer, note root_buffer has the remaining combined_damage set as the clip region */
-		XRenderComposite(vwm->display, PictOpSrc, xwin->picture, None, root_buffer,
+		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, xwin->picture, None, root_buffer,
 				 0, 0, 0, 0, /* src x, y, mask x, y */
 				 r.x, r.y, /* dst x, y */
 				 r.width, r.height);
 
 		if (xwin->monitor && !xwin->attrs.override_redirect && xwin->overlay.width) {
 			/* draw the monitoring overlay atop the window, note we stay within the window borders here. */
-			XRenderComposite(vwm->display, PictOpOver, xwin->overlay.picture, None, root_buffer,
+			XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, xwin->overlay.picture, None, root_buffer,
 					 0, 0, 0, 0,								/* src x,y, maxk x, y */
 					 xwin->attrs.x + xwin->attrs.border_width,				/* dst x */
 					 xwin->attrs.y + xwin->attrs.border_width,				/* dst y */
@@ -265,22 +265,22 @@ void vwm_composite_paint_all(vwm_t *vwm)
 		}
 
 		/* subtract the region of the window from the combined damage and update the root_buffer clip region to reflect the remaining damage */
-		XFixesSetRegion(vwm->display, undamage_region, &r, 1);
-		XFixesSubtractRegion(vwm->display, combined_damage, combined_damage, undamage_region);
-		XFixesSetPictureClipRegion(vwm->display, root_buffer, 0, 0, combined_damage);
+		XFixesSetRegion(VWM_XDISPLAY(vwm), undamage_region, &r, 1);
+		XFixesSubtractRegion(VWM_XDISPLAY(vwm), combined_damage, combined_damage, undamage_region);
+		XFixesSetPictureClipRegion(VWM_XDISPLAY(vwm), root_buffer, 0, 0, combined_damage);
 	}
 
 	/* at this point all of the visible windows have been subtracted from the clip region, so paint any root window damage (draw background) */
-	XRenderFillRectangle(vwm->display, PictOpSrc, root_buffer, &bgcolor, 0, 0, root_attrs.width, root_attrs.height);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, root_buffer, &bgcolor, 0, 0, root_attrs.width, root_attrs.height);
 
 	/* discard the root_buffer clip region and copy root_buffer to root_picture, root_picture still has the combined damage as its clip region */
-	XFixesSetPictureClipRegion(vwm->display, root_buffer, 0, 0, None);
-	XRenderComposite(vwm->display, PictOpSrc, root_buffer, None, root_picture, 0, 0, 0, 0, 0, 0, root_attrs.width, root_attrs.height);
+	XFixesSetPictureClipRegion(VWM_XDISPLAY(vwm), root_buffer, 0, 0, None);
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, root_buffer, None, root_picture, 0, 0, 0, 0, 0, 0, root_attrs.width, root_attrs.height);
 
 	/* fin */
-	XFixesDestroyRegion(vwm->display, combined_damage);
+	XFixesDestroyRegion(VWM_XDISPLAY(vwm), combined_damage);
 	combined_damage = None;
-	XSync(vwm->display, False);
+	XSync(VWM_XDISPLAY(vwm), False);
 }
 
 
@@ -289,21 +289,21 @@ void vwm_composite_toggle(vwm_t *vwm)
 {
 	vwm_xwindow_t	*xwin;
 
-	XGrabServer(vwm->display);
-	XSync(vwm->display, False);
+	XGrabServer(VWM_XDISPLAY(vwm));
+	XSync(VWM_XDISPLAY(vwm), False);
 
 	switch (compositing_mode) {
 		case VWM_COMPOSITING_OFF:
 			VWM_TRACE("enabling compositing");
 			compositing_mode = VWM_COMPOSITING_MONITORS;
-			XCompositeRedirectSubwindows(vwm->display, VWM_XROOT(vwm), CompositeRedirectManual);
+			XCompositeRedirectSubwindows(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), CompositeRedirectManual);
 			list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
 				bind_namewindow(vwm, xwin);
-				xwin->damage = XDamageCreate(vwm->display, xwin->id, XDamageReportNonEmpty);
+				xwin->damage = XDamageCreate(VWM_XDISPLAY(vwm), xwin->id, XDamageReportNonEmpty);
 			}
 			/* damage everything */
 			/* TODO: keep a list of rects reflecting all the current screens and create a region from that... */
-			vwm_composite_damage_add(vwm, XFixesCreateRegionFromWindow(vwm->display, VWM_XROOT(vwm), WindowRegionBounding));
+			vwm_composite_damage_add(vwm, XFixesCreateRegionFromWindow(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), WindowRegionBounding));
 			break;
 
 		case VWM_COMPOSITING_MONITORS: {
@@ -313,20 +313,20 @@ void vwm_composite_toggle(vwm_t *vwm)
 			compositing_mode = VWM_COMPOSITING_OFF;
 			list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
 				unbind_namewindow(vwm, xwin);
-				XDamageDestroy(vwm->display, xwin->damage);
+				XDamageDestroy(VWM_XDISPLAY(vwm), xwin->damage);
 			}
-			XCompositeUnredirectSubwindows(vwm->display, VWM_XROOT(vwm), CompositeRedirectManual);
+			XCompositeUnredirectSubwindows(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), CompositeRedirectManual);
 			vwm_composite_invalidate_root(vwm);
 
 			/* if there's any damage queued up discard it so we don't enter paint_all() until compositing is reenabled again. */
 			if (combined_damage) {
-				XFixesDestroyRegion(vwm->display, combined_damage);
+				XFixesDestroyRegion(VWM_XDISPLAY(vwm), combined_damage);
 				combined_damage = None;
 			}
-			while (XCheckTypedEvent(vwm->display, vwm->damage_event + XDamageNotify, &ev) != False);
+			while (XCheckTypedEvent(VWM_XDISPLAY(vwm), vwm->damage_event + XDamageNotify, &ev) != False);
 			break;
 		}
 	}
 
-	XUngrabServer(vwm->display);
+	XUngrabServer(VWM_XDISPLAY(vwm));
 }

@@ -33,7 +33,7 @@ void vwm_draw_logo(vwm_t *vwm)
 	XPoint			points[VWM_LOGO_POINTS];
 	const vwm_screen_t	*scr = vwm_screen_find(vwm, VWM_SCREEN_REL_POINTER);
 
-	XGrabServer(vwm->display);
+	XGrabServer(VWM_XDISPLAY(vwm));
 
 	/* use the dimensions of the pointer-containing screen */
 	width = scr->width;
@@ -50,11 +50,11 @@ void vwm_draw_logo(vwm_t *vwm)
 			points[i].y = (i % 2 * (float)height) + yoff;
 		}
 
-		XDrawLines(vwm->display, VWM_XROOT(vwm), vwm->gc, points, sizeof(points) / sizeof(XPoint), CoordModeOrigin);
-		XFlush(vwm->display);
+		XDrawLines(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), VWM_XGC(vwm), points, sizeof(points) / sizeof(XPoint), CoordModeOrigin);
+		XFlush(VWM_XDISPLAY(vwm));
 		usleep(3333);
-		XDrawLines(vwm->display, VWM_XROOT(vwm), vwm->gc, points, sizeof(points) / sizeof(XPoint), CoordModeOrigin);
-		XFlush(vwm->display);
+		XDrawLines(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), VWM_XGC(vwm), points, sizeof(points) / sizeof(XPoint), CoordModeOrigin);
+		XFlush(VWM_XDISPLAY(vwm));
 
 		/* the width is shrunken as well, but only by as much as it is tall */
 		yoff++;
@@ -62,5 +62,5 @@ void vwm_draw_logo(vwm_t *vwm)
 		xoff += 2;
 	}
 
-	XUngrabServer(vwm->display);
+	XUngrabServer(VWM_XDISPLAY(vwm));
 }

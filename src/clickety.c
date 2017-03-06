@@ -121,7 +121,7 @@ void vwm_clickety_motion(vwm_t *vwm, Window win, XMotionEvent *motion)
 		case VWM_ADJUST_MOVE:
 			changes.x = clickety.orig.x + (motion->x_root - clickety.impetus_x_root);
 			changes.y = clickety.orig.y + (motion->y_root - clickety.impetus_y_root);
-			XConfigureWindow(vwm->display, win, CWX | CWY | CWBorderWidth, &changes);
+			XConfigureWindow(VWM_XDISPLAY(vwm), win, CWX | CWY | CWBorderWidth, &changes);
 			break;
 
 		case VWM_ADJUST_RESIZE: {
@@ -132,9 +132,9 @@ void vwm_clickety_motion(vwm_t *vwm, Window win, XMotionEvent *motion)
 			compute_resize((XEvent *)motion, &resized);
 			/* TODO: this is probably broken with compositing active, but it doesn't seem to be too messed up in practice */
 			/* erase the last rectangle */
-			XDrawRectangle(vwm->display, VWM_XROOT(vwm), vwm->gc, clickety.lastrect.x, clickety.lastrect.y, clickety.lastrect.width, clickety.lastrect.height);
+			XDrawRectangle(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), VWM_XGC(vwm), clickety.lastrect.x, clickety.lastrect.y, clickety.lastrect.width, clickety.lastrect.height);
 			/* draw a frame @ resized coordinates */
-			XDrawRectangle(vwm->display, VWM_XROOT(vwm), vwm->gc, resized.x, resized.y, resized.width, resized.height);
+			XDrawRectangle(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), VWM_XGC(vwm), resized.x, resized.y, resized.width, resized.height);
 			/* remember the last rectangle */
 			clickety.lastrect = resized;
 			break;
@@ -156,20 +156,20 @@ void vwm_clickety_released(vwm_t *vwm, Window win, XButtonPressedEvent *terminus
 		case VWM_ADJUST_MOVE:
 			changes.x = clickety.orig.x + (terminus->x_root - clickety.impetus_x_root);
 			changes.y = clickety.orig.y + (terminus->y_root - clickety.impetus_y_root);
-			XConfigureWindow(vwm->display, win, CWX | CWY | CWBorderWidth, &changes);
+			XConfigureWindow(VWM_XDISPLAY(vwm), win, CWX | CWY | CWBorderWidth, &changes);
 			break;
 
 		case VWM_ADJUST_RESIZE: {
 			XWindowAttributes	resized;
 			compute_resize((XEvent *)terminus, &resized);
 			/* move and resize the window @ resized */
-			XDrawRectangle(vwm->display, VWM_XROOT(vwm), vwm->gc, clickety.lastrect.x, clickety.lastrect.y, clickety.lastrect.width, clickety.lastrect.height);
+			XDrawRectangle(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), VWM_XGC(vwm), clickety.lastrect.x, clickety.lastrect.y, clickety.lastrect.width, clickety.lastrect.height);
 			changes.x = resized.x;
 			changes.y = resized.y;
 			changes.width = resized.width;
 			changes.height = resized.height;
-			XConfigureWindow(vwm->display, win, CWX | CWY | CWWidth | CWHeight | CWBorderWidth, &changes);
-			XUngrabServer(vwm->display);
+			XConfigureWindow(VWM_XDISPLAY(vwm), win, CWX | CWY | CWWidth | CWHeight | CWBorderWidth, &changes);
+			XUngrabServer(VWM_XDISPLAY(vwm));
 			break;
 		}
 
@@ -181,8 +181,8 @@ void vwm_clickety_released(vwm_t *vwm, Window win, XButtonPressedEvent *terminus
 
 	clickety.vwin = NULL; /* reset clickety */
 
-	XFlush(vwm->display);
-	XUngrabPointer(vwm->display, CurrentTime);
+	XFlush(VWM_XDISPLAY(vwm));
+	XUngrabPointer(VWM_XDISPLAY(vwm), CurrentTime);
 }
 
 
@@ -192,7 +192,7 @@ int vwm_clickety_pressed(vwm_t *vwm, Window win, XButtonPressedEvent *impetus)
 	vwm_window_t	*vwin;
 
 	/* verify the window still exists */
-	if (!XGetWindowAttributes(vwm->display, win, &clickety.orig)) goto _fail;
+	if (!XGetWindowAttributes(VWM_XDISPLAY(vwm), win, &clickety.orig)) goto _fail;
 
 	if (!(vwin = vwm_win_lookup(vwm, win))) goto _fail;
 
@@ -210,16 +210,16 @@ int vwm_clickety_pressed(vwm_t *vwm, Window win, XButtonPressedEvent *impetus)
 				/* immediately raise the window if we're relocating,
 				 * resizes are supported without raising (which also enables NULL resizes to focus without raising) */
 				clickety.mode = VWM_ADJUST_MOVE;
-				XRaiseWindow(vwm->display, win);
+				XRaiseWindow(VWM_XDISPLAY(vwm), win);
 				break;
 
 			case Button3:
 				/* grab the server on resize for the xor rubber-banding's sake */
-				XGrabServer(vwm->display);
-				XSync(vwm->display, False);
+				XGrabServer(VWM_XDISPLAY(vwm));
+				XSync(VWM_XDISPLAY(vwm), False);
 
 				/* FIXME: none of the resize DrawRectangle() calls consider the window border. */
-				XDrawRectangle(vwm->display, VWM_XROOT(vwm), vwm->gc, clickety.orig.x, clickety.orig.y, clickety.orig.width, clickety.orig.height);
+				XDrawRectangle(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), VWM_XGC(vwm), clickety.orig.x, clickety.orig.y, clickety.orig.width, clickety.orig.height);
 				clickety.lastrect = clickety.orig;
 
 				clickety.mode = VWM_ADJUST_RESIZE;
@@ -238,7 +238,7 @@ int vwm_clickety_pressed(vwm_t *vwm, Window win, XButtonPressedEvent *impetus)
 	return 1;
 
 _fail:
-	XUngrabPointer(vwm->display, CurrentTime);
+	XUngrabPointer(VWM_XDISPLAY(vwm), CurrentTime);
 
 	return 0;
 }

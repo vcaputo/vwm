@@ -42,7 +42,7 @@ void vwm_xwin_message(vwm_t *vwm, vwm_xwindow_t *xwin, Atom type, long foo)
 	event.xclient.data.l[0] = foo;
 	event.xclient.data.l[1] = CurrentTime;	/* XXX TODO: is CurrentTime actually correct to use for this purpose? */
 
-	XSendEvent(vwm->display, xwin->id, False, 0, &event);
+	XSendEvent(VWM_XDISPLAY(vwm), xwin->id, False, 0, &event);
 }
 
 
@@ -105,12 +105,12 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 
 	/* prevent races */
 	if (!grabbed) {
-		XGrabServer(vwm->display);
-		XSync(vwm->display, False);
+		XGrabServer(VWM_XDISPLAY(vwm));
+		XSync(VWM_XDISPLAY(vwm), False);
 	}
 
 	/* verify the window still exists */
-	if (!XGetWindowAttributes(vwm->display, win, &attrs)) goto _out_grabbed;
+	if (!XGetWindowAttributes(VWM_XDISPLAY(vwm), win, &attrs)) goto _out_grabbed;
 
 	/* don't create InputOnly windows */
 	if (attrs.class == InputOnly) goto _out_grabbed;
@@ -124,7 +124,7 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	xwin->attrs = attrs;
 	xwin->managed = NULL;
 	xwin->name = NULL;
-	XFetchName(vwm->display, win, &xwin->name);
+	XFetchName(VWM_XDISPLAY(vwm), win, &xwin->name);
 
 	xwin->monitor = NULL;
 	xwin->overlay.width = xwin->overlay.height = xwin->overlay.phase = 0;
@@ -132,7 +132,7 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 
 	/* This is so we get the PropertyNotify event and can get the pid when it's set post-create,
 	 * with my _NET_WM_PID patch the property is immediately available */
-	XSelectInput(vwm->display, win, PropertyChangeMask);
+	XSelectInput(VWM_XDISPLAY(vwm), win, PropertyChangeMask);
 
 	/* we must track the mapped-by-client state of the window independent of managed vs. unmanaged because
 	 * in the case of override_redirect windows they may be unmapped (invisible) or mapped (visible) like menus without being managed.
@@ -150,7 +150,7 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	if (xwin->mapped) vwm_win_manage_xwin(vwm, xwin);
 #endif
 _out_grabbed:
-	if (!grabbed) XUngrabServer(vwm->display);
+	if (!grabbed) XUngrabServer(VWM_XDISPLAY(vwm));
 
 	return xwin;
 }
@@ -160,8 +160,8 @@ _out_grabbed:
 /* if the window is also managed it will be unmanaged first */
 void vwm_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
-	XGrabServer(vwm->display);
-	XSync(vwm->display, False);
+	XGrabServer(VWM_XDISPLAY(vwm));
+	XSync(VWM_XDISPLAY(vwm), False);
 
 	if (xwin->managed) vwm_win_unmanage(vwm, xwin->managed);
 
@@ -174,7 +174,7 @@ void vwm_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 	free(xwin);
 
-	XUngrabServer(vwm->display);
+	XUngrabServer(VWM_XDISPLAY(vwm));
 }
 
 
@@ -223,9 +223,9 @@ int vwm_xwin_create_existing(vwm_t *vwm)
 	unsigned int	n_children, i;
 
 	/* TODO FIXME I don't think this is right anymore, not since we went compositing and split managed vs. bare xwindows... */
-	XGrabServer(vwm->display);
-	XSync(vwm->display, False);
-	XQueryTree(vwm->display, VWM_XROOT(vwm), &root, &parent, &children, &n_children);
+	XGrabServer(VWM_XDISPLAY(vwm));
+	XSync(VWM_XDISPLAY(vwm), False);
+	XQueryTree(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), &root, &parent, &children, &n_children);
 
 	for (i = 0; i < n_children; i++) {
 		if (children[i] == None) continue;
@@ -233,14 +233,14 @@ int vwm_xwin_create_existing(vwm_t *vwm)
 		if ((vwm_xwin_create(vwm, children[i], VWM_GRABBED) == NULL)) goto _fail_grabbed;
 	}
 
-	XUngrabServer(vwm->display);
+	XUngrabServer(VWM_XDISPLAY(vwm));
 
 	if (children) XFree(children);
 
 	return 1;
 
 _fail_grabbed:
-	XUngrabServer(vwm->display);
+	XUngrabServer(VWM_XDISPLAY(vwm));
 
 	if (children) XFree(children);
 

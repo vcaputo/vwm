@@ -39,8 +39,8 @@ void vwm_desktop_mru(vwm_t *vwm, vwm_desktop_t *desktop)
 /* this switches to the desktop context if necessary, maps and unmaps windows accordingly if necessary */
 int vwm_desktop_focus(vwm_t *vwm, vwm_desktop_t *desktop)
 {
-	XGrabServer(vwm->display);
-	XSync(vwm->display, False);
+	XGrabServer(VWM_XDISPLAY(vwm));
+	XSync(VWM_XDISPLAY(vwm), False);
 
 	/* if the context switched and the focused desktop is the desired desktop there's nothing else to do */
 	if ((vwm_context_focus(vwm, VWM_CONTEXT_DESKTOP) && vwm->focused_desktop != desktop) || vwm->focused_desktop != desktop) {
@@ -53,7 +53,7 @@ int vwm_desktop_focus(vwm_t *vwm, vwm_desktop_t *desktop)
 			if (vwin->desktop == vwm->focused_desktop) vwm_win_unmap(vwm, vwin);
 		}
 
-		XFlush(vwm->display);
+		XFlush(VWM_XDISPLAY(vwm));
 
 		list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
 			if (!(vwin = xwin->managed) || vwin->shelved) continue;
@@ -66,10 +66,10 @@ int vwm_desktop_focus(vwm_t *vwm, vwm_desktop_t *desktop)
 	/* directly focus the desktop's focused window if there is one, we don't use vwm_win_focus() intentionally XXX */
 	if (vwm->focused_desktop->focused_window) {
 		VWM_TRACE("Focusing \"%s\"", vwm->focused_desktop->focused_window->xwindow->name);
-		XSetInputFocus(vwm->display, vwm->focused_desktop->focused_window->xwindow->id, RevertToPointerRoot, CurrentTime);
+		XSetInputFocus(VWM_XDISPLAY(vwm), vwm->focused_desktop->focused_window->xwindow->id, RevertToPointerRoot, CurrentTime);
 	}
 
-	XUngrabServer(vwm->display);
+	XUngrabServer(VWM_XDISPLAY(vwm));
 
 	return 1;
 }

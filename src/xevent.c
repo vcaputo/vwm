@@ -97,7 +97,7 @@ void vwm_xevent_handle_configure_request(vwm_t *vwm, XConfigureRequestEvent *ev)
 		change_mask &= ~CWBorderWidth;
 	}
 
-	XConfigureWindow(vwm->display, ev->window, change_mask, &changes);
+	XConfigureWindow(VWM_XDISPLAY(vwm), ev->window, change_mask, &changes);
 }
 
 
@@ -108,7 +108,7 @@ void vwm_xevent_handle_configure_notify(vwm_t *vwm, XConfigureEvent *ev)
 	if ((xwin = vwm_xwin_lookup(vwm, ev->window))) {
 		XWindowAttributes	attrs;
 		vwm_xwin_restack(vwm, xwin, ev->above);
-		XGetWindowAttributes(vwm->display, ev->window, &attrs);
+		XGetWindowAttributes(VWM_XDISPLAY(vwm), ev->window, &attrs);
 		vwm_composite_handle_configure(vwm, xwin, &attrs);
 		VWM_TRACE("pre x=%i y=%i w=%i h=%i\n", xwin->attrs.x, xwin->attrs.y, xwin->attrs.width, xwin->attrs.height);
 		xwin->attrs = attrs;
@@ -191,7 +191,7 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 
 		/* figure out if the window is the console */
 		if ((classhint = XAllocClassHint())) {
-			if (XGetClassHint(vwm->display, ev->window, classhint) && !strcmp(classhint->res_class, CONSOLE_WM_CLASS)) {
+			if (XGetClassHint(VWM_XDISPLAY(vwm), ev->window, classhint) && !strcmp(classhint->res_class, CONSOLE_WM_CLASS)) {
 				vwm->console = vwin;
 				vwm_win_shelve(vwm, vwin);
 				vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
@@ -231,8 +231,8 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 		}
 
 		/* XXX TODO: does this belong here? */
-		XGetWMNormalHints(vwm->display, ev->window, vwin->hints, &vwin->hints_supplied);
-		XGetWindowAttributes(vwm->display, ev->window, &attrs);
+		XGetWMNormalHints(VWM_XDISPLAY(vwm), ev->window, vwin->hints, &vwin->hints_supplied);
+		XGetWindowAttributes(VWM_XDISPLAY(vwm), ev->window, &attrs);
 
 
 		/* if the window size is precisely the screen size then directly "allscreen" the window right here */
@@ -250,14 +250,14 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 		vwin->client.height = attrs.height;
 		vwin->client.width = attrs.width;
 
-		XConfigureWindow(vwm->display, ev->window, changes_mask, &changes);
+		XConfigureWindow(VWM_XDISPLAY(vwm), ev->window, changes_mask, &changes);
 	}
 
 	if (domap) {
-		XMapWindow(vwm->display, ev->window);
+		XMapWindow(VWM_XDISPLAY(vwm), ev->window);
 		if (vwin && vwin->desktop->focused_window == vwin) {
-			XSync(vwm->display, False);
-			XSetInputFocus(vwm->display, vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
+			XSync(VWM_XDISPLAY(vwm), False);
+			XSetInputFocus(VWM_XDISPLAY(vwm), vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
 		}
 	}
 }

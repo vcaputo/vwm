@@ -41,7 +41,7 @@ int vwm_context_focus(vwm_t *vwm, vwm_context_t desired_context)
 
 			VWM_TRACE("unmapping shelf window \"%s\"", vwm->focused_shelf->xwindow->name);
 			vwm_win_unmap(vwm, vwm->focused_shelf);
-			XFlush(vwm->display); /* for a more responsive feel */
+			XFlush(VWM_XDISPLAY(vwm)); /* for a more responsive feel */
 
 			/* map the focused desktop, from the top of the stack down */
 			list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
@@ -54,7 +54,7 @@ int vwm_context_focus(vwm_t *vwm, vwm_context_t desired_context)
 
 			if (vwm->focused_desktop->focused_window) {
 				VWM_TRACE("Focusing \"%s\"", vwm->focused_desktop->focused_window->xwindow->name);
-				XSetInputFocus(vwm->display, vwm->focused_desktop->focused_window->xwindow->id, RevertToPointerRoot, CurrentTime);
+				XSetInputFocus(VWM_XDISPLAY(vwm), vwm->focused_desktop->focused_window->xwindow->id, RevertToPointerRoot, CurrentTime);
 			}
 
 			vwm->focused_context = VWM_CONTEXT_DESKTOP;
@@ -77,7 +77,7 @@ int vwm_context_focus(vwm_t *vwm, vwm_context_t desired_context)
 					}
 				}
 
-				XFlush(vwm->display); /* for a more responsive feel */
+				XFlush(VWM_XDISPLAY(vwm)); /* for a more responsive feel */
 
 				VWM_TRACE("Mapping shelf window \"%s\"", vwm->focused_shelf->xwindow->name);
 				vwm_win_map(vwm, vwm->focused_shelf);

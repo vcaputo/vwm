@@ -101,7 +101,7 @@ static void snowflake_row(vwm_t *vwm, vwm_xwindow_t *xwin, Picture pic, int copy
 
 	if (copy) {
 		/* copy row to tmp */
-		XRenderComposite(vwm->display, PictOpSrc, pic, None, xwin->overlay.tmp_picture,
+		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, pic, None, xwin->overlay.tmp_picture,
 			0, row * OVERLAY_ROW_HEIGHT,			/* src */
 			0, 0,						/* mask */
 			0, 0,						/* dest */
@@ -109,24 +109,24 @@ static void snowflake_row(vwm_t *vwm, vwm_xwindow_t *xwin, Picture pic, int copy
 	}
 
 	/* shift up */
-	XRenderChangePicture(vwm->display, pic, CPRepeat, &pa_no_repeat);
-	XRenderComposite(vwm->display, PictOpSrc, pic, None, pic,
+	XRenderChangePicture(VWM_XDISPLAY(vwm), pic, CPRepeat, &pa_no_repeat);
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, pic, None, pic,
 		0, (1 + row) * OVERLAY_ROW_HEIGHT,										/* src */
 		0, 0,														/* mask */
 		0, row * OVERLAY_ROW_HEIGHT,											/* dest */
 		xwin->overlay.width, (1 + xwin->overlay.heirarchy_end) * OVERLAY_ROW_HEIGHT - (1 + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
-	XRenderChangePicture(vwm->display, pic, CPRepeat, &pa_repeat);
+	XRenderChangePicture(VWM_XDISPLAY(vwm), pic, CPRepeat, &pa_repeat);
 
 	if (copy) {
 		/* copy tmp to top of snowflakes */
-		XRenderComposite(vwm->display, PictOpSrc, xwin->overlay.tmp_picture, None, pic,
+		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.tmp_picture, None, pic,
 			0, 0,									/* src */
 			0, 0,									/* mask */
 			0, (xwin->overlay.heirarchy_end) * OVERLAY_ROW_HEIGHT,			/* dest */
 			xwin->overlay.width, OVERLAY_ROW_HEIGHT);				/* dimensions */
 	} else {
 		/* clear the snowflake row */
-		XRenderFillRectangle(vwm->display, PictOpSrc, pic, &overlay_trans_color,
+		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, pic, &overlay_trans_color,
 			0, (xwin->overlay.heirarchy_end) * OVERLAY_ROW_HEIGHT,			/* dest */
 			xwin->overlay.width, OVERLAY_ROW_HEIGHT);				/* dimensions */
 	}
@@ -142,13 +142,13 @@ static void allocate_row(vwm_t *vwm, vwm_xwindow_t *xwin, Picture pic, int row)
 	VWM_TRACE("pid=%i xwin=%p row=%i", xwin->monitor->pid, xwin, row);
 
 	/* shift everything below the row down */
-	XRenderComposite(vwm->display, PictOpSrc, pic, None, pic,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, pic, None, pic,
 		0, row * OVERLAY_ROW_HEIGHT,							/* src */
 		0, 0,										/* mask */
 		0, (1 + row) * OVERLAY_ROW_HEIGHT,						/* dest */
 		xwin->overlay.width, xwin->overlay.height - (1 + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
 	/* fill the space created with transparent pixels */
-	XRenderFillRectangle(vwm->display, PictOpSrc, pic, &overlay_trans_color,
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, pic, &overlay_trans_color,
 		0, row * OVERLAY_ROW_HEIGHT,							/* dest */
 		xwin->overlay.width, OVERLAY_ROW_HEIGHT);					/* dimensions */
 }
@@ -158,25 +158,25 @@ static void allocate_row(vwm_t *vwm, vwm_xwindow_t *xwin, Picture pic, int row)
 static void shadow_row(vwm_t *vwm, vwm_xwindow_t *xwin, int row)
 {
 	/* the current technique for creating the shadow is to simply render the text at +1/-1 pixel offsets on both axis in translucent black */
-	XRenderComposite(vwm->display, PictOpSrc, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
 		0, 0,
 		-1, row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		xwin->attrs.width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(vwm->display, PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
 		0, 0,
 		0, -1 + row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		xwin->attrs.width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(vwm->display, PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
 		0, 0,
 		1, row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		xwin->attrs.width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(vwm->display, PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
 		0, 0,
 		0, 1 + row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
@@ -275,10 +275,10 @@ static void draw_bars(vwm_t *vwm, vwm_xwindow_t *xwin, int row, double a_fractio
 	if (b_fraction && !b_height) b_height = 1;
 
 	/* draw the two bars for this sample at the current phase in the graphs, note the first is ceiling-based, second floor-based */
-	XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.grapha_picture, &overlay_visible_color,
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.grapha_picture, &overlay_visible_color,
 		xwin->overlay.phase, row * OVERLAY_ROW_HEIGHT,					/* dst x, y */
 		1, a_height);										/* dst w, h */
-	XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.graphb_picture, &overlay_visible_color,
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.graphb_picture, &overlay_visible_color,
 		xwin->overlay.phase, row * OVERLAY_ROW_HEIGHT + (OVERLAY_ROW_HEIGHT - b_height) - 1,	/* dst x, y */
 		1, b_height);										/* dst w, h */
 }
@@ -307,7 +307,7 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 	/* TODO: make the columns interactively configurable @ runtime */
 	if (!proc->is_new) {
 	/* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
-		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
+		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
 			0, row * OVERLAY_ROW_HEIGHT,			/* dst x, y */
 			xwin->overlay.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
 	}
@@ -327,18 +327,18 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 
 	/* the process' comm label indented according to depth, followed with their respective argv's */
 	argv2xtext(proc, items, NELEMS(items), &nr_items);
-	XDrawText(vwm->display, xwin->overlay.text_pixmap, text_gc,
+	XDrawText(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
 		  depth * (OVERLAY_ROW_HEIGHT / 2), (row + 1) * OVERLAY_ROW_HEIGHT - 3,			/* dst x, y */
 		  items, nr_items);
 
 	/* ensure the area for the rest of the stuff is cleared, we don't put much text into thread rows so skip it for those. */
 	if (!proc->is_thread) {
-		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
+		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
 			xwin->attrs.width - str_width, row * OVERLAY_ROW_HEIGHT,			/* dst x,y */
 			xwin->overlay.width - (xwin->attrs.width - str_width), OVERLAY_ROW_HEIGHT);	/* dst w,h */
 	}
 
-	XDrawString(vwm->display, xwin->overlay.text_pixmap, text_gc,
+	XDrawString(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
 		    xwin->attrs.width - str_width, (row + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
 		    str, str_len);
 
@@ -361,7 +361,7 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
 			for (rem = ancestor->siblings.next; rem != &ancestor->parent->children; rem = rem->next) {
 				if (!(list_entry(rem, vmon_proc_t, siblings)->is_stale)) {
-					XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
+					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
 						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
 						  bar_x, bar_y);			/* dst x2, y2 (vertical line) */
 					break; /* stop looking for more siblings at this ancestor when we find one that isn't stale */
@@ -410,16 +410,16 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 
 				/* if we're the last sibling, corner the tee by shortening the vbar */
 				if (proc == last_sibling) {
-					XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
+					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
 						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
 						  bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
 				} else {
-					XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
+					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
 						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
 						  bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
 				}
 
-				XDrawLine(vwm->display, xwin->overlay.text_pixmap, text_gc,
+				XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
 					  bar_x, bar_y - 4,				/* dst x1, y1 */
 					  bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
 
@@ -487,12 +487,12 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 			(*depth), (*row), proc->is_thread);
 
 		/* stamp the graphs with the finish line */
-		XRenderComposite(vwm->display, PictOpSrc, overlay_finish_fill, None, xwin->overlay.grapha_picture,
+		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, overlay_finish_fill, None, xwin->overlay.grapha_picture,
 				 0, 0,							/* src x, y */
 				 0, 0,							/* mask x, y */
 				 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
 				 1, OVERLAY_ROW_HEIGHT - 1);
-		XRenderComposite(vwm->display, PictOpSrc, overlay_finish_fill, None, xwin->overlay.graphb_picture,
+		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, overlay_finish_fill, None, xwin->overlay.graphb_picture,
 				 0, 0,							/* src x, y */
 				 0, 0,							/* mask x, y */
 				 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
@@ -507,7 +507,7 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 
 		/* stamp the name (and whatever else we include) into overlay.text_picture */
 		argv2xtext(proc, items, NELEMS(items), &nr_items);
-		XDrawText(vwm->display, xwin->overlay.text_pixmap, text_gc,
+		XDrawText(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
 			  5, (xwin->overlay.heirarchy_end + 1) * OVERLAY_ROW_HEIGHT - 3,/* dst x, y */
 			  items, nr_items);
 		shadow_row(vwm, xwin, xwin->overlay.heirarchy_end);
@@ -594,11 +594,11 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 	/* only draw the \/\/\ and HZ if necessary */
 	if (xwin->overlay.redraw_needed || prev_sampling_interval != sampling_interval) {
 		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(sampling_interval < 0 ? 0 : 1 / sampling_intervals[sampling_interval]), &str_len);
-		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
+		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
 			0, 0,					/* dst x, y */
 			xwin->attrs.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
 		str_width = XTextWidth(overlay_font, str, str_len);
-		XDrawString(vwm->display, xwin->overlay.text_pixmap, text_gc,
+		XDrawString(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
 			    xwin->attrs.width - str_width, OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
 			    str, str_len);
 		shadow_row(vwm, xwin, 0);
@@ -647,76 +647,76 @@ static void maintain_overlay(vwm_t *vwm, vwm_xwindow_t *xwin)
 		xwin->overlay.width = MAX(xwin->overlay.width, MAX(xwin->attrs.width, OVERLAY_GRAPH_MIN_WIDTH));
 		xwin->overlay.height = MAX(xwin->overlay.height, MAX(xwin->attrs.height, OVERLAY_GRAPH_MIN_HEIGHT));
 
-		pixmap = XCreatePixmap(vwm->display, VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
-		xwin->overlay.grapha_picture = XRenderCreatePicture(vwm->display, pixmap, XRenderFindStandardFormat(vwm->display, OVERLAY_MASK_FORMAT), CPRepeat, &pa_repeat);
-		XFreePixmap(vwm->display, pixmap);
-		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.grapha_picture, &overlay_trans_color, 0, 0, xwin->overlay.width, xwin->overlay.height);
+		pixmap = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
+		xwin->overlay.grapha_picture = XRenderCreatePicture(VWM_XDISPLAY(vwm), pixmap, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), OVERLAY_MASK_FORMAT), CPRepeat, &pa_repeat);
+		XFreePixmap(VWM_XDISPLAY(vwm), pixmap);
+		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.grapha_picture, &overlay_trans_color, 0, 0, xwin->overlay.width, xwin->overlay.height);
 
-		pixmap = XCreatePixmap(vwm->display, VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
-		xwin->overlay.graphb_picture = XRenderCreatePicture(vwm->display, pixmap, XRenderFindStandardFormat(vwm->display, OVERLAY_MASK_FORMAT), CPRepeat, &pa_repeat);
-		XFreePixmap(vwm->display, pixmap);
-		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.graphb_picture, &overlay_trans_color, 0, 0, xwin->overlay.width, xwin->overlay.height);
+		pixmap = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
+		xwin->overlay.graphb_picture = XRenderCreatePicture(VWM_XDISPLAY(vwm), pixmap, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), OVERLAY_MASK_FORMAT), CPRepeat, &pa_repeat);
+		XFreePixmap(VWM_XDISPLAY(vwm), pixmap);
+		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.graphb_picture, &overlay_trans_color, 0, 0, xwin->overlay.width, xwin->overlay.height);
 
-		pixmap = XCreatePixmap(vwm->display, VWM_XROOT(vwm), xwin->overlay.width, OVERLAY_ROW_HEIGHT, OVERLAY_MASK_DEPTH);
-		xwin->overlay.tmp_picture = XRenderCreatePicture(vwm->display, pixmap, XRenderFindStandardFormat(vwm->display, OVERLAY_MASK_FORMAT), 0, NULL);
-		XFreePixmap(vwm->display, pixmap);
+		pixmap = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), xwin->overlay.width, OVERLAY_ROW_HEIGHT, OVERLAY_MASK_DEPTH);
+		xwin->overlay.tmp_picture = XRenderCreatePicture(VWM_XDISPLAY(vwm), pixmap, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), OVERLAY_MASK_FORMAT), 0, NULL);
+		XFreePixmap(VWM_XDISPLAY(vwm), pixmap);
 
 		/* keep the text_pixmap reference around for XDrawText usage */
-		xwin->overlay.text_pixmap = XCreatePixmap(vwm->display, VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
-		xwin->overlay.text_picture = XRenderCreatePicture(vwm->display, xwin->overlay.text_pixmap, XRenderFindStandardFormat(vwm->display, OVERLAY_MASK_FORMAT), 0, NULL);
-		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color, 0, 0, xwin->overlay.width, xwin->overlay.height);
+		xwin->overlay.text_pixmap = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
+		xwin->overlay.text_picture = XRenderCreatePicture(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), OVERLAY_MASK_FORMAT), 0, NULL);
+		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color, 0, 0, xwin->overlay.width, xwin->overlay.height);
 
-		pixmap = XCreatePixmap(vwm->display, VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
-		xwin->overlay.shadow_picture = XRenderCreatePicture(vwm->display, pixmap, XRenderFindStandardFormat(vwm->display, OVERLAY_MASK_FORMAT), 0, NULL);
-		XFreePixmap(vwm->display, pixmap);
-		XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.shadow_picture, &overlay_trans_color, 0, 0, xwin->overlay.width, xwin->overlay.height);
+		pixmap = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, OVERLAY_MASK_DEPTH);
+		xwin->overlay.shadow_picture = XRenderCreatePicture(VWM_XDISPLAY(vwm), pixmap, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), OVERLAY_MASK_FORMAT), 0, NULL);
+		XFreePixmap(VWM_XDISPLAY(vwm), pixmap);
+		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.shadow_picture, &overlay_trans_color, 0, 0, xwin->overlay.width, xwin->overlay.height);
 
-		pixmap = XCreatePixmap(vwm->display, VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, 32);
-		xwin->overlay.picture = XRenderCreatePicture(vwm->display, pixmap, XRenderFindStandardFormat(vwm->display, PictStandardARGB32), 0, NULL);
-		XFreePixmap(vwm->display, pixmap);
+		pixmap = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), xwin->overlay.width, xwin->overlay.height, 32);
+		xwin->overlay.picture = XRenderCreatePicture(VWM_XDISPLAY(vwm), pixmap, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), 0, NULL);
+		XFreePixmap(VWM_XDISPLAY(vwm), pixmap);
 
 		if (existing.width) {
 			/* XXX: note the graph pictures are copied from their current phase in the x dimension */
-			XRenderComposite(vwm->display, PictOpSrc, existing.grapha_picture, None, xwin->overlay.grapha_picture,
+			XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, existing.grapha_picture, None, xwin->overlay.grapha_picture,
 				existing.phase, 0,	/* src x, y */
 				0, 0,			/* mask x, y */
 				0, 0,			/* dest x, y */
 				existing.width, existing.height);
-			XRenderComposite(vwm->display, PictOpSrc, existing.graphb_picture, None, xwin->overlay.graphb_picture,
+			XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, existing.graphb_picture, None, xwin->overlay.graphb_picture,
 				existing.phase, 0,	/* src x, y */
 				0, 0,			/* mask x, y */
 				0, 0,			/* dest x, y */
 				existing.width, existing.height);
-			XRenderComposite(vwm->display, PictOpSrc, existing.text_picture, None, xwin->overlay.text_picture,
+			XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, existing.text_picture, None, xwin->overlay.text_picture,
 				0, 0,			/* src x, y */
 				0, 0,			/* mask x, y */
 				0, 0,			/* dest x, y */
 				existing.width, existing.height);
-			XRenderComposite(vwm->display, PictOpSrc, existing.shadow_picture, None, xwin->overlay.shadow_picture,
+			XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, existing.shadow_picture, None, xwin->overlay.shadow_picture,
 				0, 0,			/* src x, y */
 				0, 0,			/* mask x, y */
 				0, 0,			/* dest x, y */
 				existing.width, existing.height);
-			XRenderComposite(vwm->display, PictOpSrc, existing.picture, None, xwin->overlay.picture,
+			XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, existing.picture, None, xwin->overlay.picture,
 				0, 0,			/* src x, y */
 				0, 0,			/* mask x, y */
 				0, 0,			/* dest x, y */
 				existing.width, existing.height);
 			xwin->overlay.phase = 0;	/* having unrolled the existing graph[ab] pictures into the larger ones, phase is reset to 0 */
-			XRenderFreePicture(vwm->display, existing.grapha_picture);
-			XRenderFreePicture(vwm->display, existing.graphb_picture);
-			XRenderFreePicture(vwm->display, existing.tmp_picture);
-			XRenderFreePicture(vwm->display, existing.text_picture);
-			XFreePixmap(vwm->display, existing.text_pixmap);
-			XRenderFreePicture(vwm->display, existing.shadow_picture);
-			XRenderFreePicture(vwm->display, existing.picture);
+			XRenderFreePicture(VWM_XDISPLAY(vwm), existing.grapha_picture);
+			XRenderFreePicture(VWM_XDISPLAY(vwm), existing.graphb_picture);
+			XRenderFreePicture(VWM_XDISPLAY(vwm), existing.tmp_picture);
+			XRenderFreePicture(VWM_XDISPLAY(vwm), existing.text_picture);
+			XFreePixmap(VWM_XDISPLAY(vwm), existing.text_pixmap);
+			XRenderFreePicture(VWM_XDISPLAY(vwm), existing.shadow_picture);
+			XRenderFreePicture(VWM_XDISPLAY(vwm), existing.picture);
 		}
 	}
 
 	xwin->overlay.phase += (xwin->overlay.width - 1);  /* simply change this to .phase++ to scroll the other direction */
 	xwin->overlay.phase %= xwin->overlay.width;
-	XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.grapha_picture, &overlay_trans_color, xwin->overlay.phase, 0, 1, xwin->overlay.height);
-	XRenderFillRectangle(vwm->display, PictOpSrc, xwin->overlay.graphb_picture, &overlay_trans_color, xwin->overlay.phase, 0, 1, xwin->overlay.height);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.grapha_picture, &overlay_trans_color, xwin->overlay.phase, 0, 1, xwin->overlay.height);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.graphb_picture, &overlay_trans_color, xwin->overlay.phase, 0, 1, xwin->overlay.height);
 
 	/* recursively draw the monitored processes to the overlay */
 	draw_overlay(vwm, xwin, xwin->monitor, &depth, &row);
@@ -805,44 +805,44 @@ static void init_overlay(vwm_t *vwm) {
 	gettimeofday(&this_sample, NULL);
 
 	/* get all the text and graphics stuff setup for overlays */
-	overlay_font = XLoadQueryFont(vwm->display, OVERLAY_FIXED_FONT);
+	overlay_font = XLoadQueryFont(VWM_XDISPLAY(vwm), OVERLAY_FIXED_FONT);
 
 	/* create a GC for rendering the text using Xlib into the text overlay stencils */
-	bitmask = XCreatePixmap(vwm->display, VWM_XROOT(vwm), 1, 1, OVERLAY_MASK_DEPTH);
-	text_gc = XCreateGC(vwm->display, bitmask, 0, NULL);
-	XSetForeground(vwm->display, text_gc, WhitePixel(vwm->display, vwm->screen_num));
-	XFreePixmap(vwm->display, bitmask);
+	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, OVERLAY_MASK_DEPTH);
+	text_gc = XCreateGC(VWM_XDISPLAY(vwm), bitmask, 0, NULL);
+	XSetForeground(VWM_XDISPLAY(vwm), text_gc, WhitePixel(VWM_XDISPLAY(vwm), VWM_XSCREENNUM(vwm)));
+	XFreePixmap(VWM_XDISPLAY(vwm), bitmask);
 
 	/* create some repeating source fill pictures for drawing through the text and graph stencils */
-	bitmask = XCreatePixmap(vwm->display, VWM_XROOT(vwm), 1, 1, 32);
-	overlay_text_fill = XRenderCreatePicture(vwm->display, bitmask, XRenderFindStandardFormat(vwm->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_text_fill, &overlay_visible_color, 0, 0, 1, 1);
+	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
+	overlay_text_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_text_fill, &overlay_visible_color, 0, 0, 1, 1);
 
-	bitmask = XCreatePixmap(vwm->display, VWM_XROOT(vwm), 1, 1, 32);
-	overlay_shadow_fill = XRenderCreatePicture(vwm->display, bitmask, XRenderFindStandardFormat(vwm->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_shadow_fill, &overlay_shadow_color, 0, 0, 1, 1);
+	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
+	overlay_shadow_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_shadow_fill, &overlay_shadow_color, 0, 0, 1, 1);
 
-	bitmask = XCreatePixmap(vwm->display, VWM_XROOT(vwm), 1, OVERLAY_ROW_HEIGHT, 32);
-	overlay_bg_fill = XRenderCreatePicture(vwm->display, bitmask, XRenderFindStandardFormat(vwm->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_bg_fill, &overlay_bg_color, 0, 0, 1, OVERLAY_ROW_HEIGHT);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_bg_fill, &overlay_div_color, 0, OVERLAY_ROW_HEIGHT - 1, 1, 1);
+	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, OVERLAY_ROW_HEIGHT, 32);
+	overlay_bg_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_bg_fill, &overlay_bg_color, 0, 0, 1, OVERLAY_ROW_HEIGHT);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_bg_fill, &overlay_div_color, 0, OVERLAY_ROW_HEIGHT - 1, 1, 1);
 
-	bitmask = XCreatePixmap(vwm->display, VWM_XROOT(vwm), 1, 1, 32);
-	overlay_snowflakes_text_fill = XRenderCreatePicture(vwm->display, bitmask, XRenderFindStandardFormat(vwm->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_snowflakes_text_fill, &overlay_snowflakes_visible_color, 0, 0, 1, 1);
+	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
+	overlay_snowflakes_text_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_snowflakes_text_fill, &overlay_snowflakes_visible_color, 0, 0, 1, 1);
 
-	bitmask = XCreatePixmap(vwm->display, VWM_XROOT(vwm), 1, 1, 32);
-	overlay_grapha_fill = XRenderCreatePicture(vwm->display, bitmask, XRenderFindStandardFormat(vwm->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_grapha_fill, &overlay_grapha_color, 0, 0, 1, 1);
+	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
+	overlay_grapha_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_grapha_fill, &overlay_grapha_color, 0, 0, 1, 1);
 
-	bitmask = XCreatePixmap(vwm->display, VWM_XROOT(vwm), 1, 1, 32);
-	overlay_graphb_fill = XRenderCreatePicture(vwm->display, bitmask, XRenderFindStandardFormat(vwm->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_graphb_fill, &overlay_graphb_color, 0, 0, 1, 1);
+	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
+	overlay_graphb_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_graphb_fill, &overlay_graphb_color, 0, 0, 1, 1);
 
-	bitmask = XCreatePixmap(vwm->display, VWM_XROOT(vwm), 1, 2, 32);
-	overlay_finish_fill = XRenderCreatePicture(vwm->display, bitmask, XRenderFindStandardFormat(vwm->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_finish_fill, &overlay_visible_color, 0, 0, 1, 1);
-	XRenderFillRectangle(vwm->display, PictOpSrc, overlay_finish_fill, &overlay_trans_color, 0, 1, 1, 1);
+	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 2, 32);
+	overlay_finish_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_finish_fill, &overlay_visible_color, 0, 0, 1, 1);
+	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_finish_fill, &overlay_trans_color, 0, 1, 1, 1);
 }
 
 
@@ -860,7 +860,7 @@ void vwm_overlay_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 	if (xwin->monitor) return;
 
-	if (XGetWindowProperty(vwm->display, xwin->id, vwm->wm_pid_atom, 0, 1, False, XA_CARDINAL,
+	if (XGetWindowProperty(VWM_XDISPLAY(vwm), xwin->id, vwm->wm_pid_atom, 0, 1, False, XA_CARDINAL,
 			       &type, &fmt, &nitems, &nbytes, (unsigned char **)&foo) != Success || !foo) return;
 
 	pid = *foo;
@@ -901,39 +901,39 @@ void vwm_overlay_xwin_compose(vwm_t *vwm, vwm_xwindow_t *xwin)
 	height = vwm_overlay_xwin_composed_height(vwm, xwin);
 
 	/* fill the overlay picture with the background */
-	XRenderComposite(vwm->display, PictOpSrc, overlay_bg_fill, None, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, overlay_bg_fill, None, xwin->overlay.picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		xwin->attrs.width, height);
 
 	/* draw the graphs into the overlay through the stencils being maintained by the sample callbacks */
-	XRenderComposite(vwm->display, PictOpOver, overlay_grapha_fill, xwin->overlay.grapha_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_grapha_fill, xwin->overlay.grapha_picture, xwin->overlay.picture,
 		0, 0,
 		xwin->overlay.phase, 0,
 		0, 0,
 		xwin->attrs.width, height);
-	XRenderComposite(vwm->display, PictOpOver, overlay_graphb_fill, xwin->overlay.graphb_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_graphb_fill, xwin->overlay.graphb_picture, xwin->overlay.picture,
 		0, 0,
 		xwin->overlay.phase, 0,
 		0, 0,
 		xwin->attrs.width, height);
 
 	/* draw the shadow into the overlay picture using a translucent black source drawn through the shadow mask */
-	XRenderComposite(vwm->display, PictOpOver, overlay_shadow_fill, xwin->overlay.shadow_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_shadow_fill, xwin->overlay.shadow_picture, xwin->overlay.picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		xwin->attrs.width, height);
 
 	/* render overlay text into the overlay picture using a white source drawn through the overlay text as a mask, on top of everything */
-	XRenderComposite(vwm->display, PictOpOver, overlay_text_fill, xwin->overlay.text_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_text_fill, xwin->overlay.text_picture, xwin->overlay.picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		xwin->attrs.width, (xwin->overlay.heirarchy_end * OVERLAY_ROW_HEIGHT));
 
-	XRenderComposite(vwm->display, PictOpOver, overlay_snowflakes_text_fill, xwin->overlay.text_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_snowflakes_text_fill, xwin->overlay.text_picture, xwin->overlay.picture,
 		0, 0,
 		0, xwin->overlay.heirarchy_end * OVERLAY_ROW_HEIGHT,
 		0, xwin->overlay.heirarchy_end * OVERLAY_ROW_HEIGHT,
@@ -944,7 +944,7 @@ void vwm_overlay_xwin_compose(vwm_t *vwm, vwm_xwindow_t *xwin)
 	damage.y = xwin->attrs.y + xwin->attrs.border_width;
 	damage.width = xwin->attrs.width;
 	damage.height = height;
-	region = XFixesCreateRegion(vwm->display, &damage, 1);
+	region = XFixesCreateRegion(VWM_XDISPLAY(vwm), &damage, 1);
 	vwm_composite_damage_add(vwm, region);
 }
 
