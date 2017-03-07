@@ -6,6 +6,7 @@ AC_PROG_RANLIB
 AM_SILENT_RULES([yes])
 
 PKG_CHECK_MODULES(VWM, x11 xext xinerama xrandr xcomposite xfixes xdamage xrender)
+PKG_CHECK_MODULES(VMON, x11 xext xfixes xrender)
 
 AC_CONFIG_FILES([
  Makefile
