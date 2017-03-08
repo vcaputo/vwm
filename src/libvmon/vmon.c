@@ -1123,7 +1123,7 @@ static int find_proc_in_array(vmon_t *vmon, vmon_proc_t *proc, int hint)
 
 /* simple helper for installing callbacks on the callback lists, currently only used for the per-process sample callbacks */
 /* will not install the same callback function & arg combination more than once, and will not install NULL-functioned callbacks at all! */
-static int maybe_install_proc_callback(vmon_t *vmon, list_head_t *callbacks, void (*func)(vmon_t *, vmon_proc_t *, void *), void *arg)
+static int maybe_install_proc_callback(vmon_t *vmon, list_head_t *callbacks, void (*func)(vmon_t *, void *, vmon_proc_t *, void *), void *arg)
 {
 	if(func) {
 		vmon_proc_callback_t	*cb;
@@ -1152,7 +1152,7 @@ static int maybe_install_proc_callback(vmon_t *vmon, list_head_t *callbacks, voi
 /* monitor a process under a given vmon instance, the public interface.
  * XXX note it's impossible to say "none" for wants per-process, just "inherit", if vmon_init() was told a proc_wants of "inherit" then it's like having "none"
  * proc_wants for all proceses, perhaps improve this if there's a pressure to support this use case */
-vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon_proc_wants_t wants, void (*sample_cb)(vmon_t *, vmon_proc_t *, void *), void *sample_cb_data)
+vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon_proc_wants_t wants, void (*sample_cb)(vmon_t *, void *, vmon_proc_t *, void *), void *sample_cb_arg)
 {
 	vmon_proc_t	*proc;
 	int		hash = (pid % VMON_HTAB_SIZE), i;
@@ -1165,7 +1165,7 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 	list_for_each_entry(proc, &vmon->htab[hash], bucket) {
 		/* search for the process to see if it's already monitored, we allow threads to exist with the same pid hence the additional is_thread comparison */
 		if(proc->pid == pid && proc->is_thread == is_thread) {
-			if(!maybe_install_proc_callback(vmon, &proc->sample_callbacks, sample_cb, sample_cb_data)) {
+			if(!maybe_install_proc_callback(vmon, &proc->sample_callbacks, sample_cb, sample_cb_arg)) {
 				return NULL;
 			}
 
@@ -1215,7 +1215,7 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 	INIT_LIST_HEAD(&proc->siblings);
 	INIT_LIST_HEAD(&proc->threads);
 
-	if(!maybe_install_proc_callback(vmon, &proc->sample_callbacks, sample_cb, sample_cb_data)) {
+	if(!maybe_install_proc_callback(vmon, &proc->sample_callbacks, sample_cb, sample_cb_arg)) {
 		free(proc);
 		return NULL;
 	}
@@ -1256,8 +1256,8 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 }
 
 
-/* stop monitoring a process under a given vmon instance, a caller who supplied a sample_cb & sample_cb_data pair @ monitor() must also supply it @ unmonitor! */
-void vmon_proc_unmonitor(vmon_t *vmon, vmon_proc_t *proc, void (*sample_cb)(vmon_t *, vmon_proc_t *, void *), void *sample_cb_data)
+/* stop monitoring a process under a given vmon instance, a caller who supplied a sample_cb & sample_cb_arg pair @ monitor() must also supply it @ unmonitor! */
+void vmon_proc_unmonitor(vmon_t *vmon, vmon_proc_t *proc, void (*sample_cb)(vmon_t *, void *, vmon_proc_t *, void *), void *sample_cb_arg)
 {
 	vmon_proc_t	*child, *_child;
 	int		i;
@@ -1266,7 +1266,7 @@ void vmon_proc_unmonitor(vmon_t *vmon, vmon_proc_t *proc, void (*sample_cb)(vmon
 		vmon_proc_callback_t	*cb, *_cb;
 
 		list_for_each_entry_safe(cb, _cb, &proc->sample_callbacks, callbacks) {
-			if(cb->func == sample_cb && cb->arg == sample_cb_data) {
+			if(cb->func == sample_cb && cb->arg == sample_cb_arg) {
 				list_del(&cb->callbacks);
 				free(cb);
 				break;
@@ -1374,7 +1374,7 @@ static int sample_threads(vmon_t *vmon, list_head_t *threads)
 		vmon_proc_callback_t	*cb;
 
 		list_for_each_entry(cb, &proc->sample_callbacks, callbacks) {
-			cb->func(vmon, proc, cb->arg);
+			cb->func(vmon, vmon->sample_cb_arg, proc, cb->arg);
 		}
 #endif
 	}
@@ -1414,7 +1414,7 @@ static int sample_siblings(vmon_t *vmon, list_head_t *siblings)
 		 * being monitored, handy when automatically following children, an immediately relevant use case (vwm)
 		 */
 		list_for_each_entry(cb, &proc->sample_callbacks, callbacks) {
-			cb->func(vmon, proc, cb->arg);
+			cb->func(vmon, vmon->sample_cb_arg, proc, cb->arg);
 		}
 
 		/* transition new to non-new processes where we're responsible, this is a slight problem */
@@ -1482,7 +1482,7 @@ static int sample_siblings_pass2(vmon_t *vmon, list_head_t *siblings)
 		sample_siblings_pass2(vmon, &proc->children);	/* recurse into children, we invoke callbacks as encountered on nodes from the leaves up */
 
 		list_for_each_entry(cb, &proc->sample_callbacks, callbacks) {
-			cb->func(vmon, proc, cb->arg);
+			cb->func(vmon, vmon->sample_cb_arg, proc, cb->arg);
 		}
 
 		if(!proc->parent && proc->is_new) {		/* top-level processes aren't managed by a follower/sampler, so we need to clear their is_new flag, this approach is slightly deviant from the managed case,
@@ -1581,7 +1581,7 @@ int vmon_sample(vmon_t *vmon)
 	}
 
 	if(vmon->sample_cb) {
-		vmon->sample_cb(vmon);
+		vmon->sample_cb(vmon, vmon->sample_cb_arg);
 	}
 
 	/* then the per-process samplers */	
@@ -1607,7 +1607,7 @@ int vmon_sample(vmon_t *vmon)
 				sample(vmon, proc);
 
 				list_for_each_entry(cb, &proc->sample_callbacks, callbacks) {
-					cb->func(vmon, proc, cb->arg);
+					cb->func(vmon, vmon->sample_cb_arg, proc, cb->arg);
 				}
 
 				/* age process, we use the presence of a parent as a flag indicating if the process is managed ala follow children/threads

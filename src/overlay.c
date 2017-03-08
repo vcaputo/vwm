@@ -91,9 +91,6 @@ static XRenderColor		overlay_visible_color = { 0xffff, 0xffff, 0xffff, 0xffff },
 				overlay_graphb_color = { 0x0000, 0xffff, 0xffff, 0x3000 };	/* ~cyan */
 
 
-/* we need a copy of this pointer for the vmon callback :( */
-static vwm_t *vwm_ptr;
-
 /* moves what's below a given row up above it if specified, the row becoming discarded */
 static void snowflake_row(vwm_t *vwm, vwm_xwindow_t *xwin, Picture pic, int copy, int row)
 {
@@ -726,20 +723,22 @@ static void maintain_overlay(vwm_t *vwm, vwm_xwindow_t *xwin)
 /* this callback gets invoked at sample time for every process we've explicitly monitored (not autofollowed children/threads)
  * It's where we update the cumulative data for all windows, including the graph masks, regardless of their visibility
  * It's also where we compose the graphs and text for visible windows into a picture ready for compositing with the window contents */
-static void proc_sample_callback(vmon_t *vmon, vmon_proc_t *proc, vwm_xwindow_t *xwin)
+static void proc_sample_callback(vmon_t *vmon, void *sys_cb_arg, vmon_proc_t *proc, void *proc_cb_arg)
 {
+	vwm_t		*vwm = sys_cb_arg;
+	vwm_xwindow_t	*xwin = proc_cb_arg;
 	//VWM_TRACE("proc=%p xwin=%p", proc, xwin);
 	/* render the various always-updated overlays, this is the component we do regardless of the overlays mode and window visibility,
 	 * essentially the incrementally rendered/historic components */
-	maintain_overlay(vwm_ptr, xwin);
+	maintain_overlay(vwm, xwin);
 
 	/* if we've updated overlays for a mapped window, kick the compositor to do the costly parts of overlay drawing and compositing. */
-	if (vwm_xwin_is_mapped(vwm_ptr, xwin)) vwm_composite_repaint_needed(vwm_ptr);
+	if (vwm_xwin_is_mapped(vwm, xwin)) vwm_composite_repaint_needed(vwm);
 }
 
 
 /* this callback gets invoked at sample time once "per sys" */
-static void sample_callback(vmon_t *_vmon)
+static void sample_callback(vmon_t *_vmon, void *sys_cb_arg)
 {
 	vmon_sys_stat_t	*sys_stat = vmon.stores[VMON_STORE_SYS_STAT];
 	this_total =	sys_stat->user + sys_stat->nice + sys_stat->system +
@@ -793,15 +792,12 @@ static void init_overlay(vwm_t *vwm) {
 	if (initialized) return;
 	initialized = 1;
 
-	/* we stow the vwm pointer so the vmon callback can access it, rather than allocating something
-	 * to encapsulate the xwin and vwm pointers just for the callback... */
-	vwm_ptr = vwm;
-
 	/* initialize libvmon */
 	vmon_init(&vmon, VMON_FLAG_2PASS, VMON_WANT_SYS_STAT, (VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS));
 	vmon.proc_ctor_cb = vmon_ctor_cb;
 	vmon.proc_dtor_cb = vmon_dtor_cb;
 	vmon.sample_cb = sample_callback;
+	vmon.sample_cb_arg = vwm;
 	gettimeofday(&this_sample, NULL);
 
 	/* get all the text and graphics stuff setup for overlays */
@@ -868,7 +864,7 @@ void vwm_overlay_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 	/* add the client process to the monitoring heirarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
-	xwin->monitor = vmon_proc_monitor(&vmon, NULL, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, vmon_proc_t *, void *))proc_sample_callback, xwin);
+	xwin->monitor = vmon_proc_monitor(&vmon, NULL, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, xwin);
 	 /* FIXME: count_rows() isn't returning the right count sometimes (off by ~1), it seems to be related to racing with the automatic child monitoring */
 	 /* the result is an extra row sometimes appearing below the process heirarchy */
 	xwin->overlay.heirarchy_end = 1 + count_rows(xwin->monitor);
@@ -879,7 +875,7 @@ void vwm_overlay_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 /* remove monitoring on the window if installed */
 void vwm_overlay_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
-	if (xwin->monitor) vmon_proc_unmonitor(&vmon, xwin->monitor, (void (*)(vmon_t *, vmon_proc_t *, void *))proc_sample_callback, xwin);
+	if (xwin->monitor) vmon_proc_unmonitor(&vmon, xwin->monitor, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, xwin);
 }
 
 

@@ -217,7 +217,7 @@ struct _vmon_t;
 
 /* list of callbacks is maintained for the per-process callbacks, it's convenient to do things like update multiple dynamic contexts associated with a given process monitor (think multiple windows) */
 typedef struct _vmon_proc_callback_t {
-	void			(*func)(struct _vmon_t *, struct _vmon_proc_t *, void *);
+	void			(*func)(struct _vmon_t *, void *, struct _vmon_proc_t *, void *);
 	void			*arg;
 	list_head_t		callbacks;
 } vmon_proc_callback_t;
@@ -283,7 +283,8 @@ typedef struct _vmon_t {
 
 	vmon_sys_wants_t	activity;			/* bits updated when there's activity on the respective wants (stores have changes) */
 	void			*stores[VMON_STORE_SYS_NR];	/* stores for the sys-wide wants */
-	void			(*sample_cb)(struct _vmon_t *);	/* callback invoked after executing the selected sys wants (once per vmon_sample() call)) */
+	void			(*sample_cb)(struct _vmon_t *, void *);	/* callback invoked after executing the selected sys wants (once per vmon_sample() call)) */
+	void			*sample_cb_arg;			/* user pointer for sample_cb */
 
 	char			buf[8192];			/* scratch buffer for private use XXX: it may make sense to dynamically size these... */
 	char			buf_bis[8192];			/* secondary scratch buffer for private use */
@@ -301,8 +302,8 @@ typedef struct _vmon_t {
 
 int vmon_init(vmon_t *, vmon_flags_t, vmon_sys_wants_t, vmon_proc_wants_t);
 void vmon_destroy(vmon_t *);
-vmon_proc_t * vmon_proc_monitor(vmon_t *, vmon_proc_t *, int, vmon_proc_wants_t, void (*)(vmon_t *, vmon_proc_t *, void *), void *);
-void vmon_proc_unmonitor(vmon_t *, vmon_proc_t *, void (*)(vmon_t *, vmon_proc_t *, void *), void *);
+vmon_proc_t * vmon_proc_monitor(vmon_t *, vmon_proc_t *, int, vmon_proc_wants_t, void (*)(vmon_t *, void *, vmon_proc_t *, void *), void *);
+void vmon_proc_unmonitor(vmon_t *, vmon_proc_t *, void (*)(vmon_t *, void *, vmon_proc_t *, void *), void *);
 int vmon_sample(vmon_t *);
 
 #endif
