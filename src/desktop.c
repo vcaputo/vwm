@@ -19,6 +19,7 @@
 
 #include <X11/Xlib.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "list.h"
 #include "context.h"
