@@ -1,5 +1,5 @@
-#ifndef _OVERLAY_H
-#define _OVERLAY_H
+#ifndef _OVERLAYS_H
+#define _OVERLAYS_H
 
 #include <X11/Xlib.h>
 #include <X11/extensions/Xrender.h>

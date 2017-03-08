@@ -7,7 +7,7 @@
 
 #include "libvmon/vmon.h"
 #include "list.h"
-#include "overlay.h"
+#include "overlays.h"
 
 typedef struct _vwm_t vwm_t;
 typedef struct _vwm_window_t vwm_window_t;

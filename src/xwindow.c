@@ -23,6 +23,7 @@
 
 #include "composite.h"
 #include "list.h"
+#include "overlays.h"
 #include "vwm.h"
 #include "window.h"
 #include "xwindow.h"

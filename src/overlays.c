@@ -28,11 +28,10 @@
 #include "composite.h"
 #include "libvmon/vmon.h"
 #include "list.h"
-#include "overlay.h"
+#include "overlays.h"
 #include "vwm.h"
 #include "xwindow.h"
 
-/* TODO: move to overlay.h */
 #define OVERLAY_MASK_DEPTH		8					/* XXX: 1 would save memory, but Xorg isn't good at it */
 #define OVERLAY_MASK_FORMAT		PictStandardA8
 #define OVERLAY_FIXED_FONT		"-misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1"
