@@ -345,11 +345,11 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			break;
 
 		case XK_Right:	/* increase sampling frequency */
-			vwm_overlay_rate_increase(vwm);
+			vwm_overlays_rate_increase(vwm->overlays);
 			break;
 
 		case XK_Left:	/* decrease sampling frequency */
-			vwm_overlay_rate_decrease(vwm);
+			vwm_overlays_rate_decrease(vwm->overlays);
 			break;
 
 		default:

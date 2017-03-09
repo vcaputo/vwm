@@ -42,44 +42,49 @@
 #define OVERLAY_NOCOMM_ARGV		"#missed it!"				/* use this string to substitute the command when missing in argv field */
 #define OVERLAY_MAX_ARGC		512					/* this is a huge amount */
 
+/* the global overlays state, supplied to vwm_overlay_create() which keeps a reference for future use. */
+typedef struct _vwm_overlays_t {
+	vwm_xserver_t				*xserver;	/* xserver supplied to vwm_overlays_init() */
 
-/* libvmon */
-static struct timeval				maybe_sample, last_sample, this_sample = {0,0};
-static typeof(((vmon_sys_stat_t *)0)->user)	last_user_cpu;
-static typeof(((vmon_sys_stat_t *)0)->system)	last_system_cpu;
-static unsigned long long			last_total, this_total, total_delta;
-static unsigned long long			last_idle, last_iowait, idle_delta, iowait_delta;
-static vmon_t					vmon;
+	/* libvmon */
+	struct timeval				maybe_sample, last_sample, this_sample;
+	typeof(((vmon_sys_stat_t *)0)->user)	last_user_cpu;
+	typeof(((vmon_sys_stat_t *)0)->system)	last_system_cpu;
+	unsigned long long			last_total, this_total, total_delta;
+	unsigned long long			last_idle, last_iowait, idle_delta, iowait_delta;
+	vmon_t					vmon;
+	int					prev_sampling_interval, sampling_interval;
+	int					sampling_paused, contiguous_drops;
 
-static float					sampling_intervals[] = {
-							1,		/* ~1Hz */
-							.1,		/* ~10Hz */
-							.05,		/* ~20Hz */
-							.025,		/* ~40Hz */
-							.01666};	/* ~60Hz */
-static int					prev_sampling_interval = 1, sampling_interval = 1;
+	/* X */
+	XFontStruct				*overlay_font;
+	GC					text_gc;
+	Picture					overlay_shadow_fill,
+						overlay_text_fill,
+						overlay_bg_fill,
+						overlay_snowflakes_text_fill,
+						overlay_grapha_fill,
+						overlay_graphb_fill,
+						overlay_finish_fill;
+} vwm_overlays_t;
 
 /* space we need for every process being monitored */
 typedef struct _vwm_perproc_ctxt_t {
-	typeof(vmon.generation)			generation;
+	typeof(((vmon_t *)0)->generation)	generation;
 	typeof(((vmon_proc_stat_t *)0)->utime)	last_utime;
 	typeof(((vmon_proc_stat_t *)0)->stime)	last_stime;
 	typeof(((vmon_proc_stat_t *)0)->utime)	utime_delta;
 	typeof(((vmon_proc_stat_t *)0)->stime)	stime_delta;
 } vwm_perproc_ctxt_t;
 
-/* Compositing / Overlays */
-static XFontStruct		*overlay_font;
-static GC			text_gc;
-static XRenderPictureAttributes	pa_repeat = { .repeat = 1 };
-static XRenderPictureAttributes	pa_no_repeat = { .repeat = 0 };
-static Picture			overlay_shadow_fill,	/* TODO: the repetition here smells like an XMacro waiting to happen */
-				overlay_text_fill,
-				overlay_bg_fill,
-				overlay_snowflakes_text_fill,
-				overlay_grapha_fill,
-				overlay_graphb_fill,
-				overlay_finish_fill;
+
+static float			sampling_intervals[] = {
+						1,		/* ~1Hz */
+						.1,		/* ~10Hz */
+						.05,		/* ~20Hz */
+						.025,		/* ~40Hz */
+						.01666};	/* ~60Hz */
+
 static XRenderColor		overlay_visible_color = { 0xffff, 0xffff, 0xffff, 0xffff },
 				overlay_shadow_color = { 0x0000, 0x0000, 0x0000, 0x8800},
 				overlay_bg_color = { 0x0, 0x1000, 0x0, 0x9000},
@@ -88,6 +93,119 @@ static XRenderColor		overlay_visible_color = { 0xffff, 0xffff, 0xffff, 0xffff },
 				overlay_trans_color = {0x00, 0x00, 0x00, 0x00},
 				overlay_grapha_color = { 0xff00, 0x0000, 0x0000, 0x3000 },	/* ~red */
 				overlay_graphb_color = { 0x0000, 0xffff, 0xffff, 0x3000 };	/* ~cyan */
+static XRenderPictureAttributes	pa_repeat = { .repeat = 1 };
+static XRenderPictureAttributes	pa_no_repeat = { .repeat = 0 };
+
+
+/* this callback gets invoked at sample time once "per sys" */
+static void sample_callback(vmon_t *vmon, void *arg)
+{
+	vwm_t		*vwm = arg;
+	vmon_sys_stat_t	*sys_stat = vmon->stores[VMON_STORE_SYS_STAT];
+
+	vwm->overlays->this_total =	sys_stat->user + sys_stat->nice + sys_stat->system +
+					sys_stat->idle + sys_stat->iowait + sys_stat->irq +
+					sys_stat->softirq + sys_stat->steal + sys_stat->guest;
+
+	vwm->overlays->total_delta = vwm->overlays->this_total - vwm->overlays->last_total;
+	vwm->overlays->idle_delta = sys_stat->idle - vwm->overlays->last_idle;
+	vwm->overlays->iowait_delta = sys_stat->iowait - vwm->overlays->last_iowait;
+}
+
+
+/* these callbacks are invoked by the vmon library when process instances become monitored/unmonitored */
+static void vmon_ctor_cb(vmon_t *vmon, vmon_proc_t *proc)
+{
+	VWM_TRACE("proc->pid=%i", proc->pid);
+	proc->foo = calloc(1, sizeof(vwm_perproc_ctxt_t));
+}
+
+
+static void vmon_dtor_cb(vmon_t *vmon, vmon_proc_t *proc)
+{
+	VWM_TRACE("proc->pid=%i", proc->pid);
+	if (proc->foo) {
+		free(proc->foo);
+		proc->foo = NULL;
+	}
+}
+
+
+
+/* initialize overlays system */
+vwm_overlays_t * vwm_overlays_create(vwm_t *vwm)
+{
+	vwm_xserver_t	*xserver = vwm->xserver;
+	vwm_overlays_t	*overlays;
+	Window		bitmask;
+
+	overlays = calloc(1, sizeof(vwm_overlays_t));
+	if (!overlays) {
+		VWM_PERROR("unable to allocate vwm_overlays_t");
+		return NULL;
+	}
+
+	overlays->xserver = xserver;
+	overlays->prev_sampling_interval = overlays->sampling_interval = 1;
+
+	/* initialize libvmon */
+	vmon_init(&overlays->vmon, VMON_FLAG_2PASS, VMON_WANT_SYS_STAT, (VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS));
+	overlays->vmon.proc_ctor_cb = vmon_ctor_cb;
+	overlays->vmon.proc_dtor_cb = vmon_dtor_cb;
+	overlays->vmon.sample_cb = sample_callback;
+	overlays->vmon.sample_cb_arg = vwm;
+	gettimeofday(&overlays->this_sample, NULL);
+
+	/* get all the text and graphics stuff setup for overlays */
+	overlays->overlay_font = XLoadQueryFont(xserver->display, OVERLAY_FIXED_FONT);
+
+	/* create a GC for rendering the text using Xlib into the text overlay stencils */
+	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, OVERLAY_MASK_DEPTH);
+	overlays->text_gc = XCreateGC(xserver->display, bitmask, 0, NULL);
+	XSetForeground(xserver->display, overlays->text_gc, WhitePixel(xserver->display, xserver->screen_num));
+	XFreePixmap(xserver->display, bitmask);
+
+	/* create some repeating source fill pictures for drawing through the text and graph stencils */
+	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
+	overlays->overlay_text_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_text_fill, &overlay_visible_color, 0, 0, 1, 1);
+
+	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
+	overlays->overlay_shadow_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_shadow_fill, &overlay_shadow_color, 0, 0, 1, 1);
+
+	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, OVERLAY_ROW_HEIGHT, 32);
+	overlays->overlay_bg_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_bg_fill, &overlay_bg_color, 0, 0, 1, OVERLAY_ROW_HEIGHT);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_bg_fill, &overlay_div_color, 0, OVERLAY_ROW_HEIGHT - 1, 1, 1);
+
+	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
+	overlays->overlay_snowflakes_text_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_snowflakes_text_fill, &overlay_snowflakes_visible_color, 0, 0, 1, 1);
+
+	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
+	overlays->overlay_grapha_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_grapha_fill, &overlay_grapha_color, 0, 0, 1, 1);
+
+	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
+	overlays->overlay_graphb_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_graphb_fill, &overlay_graphb_color, 0, 0, 1, 1);
+
+	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 2, 32);
+	overlays->overlay_finish_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_finish_fill, &overlay_visible_color, 0, 0, 1, 1);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_finish_fill, &overlay_trans_color, 0, 1, 1, 1);
+
+	return overlays;
+}
+
+
+/* teardown overlays system */
+void vwm_overlays_destroy(vwm_overlays_t *overlays)
+{
+	/* TODO: free rest of stuff.. */
+	free(overlays);
+}
 
 
 /* moves what's below a given row up above it if specified, the row becoming discarded */
@@ -154,25 +272,25 @@ static void allocate_row(vwm_t *vwm, vwm_xwindow_t *xwin, Picture pic, int row)
 static void shadow_row(vwm_t *vwm, vwm_xwindow_t *xwin, int row)
 {
 	/* the current technique for creating the shadow is to simply render the text at +1/-1 pixel offsets on both axis in translucent black */
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, vwm->overlays->overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
 		0, 0,
 		-1, row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		xwin->attrs.width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, vwm->overlays->overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
 		0, 0,
 		0, -1 + row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		xwin->attrs.width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, vwm->overlays->overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
 		0, 0,
 		1, row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		xwin->attrs.width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, vwm->overlays->overlay_shadow_fill, xwin->overlay.text_picture, xwin->overlay.shadow_picture,
 		0, 0,
 		0, 1 + row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
@@ -319,11 +437,11 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 	} else { /* we're a process having threads, suppress the wchan and state, as they will be displayed for the thread of same pid */
 		snprintf(str, sizeof(str), "  %5i   %n", proc->pid, &str_len);
 	}
-	str_width = XTextWidth(overlay_font, str, str_len);
+	str_width = XTextWidth(vwm->overlays->overlay_font, str, str_len);
 
 	/* the process' comm label indented according to depth, followed with their respective argv's */
 	argv2xtext(proc, items, NELEMS(items), &nr_items);
-	XDrawText(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
+	XDrawText(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, vwm->overlays->text_gc,
 		  depth * (OVERLAY_ROW_HEIGHT / 2), (row + 1) * OVERLAY_ROW_HEIGHT - 3,			/* dst x, y */
 		  items, nr_items);
 
@@ -334,7 +452,7 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 			xwin->overlay.width - (xwin->attrs.width - str_width), OVERLAY_ROW_HEIGHT);	/* dst w,h */
 	}
 
-	XDrawString(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
+	XDrawString(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, vwm->overlays->text_gc,
 		    xwin->attrs.width - str_width, (row + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
 		    str, str_len);
 
@@ -357,7 +475,7 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
 			for (rem = ancestor->siblings.next; rem != &ancestor->parent->children; rem = rem->next) {
 				if (!(list_entry(rem, vmon_proc_t, siblings)->is_stale)) {
-					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
+					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, vwm->overlays->text_gc,
 						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
 						  bar_x, bar_y);			/* dst x2, y2 (vertical line) */
 					break; /* stop looking for more siblings at this ancestor when we find one that isn't stale */
@@ -406,16 +524,16 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 
 				/* if we're the last sibling, corner the tee by shortening the vbar */
 				if (proc == last_sibling) {
-					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
+					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, vwm->overlays->text_gc,
 						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
 						  bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
 				} else {
-					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
+					XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, vwm->overlays->text_gc,
 						  bar_x, bar_y - OVERLAY_ROW_HEIGHT,	/* dst x1, y1 */
 						  bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
 				}
 
-				XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
+				XDrawLine(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, vwm->overlays->text_gc,
 					  bar_x, bar_y - 4,				/* dst x1, y1 */
 					  bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
 
@@ -483,12 +601,12 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 			(*depth), (*row), proc->is_thread);
 
 		/* stamp the graphs with the finish line */
-		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, overlay_finish_fill, None, xwin->overlay.grapha_picture,
+		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, vwm->overlays->overlay_finish_fill, None, xwin->overlay.grapha_picture,
 				 0, 0,							/* src x, y */
 				 0, 0,							/* mask x, y */
 				 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
 				 1, OVERLAY_ROW_HEIGHT - 1);
-		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, overlay_finish_fill, None, xwin->overlay.graphb_picture,
+		XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, vwm->overlays->overlay_finish_fill, None, xwin->overlay.graphb_picture,
 				 0, 0,							/* src x, y */
 				 0, 0,							/* mask x, y */
 				 xwin->overlay.phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
@@ -503,7 +621,7 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 
 		/* stamp the name (and whatever else we include) into overlay.text_picture */
 		argv2xtext(proc, items, NELEMS(items), &nr_items);
-		XDrawText(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
+		XDrawText(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, vwm->overlays->text_gc,
 			  5, (xwin->overlay.heirarchy_end + 1) * OVERLAY_ROW_HEIGHT - 3,/* dst x, y */
 			  items, nr_items);
 		shadow_row(vwm, xwin, xwin->overlay.heirarchy_end);
@@ -530,25 +648,25 @@ static void draw_overlay_rest(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc
 
 /* CPU utilization graphs */
 	/* use the generation number to avoid recomputing this stuff for callbacks recurring on the same process in the same sample */
-	if (proc_ctxt->generation != vmon.generation) {
+	if (proc_ctxt->generation != vwm->overlays->vmon.generation) {
 		proc_ctxt->stime_delta = proc_stat->stime - proc_ctxt->last_stime;
 		proc_ctxt->utime_delta = proc_stat->utime - proc_ctxt->last_utime;
 		proc_ctxt->last_utime = proc_stat->utime;
 		proc_ctxt->last_stime = proc_stat->stime;
 
-		proc_ctxt->generation = vmon.generation;
+		proc_ctxt->generation = vwm->overlays->vmon.generation;
 	}
 
 	if (proc->is_new) {
 		/* we need a minimum of two samples before we can compute a delta to plot,
 		 * so we suppress that and instead mark the start of monitoring with an impossible 100% of both graph contexts, a starting line. */
-		stime_delta = utime_delta = total_delta;
+		stime_delta = utime_delta = vwm->overlays->total_delta;
 	} else {
 		stime_delta = proc_ctxt->stime_delta;
 		utime_delta = proc_ctxt->utime_delta;
 	}
 
-	draw_bars(vwm, xwin, *row, stime_delta, total_delta, utime_delta, total_delta);
+	draw_bars(vwm, xwin, *row, stime_delta, vwm->overlays->total_delta, utime_delta, vwm->overlays->total_delta);
 
 	draw_heirarchy_row(vwm, xwin, proc, *depth, *row, heirarchy_changed);
 
@@ -585,16 +703,16 @@ static void draw_overlay(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *proc, int
 
 /* CPU utilization graphs */
 	/* IOWait and Idle % @ row 0 */
-	draw_bars(vwm, xwin, *row, iowait_delta, total_delta, idle_delta, total_delta);
+	draw_bars(vwm, xwin, *row, vwm->overlays->iowait_delta, vwm->overlays->total_delta, vwm->overlays->idle_delta, vwm->overlays->total_delta);
 
 	/* only draw the \/\/\ and HZ if necessary */
-	if (xwin->overlay.redraw_needed || prev_sampling_interval != sampling_interval) {
-		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(sampling_interval < 0 ? 0 : 1 / sampling_intervals[sampling_interval]), &str_len);
+	if (xwin->overlay.redraw_needed || vwm->overlays->prev_sampling_interval != vwm->overlays->sampling_interval) {
+		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(vwm->overlays->sampling_interval < 0 ? 0 : 1 / sampling_intervals[vwm->overlays->sampling_interval]), &str_len);
 		XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, xwin->overlay.text_picture, &overlay_trans_color,
 			0, 0,					/* dst x, y */
 			xwin->attrs.width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
-		str_width = XTextWidth(overlay_font, str, str_len);
-		XDrawString(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, text_gc,
+		str_width = XTextWidth(vwm->overlays->overlay_font, str, str_len);
+		XDrawString(VWM_XDISPLAY(vwm), xwin->overlay.text_pixmap, vwm->overlays->text_gc,
 			    xwin->attrs.width - str_width, OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
 			    str, str_len);
 		shadow_row(vwm, xwin, 0);
@@ -736,38 +854,6 @@ static void proc_sample_callback(vmon_t *vmon, void *sys_cb_arg, vmon_proc_t *pr
 }
 
 
-/* this callback gets invoked at sample time once "per sys" */
-static void sample_callback(vmon_t *_vmon, void *sys_cb_arg)
-{
-	vmon_sys_stat_t	*sys_stat = vmon.stores[VMON_STORE_SYS_STAT];
-	this_total =	sys_stat->user + sys_stat->nice + sys_stat->system +
-			sys_stat->idle + sys_stat->iowait + sys_stat->irq +
-			sys_stat->softirq + sys_stat->steal + sys_stat->guest;
-
-	total_delta =	this_total - last_total;
-	idle_delta =	sys_stat->idle - last_idle;
-	iowait_delta =	sys_stat->iowait - last_iowait;
-}
-
-
-/* these callbacks are invoked by the vmon library when process instances become monitored/unmonitored */
-static void vmon_ctor_cb(vmon_t *vmon, vmon_proc_t *proc)
-{
-	VWM_TRACE("proc->pid=%i", proc->pid);
-	proc->foo = calloc(1, sizeof(vwm_perproc_ctxt_t));
-}
-
-
-static void vmon_dtor_cb(vmon_t *vmon, vmon_proc_t *proc)
-{
-	VWM_TRACE("proc->pid=%i", proc->pid);
-	if (proc->foo) {
-		free(proc->foo);
-		proc->foo = NULL;
-	}
-}
-
-
 /* return the composed height of the overlay */
 int vwm_overlay_xwin_composed_height(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
@@ -784,63 +870,6 @@ void vwm_overlay_xwin_reset_snowflakes(vwm_t *vwm, vwm_xwindow_t *xwin) {
 	}
 }
 
-static void init_overlay(vwm_t *vwm) {
-	static int	initialized;
-	Window		bitmask;
-
-	if (initialized) return;
-	initialized = 1;
-
-	/* initialize libvmon */
-	vmon_init(&vmon, VMON_FLAG_2PASS, VMON_WANT_SYS_STAT, (VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS));
-	vmon.proc_ctor_cb = vmon_ctor_cb;
-	vmon.proc_dtor_cb = vmon_dtor_cb;
-	vmon.sample_cb = sample_callback;
-	vmon.sample_cb_arg = vwm;
-	gettimeofday(&this_sample, NULL);
-
-	/* get all the text and graphics stuff setup for overlays */
-	overlay_font = XLoadQueryFont(VWM_XDISPLAY(vwm), OVERLAY_FIXED_FONT);
-
-	/* create a GC for rendering the text using Xlib into the text overlay stencils */
-	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, OVERLAY_MASK_DEPTH);
-	text_gc = XCreateGC(VWM_XDISPLAY(vwm), bitmask, 0, NULL);
-	XSetForeground(VWM_XDISPLAY(vwm), text_gc, WhitePixel(VWM_XDISPLAY(vwm), VWM_XSCREENNUM(vwm)));
-	XFreePixmap(VWM_XDISPLAY(vwm), bitmask);
-
-	/* create some repeating source fill pictures for drawing through the text and graph stencils */
-	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
-	overlay_text_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_text_fill, &overlay_visible_color, 0, 0, 1, 1);
-
-	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
-	overlay_shadow_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_shadow_fill, &overlay_shadow_color, 0, 0, 1, 1);
-
-	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, OVERLAY_ROW_HEIGHT, 32);
-	overlay_bg_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_bg_fill, &overlay_bg_color, 0, 0, 1, OVERLAY_ROW_HEIGHT);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_bg_fill, &overlay_div_color, 0, OVERLAY_ROW_HEIGHT - 1, 1, 1);
-
-	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
-	overlay_snowflakes_text_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_snowflakes_text_fill, &overlay_snowflakes_visible_color, 0, 0, 1, 1);
-
-	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
-	overlay_grapha_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_grapha_fill, &overlay_grapha_color, 0, 0, 1, 1);
-
-	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 1, 32);
-	overlay_graphb_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_graphb_fill, &overlay_graphb_color, 0, 0, 1, 1);
-
-	bitmask = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), 1, 2, 32);
-	overlay_finish_fill = XRenderCreatePicture(VWM_XDISPLAY(vwm), bitmask, XRenderFindStandardFormat(VWM_XDISPLAY(vwm), PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_finish_fill, &overlay_visible_color, 0, 0, 1, 1);
-	XRenderFillRectangle(VWM_XDISPLAY(vwm), PictOpSrc, overlay_finish_fill, &overlay_trans_color, 0, 1, 1, 1);
-}
-
-
 /* install a monitor on the window if it doesn't already have one and has _NET_WM_PID set */
 void vwm_overlay_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
@@ -850,8 +879,6 @@ void vwm_overlay_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 	unsigned long	nbytes;
 	long		*foo = NULL;
 	int		pid = -1;
-
-	init_overlay(vwm);
 
 	if (xwin->monitor) return;
 
@@ -863,7 +890,7 @@ void vwm_overlay_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 	/* add the client process to the monitoring heirarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
-	xwin->monitor = vmon_proc_monitor(&vmon, NULL, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, xwin);
+	xwin->monitor = vmon_proc_monitor(&vwm->overlays->vmon, NULL, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, xwin);
 	 /* FIXME: count_rows() isn't returning the right count sometimes (off by ~1), it seems to be related to racing with the automatic child monitoring */
 	 /* the result is an extra row sometimes appearing below the process heirarchy */
 	xwin->overlay.heirarchy_end = 1 + count_rows(xwin->monitor);
@@ -874,7 +901,7 @@ void vwm_overlay_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 /* remove monitoring on the window if installed */
 void vwm_overlay_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
-	if (xwin->monitor) vmon_proc_unmonitor(&vmon, xwin->monitor, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, xwin);
+	if (xwin->monitor) vmon_proc_unmonitor(&vwm->overlays->vmon, xwin->monitor, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, xwin);
 }
 
 
@@ -896,39 +923,39 @@ void vwm_overlay_xwin_compose(vwm_t *vwm, vwm_xwindow_t *xwin)
 	height = vwm_overlay_xwin_composed_height(vwm, xwin);
 
 	/* fill the overlay picture with the background */
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, overlay_bg_fill, None, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpSrc, vwm->overlays->overlay_bg_fill, None, xwin->overlay.picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		xwin->attrs.width, height);
 
 	/* draw the graphs into the overlay through the stencils being maintained by the sample callbacks */
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_grapha_fill, xwin->overlay.grapha_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, vwm->overlays->overlay_grapha_fill, xwin->overlay.grapha_picture, xwin->overlay.picture,
 		0, 0,
 		xwin->overlay.phase, 0,
 		0, 0,
 		xwin->attrs.width, height);
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_graphb_fill, xwin->overlay.graphb_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, vwm->overlays->overlay_graphb_fill, xwin->overlay.graphb_picture, xwin->overlay.picture,
 		0, 0,
 		xwin->overlay.phase, 0,
 		0, 0,
 		xwin->attrs.width, height);
 
 	/* draw the shadow into the overlay picture using a translucent black source drawn through the shadow mask */
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_shadow_fill, xwin->overlay.shadow_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, vwm->overlays->overlay_shadow_fill, xwin->overlay.shadow_picture, xwin->overlay.picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		xwin->attrs.width, height);
 
 	/* render overlay text into the overlay picture using a white source drawn through the overlay text as a mask, on top of everything */
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_text_fill, xwin->overlay.text_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, vwm->overlays->overlay_text_fill, xwin->overlay.text_picture, xwin->overlay.picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		xwin->attrs.width, (xwin->overlay.heirarchy_end * OVERLAY_ROW_HEIGHT));
 
-	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, overlay_snowflakes_text_fill, xwin->overlay.text_picture, xwin->overlay.picture,
+	XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, vwm->overlays->overlay_snowflakes_text_fill, xwin->overlay.text_picture, xwin->overlay.picture,
 		0, 0,
 		0, xwin->overlay.heirarchy_end * OVERLAY_ROW_HEIGHT,
 		0, xwin->overlay.heirarchy_end * OVERLAY_ROW_HEIGHT,
@@ -943,12 +970,14 @@ void vwm_overlay_xwin_compose(vwm_t *vwm, vwm_xwindow_t *xwin)
 	vwm_composite_damage_add(vwm, region);
 }
 
-void vwm_overlay_rate_increase(vwm_t *vwm) {
-	if (sampling_interval + 1 < sizeof(sampling_intervals) / sizeof(sampling_intervals[0])) sampling_interval++;
+void vwm_overlays_rate_increase(vwm_overlays_t *overlays)
+{
+	if (overlays->sampling_interval + 1 < sizeof(sampling_intervals) / sizeof(sampling_intervals[0])) overlays->sampling_interval++;
 }
 
-void vwm_overlay_rate_decrease(vwm_t *vwm) {
-	if (sampling_interval >= 0) sampling_interval--;
+void vwm_overlays_rate_decrease(vwm_overlays_t *overlays)
+{
+	if (overlays->sampling_interval >= 0) overlays->sampling_interval--;
 }
 
 
@@ -968,33 +997,32 @@ static float delta(struct timeval *cur, struct timeval *prev)
 }
 
 
-void vwm_overlay_update(vwm_t *vwm, int *desired_delay) {
-	static int	sampling_paused = 0;
-	static int	contiguous_drops = 0;
-	float		this_delta;
+/* update the overlays if necessary, return if updating occurred, and duration before another update needed in *desired_delay */
+int vwm_overlays_update(vwm_overlays_t *overlays, int *desired_delay)
+{
+	float	this_delta;
+	int	ret = 0;
 
-	init_overlay(vwm);
-
-	gettimeofday(&maybe_sample, NULL);
-	if ((sampling_interval == -1 && !sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
-	    (sampling_interval != -1 && ((this_delta = delta(&maybe_sample, &this_sample)) >= sampling_intervals[sampling_interval]))) {
+	gettimeofday(&overlays->maybe_sample, NULL);
+	if ((overlays->sampling_interval == -1 && !overlays->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
+	    (overlays->sampling_interval != -1 && ((this_delta = delta(&overlays->maybe_sample, &overlays->this_sample)) >= sampling_intervals[overlays->sampling_interval]))) {
 		vmon_sys_stat_t	*sys_stat;
 
 		/* automatically lower the sample rate if we can't keep up with the current sample rate */
-		if (sampling_interval != -1 && sampling_interval <= prev_sampling_interval &&
-		    this_delta >= (sampling_intervals[sampling_interval] * 1.5)) {
-			contiguous_drops++;
+		if (overlays->sampling_interval != -1 && overlays->sampling_interval <= overlays->prev_sampling_interval &&
+		    this_delta >= (sampling_intervals[overlays->sampling_interval] * 1.5)) {
+			overlays->contiguous_drops++;
 			/* require > 1 contiguous drops before lowering the rate, tolerates spurious one-off stalls */
-			if (contiguous_drops > 2) sampling_interval--;
-		} else contiguous_drops = 0;
+			if (overlays->contiguous_drops > 2) overlays->sampling_interval--;
+		} else overlays->contiguous_drops = 0;
 
 		/* age the sys-wide sample data into "last" variables, before the new sample overwrites them. */
-		last_sample = this_sample;
-		this_sample = maybe_sample;
-		if ((sys_stat = vmon.stores[VMON_STORE_SYS_STAT])) {
-			last_user_cpu = sys_stat->user;
-			last_system_cpu = sys_stat->system;
-			last_total =	sys_stat->user +
+		overlays->last_sample = overlays->this_sample;
+		overlays->this_sample = overlays->maybe_sample;
+		if ((sys_stat = overlays->vmon.stores[VMON_STORE_SYS_STAT])) {
+			overlays->last_user_cpu = sys_stat->user;
+			overlays->last_system_cpu = sys_stat->system;
+			overlays->last_total =	sys_stat->user +
 					sys_stat->nice +
 					sys_stat->system +
 					sys_stat->idle +
@@ -1004,17 +1032,19 @@ void vwm_overlay_update(vwm_t *vwm, int *desired_delay) {
 					sys_stat->steal +
 					sys_stat->guest;
 
-			last_idle = sys_stat->idle;
-			last_iowait = sys_stat->iowait;
+			overlays->last_idle = sys_stat->idle;
+			overlays->last_iowait = sys_stat->iowait;
 		}
 
-		vmon_sample(&vmon);	/* XXX: calls proc_sample_callback() for explicitly monitored processes after sampling their descendants */
-					/* XXX: also calls sample_callback() per invocation after sampling the sys wants */
-		sampling_paused = (sampling_interval == -1);
-		prev_sampling_interval = sampling_interval;
+		ret = vmon_sample(&overlays->vmon);	/* XXX: calls proc_sample_callback() for explicitly monitored processes after sampling their descendants */
+						/* XXX: also calls sample_callback() per invocation after sampling the sys wants */
+		overlays->sampling_paused = (overlays->sampling_interval == -1);
+		overlays->prev_sampling_interval = overlays->sampling_interval;
 	}
 
 
 	/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
-	*desired_delay = sampling_interval != -1 ? sampling_intervals[sampling_interval] * 300.0 : -1;
+	*desired_delay = overlays->sampling_interval != -1 ? sampling_intervals[overlays->sampling_interval] * 300.0 : -1;
+
+	return ret;
 }

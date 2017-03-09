@@ -24,14 +24,17 @@ typedef struct _vwm_overlay_t {
 	int	gen_last_composed;	/* the last composed vmon generation */
 	int	redraw_needed;		/* if a redraw is required (like when the window is resized...) */
 } vwm_overlay_t;
+typedef struct _vwm_overlays_t vwm_overlays_t;
 
 int vwm_overlay_xwin_composed_height(vwm_t *vwm, vwm_xwindow_t *xwin);
 void vwm_overlay_xwin_reset_snowflakes(vwm_t *vwm, vwm_xwindow_t *xwin);
 void vwm_overlay_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin);
 void vwm_overlay_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin);
 void vwm_overlay_xwin_compose(vwm_t *vwm, vwm_xwindow_t *xwin);
-void vwm_overlay_rate_increase(vwm_t *vwm);
-void vwm_overlay_rate_decrease(vwm_t *vwm);
-void vwm_overlay_update(vwm_t *vwm, int *desired_delay);
+vwm_overlays_t * vwm_overlays_create(vwm_t *vwm);
+void vwm_overlays_destroy(vwm_overlays_t *overlays);
+void vwm_overlays_rate_increase(vwm_overlays_t *overlays);
+void vwm_overlays_rate_decrease(vwm_overlays_t *overlays);
+int vwm_overlays_update(vwm_overlays_t *overlays, int *desired_delay);
 
 #endif
