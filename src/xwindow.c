@@ -95,6 +95,26 @@ int vwm_xwin_is_mapped(vwm_t *vwm, vwm_xwindow_t *xwin)
 }
 
 
+/* helper to get the client pid for a window */
+static int vwm_xwin_get_pid(vwm_t *vwm, vwm_xwindow_t *xwin)
+{
+	Atom		type;
+	int		fmt;
+	unsigned long	nitems;
+	unsigned long	nbytes;
+	long		*foo = NULL;
+	int		pid;
+
+	if (XGetWindowProperty(VWM_XDISPLAY(vwm), xwin->id, vwm->wm_pid_atom, 0, 1, False, XA_CARDINAL,
+			       &type, &fmt, &nitems, &nbytes, (unsigned char **)&foo) != Success || !foo) return -1;
+
+	pid = *foo;
+	XFree(foo);
+
+	return pid;
+}
+
+
 /* creates and potentially manages a new window (called in response to CreateNotify events, and during startup for all existing windows) */
 /* if the window is already mapped and not an override_redirect window, it becomes managed here. */
 vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
