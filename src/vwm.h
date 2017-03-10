@@ -1,8 +1,6 @@
 #ifndef _VWM_H
 #define _VWM_H
 
-// #include <X11/Xlib.h>
-// #include <X11/Xutil.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/Xinerama.h>
 
@@ -43,8 +41,10 @@ typedef struct _vwm_t {
 	Atom			wm_protocols_atom;
 	Atom			wm_pid_atom;
 	int			damage_event, damage_error;
-	int			done;			/* global flag to cause vwm to quit */
+	XineramaScreenInfo	*xinerama_screens;
+	int			xinerama_screens_cnt;
 
+	int			done;			/* global flag to cause vwm to quit */
 	list_head_t		desktops;		/* global list of all (virtual) desktops in spatial created-in order */
 	list_head_t		desktops_mru;		/* global list of all (virtual) desktops in MRU order */
 	list_head_t		windows_mru;		/* global list of all managed windows kept in MRU order */
@@ -63,9 +63,6 @@ typedef struct _vwm_t {
 		#include "colors.def"
 #undef color
 	} colors;
-
-	XineramaScreenInfo	*xinerama_screens;
-	int			xinerama_screens_cnt;
 } vwm_t;
 
 #endif
