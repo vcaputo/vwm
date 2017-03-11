@@ -136,19 +136,15 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	/* don't create InputOnly windows */
 	if (attrs.class == InputOnly) goto _out_grabbed;
 
-	if (!(xwin = (vwm_xwindow_t *)malloc(sizeof(vwm_xwindow_t)))) {
+	if (!(xwin = (vwm_xwindow_t *)calloc(1, sizeof(vwm_xwindow_t)))) {
 		VWM_PERROR("Failed to allocate xwin");
 		goto _out_grabbed;
 	}
 
 	xwin->id = win;
 	xwin->attrs = attrs;
-	xwin->managed = NULL;
-	xwin->name = NULL;
 	XFetchName(VWM_XDISPLAY(vwm), win, &xwin->name);
 
-	xwin->monitor = NULL;
-	xwin->overlay.width = xwin->overlay.height = xwin->overlay.phase = 0;
 	xwin->overlay.gen_last_composed = -1;
 
 	/* This is so we get the PropertyNotify event and can get the pid when it's set post-create,
