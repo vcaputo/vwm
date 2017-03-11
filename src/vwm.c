@@ -79,7 +79,7 @@ static vwm_t * vwm_startup(void)
 		goto _err_free;
 	}
 
-	if (!(vwm->overlays = vwm_overlays_create(vwm))) {
+	if (!(vwm->overlays = vwm_overlays_create(vwm->xserver))) {
 		VWM_ERROR("Failed to create overlays");
 		goto _err_xclose;
 	}
@@ -311,7 +311,7 @@ int main(int argc, char *argv[])
 		do {
 			int	delay;
 
-			vwm_overlays_update(vwm->overlays, &delay);
+			if (vwm_overlays_update(vwm->overlays, &delay)) vwm_composite_repaint_needed(vwm);
 
 			XFlush(VWM_XDISPLAY(vwm));
 

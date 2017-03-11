@@ -338,9 +338,10 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			vwm_composite_toggle(vwm);
 			break;
 
-		case XK_apostrophe:	/* reset snowflakes of the focused window, suppressed when not compositing */
-			if (vwin) {
-				vwm_overlay_xwin_reset_snowflakes(vwm, vwin->xwindow);
+		case XK_apostrophe:	/* reset snowflakes of the focused window */
+			if (vwin && vwin->xwindow->overlay) {
+				vwm_overlay_reset_snowflakes(vwm->overlays, vwin->xwindow->overlay);
+				vwm_composite_damage_win(vwm, vwin->xwindow);
 			}
 			break;
 

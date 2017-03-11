@@ -79,6 +79,7 @@ void vwm_composite_damage_add(vwm_t *vwm, XserverRegion damage)
 {
 	if (combined_damage != None) {
 		XFixesUnionRegion(VWM_XDISPLAY(vwm), combined_damage, combined_damage, damage);
+		/* TODO FIXME: make destroy optional, change callers to reuse a persistent region where practical */
 		XFixesDestroyRegion(VWM_XDISPLAY(vwm), damage);
 	} else {
 		combined_damage = damage;
@@ -224,7 +225,18 @@ void vwm_composite_paint_all(vwm_t *vwm)
 		r.height = xwin->attrs.height + xwin->attrs.border_width * 2;
 		if (XRectInRegion(occluded, r.x, r.y, r.width, r.height) != RectangleIn) {
 			/* the window isn't fully occluded, compose it and add it to occluded */
-			if (xwin->monitor && !xwin->attrs.override_redirect) vwm_overlay_xwin_compose(vwm, xwin);
+			if (xwin->overlay) {
+				XserverRegion	overlay_damage = None;
+
+				vwm_overlay_compose(vwm->overlays, xwin->overlay, &overlay_damage);
+				if (overlay_damage != None) {
+					/* the damage region is in overlay coordinate space, translation necessary. */
+					XFixesTranslateRegion(VWM_XDISPLAY(vwm), overlay_damage,
+							xwin->attrs.x + xwin->attrs.border_width,
+							xwin->attrs.y + xwin->attrs.border_width);
+					vwm_composite_damage_add(vwm, overlay_damage);
+				}
+			}
 			XUnionRectWithRegion(&r, occluded, occluded);
 			xwin->occluded = 0;
 		} else {
@@ -256,13 +268,13 @@ void vwm_composite_paint_all(vwm_t *vwm)
 				 r.x, r.y, /* dst x, y */
 				 r.width, r.height);
 
-		if (xwin->monitor && !xwin->attrs.override_redirect && xwin->overlay.width) {
+		if (xwin->overlay) {
 			/* draw the monitoring overlay atop the window, note we stay within the window borders here. */
-			XRenderComposite(VWM_XDISPLAY(vwm), PictOpOver, xwin->overlay.picture, None, root_buffer,
-					 0, 0, 0, 0,								/* src x,y, maxk x, y */
-					 xwin->attrs.x + xwin->attrs.border_width,				/* dst x */
-					 xwin->attrs.y + xwin->attrs.border_width,				/* dst y */
-					 xwin->attrs.width, vwm_overlay_xwin_composed_height(vwm, xwin));	/* w, h */
+			vwm_overlay_render(vwm->overlays, xwin->overlay, root_buffer,
+					xwin->attrs.x + xwin->attrs.border_width,
+					xwin->attrs.y + xwin->attrs.border_width,
+					xwin->attrs.width,
+					xwin->attrs.height);
 		}
 
 		/* subtract the region of the window from the combined damage and update the root_buffer clip region to reflect the remaining damage */
