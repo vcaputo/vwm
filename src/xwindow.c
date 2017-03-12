@@ -73,11 +73,13 @@ int vwm_xwin_is_mapped(vwm_t *vwm, vwm_xwindow_t *xwin)
 	if (xwin->managed) {
 		switch (vwm->focused_context) {
 			case VWM_CONTEXT_SHELF:
-				if (vwm->focused_shelf == xwin->managed) ret = xwin->mapped;
+				if (vwm->focused_shelf == xwin->managed)
+					ret = xwin->mapped;
 				break;
 
 			case VWM_CONTEXT_DESKTOP:
-				if (vwm->focused_desktop == xwin->managed->desktop && !xwin->managed->shelved) ret = xwin->mapped;
+				if (vwm->focused_desktop == xwin->managed->desktop && !xwin->managed->shelved)
+					ret = xwin->mapped;
 				break;
 
 			default:
@@ -106,7 +108,8 @@ static int vwm_xwin_get_pid(vwm_t *vwm, vwm_xwindow_t *xwin)
 	int		pid;
 
 	if (XGetWindowProperty(VWM_XDISPLAY(vwm), xwin->id, vwm->wm_pid_atom, 0, 1, False, XA_CARDINAL,
-			       &type, &fmt, &nitems, &nbytes, (unsigned char **)&foo) != Success || !foo) return -1;
+			       &type, &fmt, &nitems, &nbytes, (unsigned char **)&foo) != Success || !foo)
+		return -1;
 
 	pid = *foo;
 	XFree(foo);
@@ -124,7 +127,8 @@ void vwm_xwin_setup_overlay(vwm_t *vwm, vwm_xwindow_t *xwin)
 	if (!xwin->attrs.override_redirect) {
 		int	pid = vwm_xwin_get_pid(vwm, xwin);
 
-		if (pid != -1) xwin->overlay = vwm_overlay_create(vwm->overlays, pid, xwin->attrs.width, xwin->attrs.height);
+		if (pid != -1)
+			xwin->overlay = vwm_overlay_create(vwm->overlays, pid, xwin->attrs.width, xwin->attrs.height);
 	}
 }
 
@@ -145,10 +149,12 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	}
 
 	/* verify the window still exists */
-	if (!XGetWindowAttributes(VWM_XDISPLAY(vwm), win, &attrs)) goto _out_grabbed;
+	if (!XGetWindowAttributes(VWM_XDISPLAY(vwm), win, &attrs))
+		goto _out_grabbed;
 
 	/* don't create InputOnly windows */
-	if (attrs.class == InputOnly) goto _out_grabbed;
+	if (attrs.class == InputOnly)
+		goto _out_grabbed;
 
 	if (!(xwin = (vwm_xwindow_t *)calloc(1, sizeof(vwm_xwindow_t)))) {
 		VWM_PERROR("Failed to allocate xwin");
@@ -174,12 +180,15 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	list_add_tail(&xwin->xwindows, &vwm->xwindows);	/* created windows are always placed on the top of the stacking order */
 
 #ifdef HONOR_OVERRIDE_REDIRECT
-	if (!attrs.override_redirect && xwin->mapped) vwm_win_manage_xwin(vwm, xwin);
+	if (!attrs.override_redirect && xwin->mapped)
+		vwm_win_manage_xwin(vwm, xwin);
 #else
-	if (xwin->mapped) vwm_win_manage_xwin(vwm, xwin);
+	if (xwin->mapped)
+		vwm_win_manage_xwin(vwm, xwin);
 #endif
 _out_grabbed:
-	if (!grabbed) XUngrabServer(VWM_XDISPLAY(vwm));
+	if (!grabbed)
+		XUngrabServer(VWM_XDISPLAY(vwm));
 
 	return xwin;
 }
@@ -192,13 +201,16 @@ void vwm_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
 	XGrabServer(VWM_XDISPLAY(vwm));
 	XSync(VWM_XDISPLAY(vwm), False);
 
-	if (xwin->managed) vwm_win_unmanage(vwm, xwin->managed);
+	if (xwin->managed)
+		vwm_win_unmanage(vwm, xwin->managed);
 
 	list_del(&xwin->xwindows);
 
-	if (xwin->name) XFree(xwin->name);
+	if (xwin->name)
+		XFree(xwin->name);
 
-	if (xwin->overlay) vwm_overlay_destroy(vwm->overlays, xwin->overlay);
+	if (xwin->overlay)
+		vwm_overlay_destroy(vwm->overlays, xwin->overlay);
 
 	vwm_composite_xwin_destroy(vwm, xwin);
 
@@ -258,21 +270,25 @@ int vwm_xwin_create_existing(vwm_t *vwm)
 	XQueryTree(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), &root, &parent, &children, &n_children);
 
 	for (i = 0; i < n_children; i++) {
-		if (children[i] == None) continue;
+		if (children[i] == None)
+			continue;
 
-		if ((vwm_xwin_create(vwm, children[i], VWM_GRABBED) == NULL)) goto _fail_grabbed;
+		if ((vwm_xwin_create(vwm, children[i], VWM_GRABBED) == NULL))
+			goto _fail_grabbed;
 	}
 
 	XUngrabServer(VWM_XDISPLAY(vwm));
 
-	if (children) XFree(children);
+	if (children)
+		XFree(children);
 
 	return 1;
 
 _fail_grabbed:
 	XUngrabServer(VWM_XDISPLAY(vwm));
 
-	if (children) XFree(children);
+	if (children)
+		XFree(children);
 
 	return 0;
 }

@@ -278,7 +278,8 @@ void vwm_process_event(vwm_t *vwm)
 		default:
 			if (event.type == randr_event + RRScreenChangeNotify) {
 				VWM_TRACE("rrscreenchangenotify");
-				if (vwm->xinerama_screens) XFree(vwm->xinerama_screens);
+				if (vwm->xinerama_screens)
+					XFree(vwm->xinerama_screens);
 				vwm->xinerama_screens = XineramaQueryScreens(VWM_XDISPLAY(vwm), &vwm->xinerama_screens_cnt);
 
 				vwm_composite_invalidate_root(vwm);
@@ -311,12 +312,14 @@ int main(int argc, char *argv[])
 		do {
 			int	delay;
 
-			if (vwm_overlays_update(vwm->overlays, &delay)) vwm_composite_repaint_needed(vwm);
+			if (vwm_overlays_update(vwm->overlays, &delay))
+				vwm_composite_repaint_needed(vwm);
 
 			XFlush(VWM_XDISPLAY(vwm));
 
 			if (!XPending(VWM_XDISPLAY(vwm))) {
-				if (poll(&pfd, 1, delay) == 0) break;
+				if (poll(&pfd, 1, delay) == 0)
+					break;
 			}
 
 			vwm_process_event(vwm);

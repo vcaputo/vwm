@@ -61,7 +61,8 @@ const vwm_screen_t * vwm_screen_find(vwm_t *vwm, vwm_screen_rel_t rel, ...)
 	faux.width = WidthOfScreen(DefaultScreenOfDisplay(VWM_XDISPLAY(vwm)));
 	faux.height = HeightOfScreen(DefaultScreenOfDisplay(VWM_XDISPLAY(vwm)));
 
-	if (!vwm->xinerama_screens) goto _out;
+	if (!vwm->xinerama_screens)
+		goto _out;
 
 #define for_each_screen(_tmp) \
 	for (i = 0, _tmp = vwm->xinerama_screens; i < vwm->xinerama_screens_cnt; _tmp = &vwm->xinerama_screens[++i])
@@ -108,10 +109,17 @@ const vwm_screen_t * vwm_screen_find(vwm_t *vwm, vwm_screen_rel_t rel, ...)
 			short	x1 = MAXSHORT, y1 = MAXSHORT, x2 = MINSHORT, y2 = MINSHORT;
 			/* find the smallest x_org and y_org, the highest x_org + width and y_org + height, those are the two corners of the total rect */
 			for_each_screen(scr) {
-				if (scr->x_org < x1) x1 = scr->x_org;
-				if (scr->y_org < y1) y1 = scr->y_org;
-				if (scr->x_org + scr->width > x2) x2 = scr->x_org + scr->width;
-				if (scr->y_org + scr->height > y2) y2 = scr->y_org + scr->height;
+				if (scr->x_org < x1)
+					x1 = scr->x_org;
+
+				if (scr->y_org < y1)
+					y1 = scr->y_org;
+
+				if (scr->x_org + scr->width > x2)
+					x2 = scr->x_org + scr->width;
+
+				if (scr->y_org + scr->height > y2)
+					y2 = scr->y_org + scr->height;
 			}
 			faux.x_org = x1;
 			faux.y_org = y1;
@@ -135,7 +143,9 @@ int vwm_screen_is_empty(vwm_t *vwm, const vwm_screen_t *scr)
 	int		is_empty = 1;
 
 	list_for_each_entry(xwin, &vwm->xwindows, xwindows) {
-		if (!xwin->mapped) continue;
+		if (!xwin->mapped)
+			continue;
+
 		if (!xwin->managed || (xwin->managed->desktop == vwm->focused_desktop && !xwin->managed->shelved && !xwin->managed->configuring)) {
 			/* XXX: it may make more sense to see what %age of the screen is overlapped by windows, and consider it empty if < some % */
 			/*      This is just seeing if any window is predominantly within the specified screen, the rationale being if you had a focusable

@@ -34,6 +34,7 @@ void vwm_win_unmap(vwm_t *vwm, vwm_window_t *vwin)
 		VWM_TRACE("inhibited unmap of \"%s\", not mapped by client", vwin->xwindow->name);
 		return;
 	}
+
 	VWM_TRACE("Unmapping \"%s\"", vwin->xwindow->name);
 	vwin->unmapping = 1;
 	XUnmapWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id);
@@ -47,6 +48,7 @@ void vwm_win_map(vwm_t *vwm, vwm_window_t *vwin)
 		VWM_TRACE("inhibited map of \"%s\", not mapped by client", vwin->xwindow->name);
 		return;
 	}
+
 	VWM_TRACE("Mapping \"%s\"", vwin->xwindow->name);
 	vwin->mapping = 1;
 	XMapWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id);
@@ -87,7 +89,8 @@ vwm_window_t * vwm_win_focused(vwm_t *vwm)
 			break;
 
 		case VWM_CONTEXT_DESKTOP:
-			if (vwm->focused_desktop) vwin = vwm->focused_desktop->focused_window;
+			if (vwm->focused_desktop)
+				vwin = vwm->focused_desktop->focused_window;
 			break;
 
 		default:
@@ -107,7 +110,8 @@ void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_
 	XWindowChanges		changes = { .border_width = WINDOW_BORDER_WIDTH };
 
 	/* remember the current configuration as the "client" configuration if it's not an autoconfigured one. */
-	if (vwin->autoconfigured == VWM_WIN_AUTOCONF_NONE) vwin->client = vwin->xwindow->attrs;
+	if (vwin->autoconfigured == VWM_WIN_AUTOCONF_NONE)
+		vwin->client = vwin->xwindow->attrs;
 
 	scr = vwm_screen_find(vwm, rel, vwin->xwindow); /* XXX FIXME: this becomes a bug when vwm_screen_find() uses non-xwin va_args */
 	va_start(ap, conf);
@@ -246,7 +250,8 @@ _retry:
 	visited_mask = 0;
 	list_for_each_entry(next, &vwin->windows_mru, windows_mru) {
 		/* searching for the next mapped window in this context, using vwin->windows as the head */
-		if (&next->windows_mru == &vwm->windows_mru) continue;	/* XXX: skip the containerless head, we're leveraging the circular list implementation */
+		if (&next->windows_mru == &vwm->windows_mru)
+			continue;	/* XXX: skip the containerless head, we're leveraging the circular list implementation */
 
 		if ((vwin->shelved && next->shelved) ||
 		    ((!vwin->shelved && !next->shelved && next->desktop == vwin->desktop) &&
@@ -255,9 +260,11 @@ _retry:
 		      (fence == VWM_FENCE_VIOLATE && vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow) != scr) ||
 		      (fence == VWM_FENCE_MASKED_VIOLATE && (next_scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow)) != scr &&
 		       !((1UL << next_scr->screen_number) & vwm->fence_mask))
-		   ))) break;
+		   )))
+			break;
 
-		if (fence == VWM_FENCE_MASKED_VIOLATE && next_scr && next_scr != scr) visited_mask |= (1UL << next_scr->screen_number);
+		if (fence == VWM_FENCE_MASKED_VIOLATE && next_scr && next_scr != scr)
+			visited_mask |= (1UL << next_scr->screen_number);
 	}
 
 	if (fence == VWM_FENCE_TRY_RESPECT && next == vwin) {
@@ -306,17 +313,16 @@ _retry:
 void vwm_win_shelve(vwm_t *vwm, vwm_window_t *vwin)
 {
 	/* already shelved, NOOP */
-	if (vwin->shelved) return;
+	if (vwin->shelved)
+		return;
 
 	/* shelving focused window, focus the next window */
-	if (vwin == vwin->desktop->focused_window) {
+	if (vwin == vwin->desktop->focused_window)
 		vwm_win_mru(vwm, vwm_win_focus_next(vwm, vwin, VWM_FENCE_RESPECT));
-	}
 
-	if (vwin == vwin->desktop->focused_window) {
+	if (vwin == vwin->desktop->focused_window)
 		/* TODO: we can probably put this into vwm_win_focus_next() and have it always handled there... */
 		vwin->desktop->focused_window = NULL;
-	}
 
 	vwin->shelved = 1;
 	vwm_win_mru(vwm, vwin);
@@ -365,8 +371,11 @@ vwm_xwindow_t * vwm_win_unmanage(vwm_t *vwm, vwm_window_t *vwin)
 	vwm_win_unfocus(vwm, vwin);
 	list_del(&vwin->windows_mru);
 
-	if (vwin == vwm->console) vwm->console = NULL;
-	if (vwin == vwm->focused_origin) vwm->focused_origin = NULL;
+	if (vwin == vwm->console)
+		vwm->console = NULL;
+
+	if (vwin == vwm->focused_origin)
+		vwm->focused_origin = NULL;
 
 	vwin->xwindow->managed = NULL;
 
@@ -446,9 +455,11 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 _fail:
 	if (vwin) {
-		if (vwin->hints) XFree(vwin->hints);
+		if (vwin->hints)
+			XFree(vwin->hints);
 		free(vwin);
 	}
+
 	return NULL;
 }
 

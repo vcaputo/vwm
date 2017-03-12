@@ -35,7 +35,8 @@ int vwm_context_focus(vwm_t *vwm, vwm_context_t desired_context)
 		vwm_window_t	*vwin;
 
 		case VWM_CONTEXT_SHELF:
-			if (desired_context == VWM_CONTEXT_SHELF) break;
+			if (desired_context == VWM_CONTEXT_SHELF)
+				break;
 
 			/* desired == DESKTOP && focused == SHELF */
 
@@ -45,7 +46,9 @@ int vwm_context_focus(vwm_t *vwm, vwm_context_t desired_context)
 
 			/* map the focused desktop, from the top of the stack down */
 			list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
-				if (!(vwin = xwin->managed)) continue;
+				if (!(vwin = xwin->managed))
+					continue;
+
 				if (vwin->desktop == vwm->focused_desktop && !vwin->shelved) {
 					VWM_TRACE("Mapping desktop window \"%s\"", xwin->name);
 					vwm_win_map(vwm, vwin);
@@ -62,7 +65,8 @@ int vwm_context_focus(vwm_t *vwm, vwm_context_t desired_context)
 
 		case VWM_CONTEXT_DESKTOP:
 			/* unmap everything, map the shelf */
-			if (desired_context == VWM_CONTEXT_DESKTOP) break;
+			if (desired_context == VWM_CONTEXT_DESKTOP)
+				break;
 
 			/* desired == SHELF && focused == DESKTOP */
 
@@ -70,7 +74,9 @@ int vwm_context_focus(vwm_t *vwm, vwm_context_t desired_context)
 			if (vwm->focused_shelf) {
 				/* unmap everything on the current desktop */
 				list_for_each_entry(xwin, &vwm->xwindows, xwindows) {
-					if (!(vwin = xwin->managed)) continue;
+					if (!(vwin = xwin->managed))
+						continue;
+
 					if (vwin->desktop == vwm->focused_desktop) {
 						VWM_TRACE("Unmapping desktop window \"%s\"", xwin->name);
 						vwm_win_unmap(vwm, vwin);

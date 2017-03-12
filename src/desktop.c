@@ -49,15 +49,21 @@ int vwm_desktop_focus(vwm_t *vwm, vwm_desktop_t *desktop)
 
 		/* unmap the windows on the currently focused desktop, map those on the newly focused one */
 		list_for_each_entry(xwin, &vwm->xwindows, xwindows) {
-			if (!(vwin = xwin->managed) || vwin->shelved) continue;
-			if (vwin->desktop == vwm->focused_desktop) vwm_win_unmap(vwm, vwin);
+			if (!(vwin = xwin->managed) || vwin->shelved)
+				continue;
+
+			if (vwin->desktop == vwm->focused_desktop)
+				vwm_win_unmap(vwm, vwin);
 		}
 
 		XFlush(VWM_XDISPLAY(vwm));
 
 		list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
-			if (!(vwin = xwin->managed) || vwin->shelved) continue;
-			if (vwin->desktop == desktop) vwm_win_map(vwm, vwin);
+			if (!(vwin = xwin->managed) || vwin->shelved)
+				continue;
+
+			if (vwin->desktop == desktop)
+				vwm_win_map(vwm, vwin);
 		}
 
 		vwm->focused_desktop = desktop;
@@ -75,7 +81,8 @@ int vwm_desktop_focus(vwm_t *vwm, vwm_desktop_t *desktop)
 }
 
 /* return next MRU desktop relative to the supplied desktop */
-vwm_desktop_t * vwm_desktop_next_mru(vwm_t *vwm, vwm_desktop_t *desktop) {
+vwm_desktop_t * vwm_desktop_next_mru(vwm_t *vwm, vwm_desktop_t *desktop)
+{
 	list_head_t	*next;
 
 	/* this dance is necessary because the list head @ vwm->desktops_mru has no vwm_desktop_t container,
@@ -92,20 +99,20 @@ vwm_desktop_t * vwm_desktop_next_mru(vwm_t *vwm, vwm_desktop_t *desktop) {
 }
 
 /* return next desktop spatially relative to the supplied desktop, no wrap-around */
-vwm_desktop_t * vwm_desktop_next(vwm_t *vwm, vwm_desktop_t *desktop) {
-	if (desktop->desktops.next != &vwm->desktops) {
+vwm_desktop_t * vwm_desktop_next(vwm_t *vwm, vwm_desktop_t *desktop)
+{
+	if (desktop->desktops.next != &vwm->desktops)
 		desktop = list_entry(desktop->desktops.next, vwm_desktop_t, desktops);
-	}
 
 	return desktop;
 }
 
 
 /* return previous desktop spatially relative to the supplied desktop, no wrap-around */
-vwm_desktop_t * vwm_desktop_prev(vwm_t *vwm, vwm_desktop_t *desktop) {
-	if (desktop->desktops.prev != &vwm->desktops) {
+vwm_desktop_t * vwm_desktop_prev(vwm_t *vwm, vwm_desktop_t *desktop)
+{
+	if (desktop->desktops.prev != &vwm->desktops)
 		desktop = list_entry(desktop->desktops.prev, vwm_desktop_t, desktops);
-	}
 
 	return desktop;
 }
@@ -140,7 +147,8 @@ void vwm_desktop_destroy(vwm_t *vwm, vwm_desktop_t *desktop)
 	/* silently refuse to destroy a desktop having windows (for now) */
 	/* there's _always_ a focused window on a desktop having mapped windows */
 	/* also silently refuse to destroy the last desktop (for now) */
-	if (desktop->focused_window || (desktop->desktops.next == desktop->desktops.prev)) return;
+	if (desktop->focused_window || (desktop->desktops.next == desktop->desktops.prev))
+		return;
 
 	/* focus the MRU desktop that isn't this one if we're the focused desktop */
 	if (desktop == vwm->focused_desktop) {

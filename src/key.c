@@ -31,14 +31,16 @@
 static int	key_is_grabbed;	/* flag for tracking keyboard grab state */
 
 /* Poll the keyboard state to see if _any_ keys are pressed */
-static int keys_pressed(vwm_t *vwm) {
+static int keys_pressed(vwm_t *vwm)
+{
 	int	i;
 	char	state[32];
 
 	XQueryKeymap(VWM_XDISPLAY(vwm), state);
 
 	for (i = 0; i < sizeof(state); i++) {
-		if (state[i]) return 1;
+		if (state[i])
+			return 1;
 	}
 
 	return 0;
@@ -67,10 +69,12 @@ void vwm_key_released(vwm_t *vwm, Window win, XKeyReleasedEvent *keyrelease)
 			}
 
 			/* make the focused window the most recently used */
-			if ((vwin = vwm_win_focused(vwm))) vwm_win_mru(vwm, vwin);
+			if ((vwin = vwm_win_focused(vwm)))
+				vwm_win_mru(vwm, vwin);
 
 			/* make the focused desktop the most recently used */
-			if (vwm->focused_context == VWM_CONTEXT_DESKTOP && vwm->focused_desktop) vwm_desktop_mru(vwm, vwm->focused_desktop);
+			if (vwm->focused_context == VWM_CONTEXT_DESKTOP && vwm->focused_desktop)
+				vwm_desktop_mru(vwm, vwm->focused_desktop);
 
 			break;
 
@@ -122,7 +126,9 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 #undef launcher
 		case XK_Alt_L: /* transaction abort */
 		case XK_Alt_R:
-			if (key_is_grabbed) key_is_grabbed++;
+			if (key_is_grabbed)
+				key_is_grabbed++;
+
 			VWM_TRACE("aborting with origin %p", vwm->focused_origin);
 			break;
 
@@ -150,7 +156,8 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 
 			if (keypress->state & ShiftMask) {
 				/* migrate the focused window with the desktop focus to the most recently used desktop */
-				if (vwin) vwm_win_migrate(vwm, vwin, next_desktop);
+				if (vwin)
+					vwm_win_migrate(vwm, vwin, next_desktop);
 			} else {
 				vwm_desktop_focus(vwm, next_desktop);
 			}
@@ -291,7 +298,9 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			break;
 
 		case XK_s: /* shelve focused window */
-			if (vwin && !vwin->shelved) vwm_win_shelve(vwm, vwin);
+			if (vwin && !vwin->shelved)
+				vwm_win_shelve(vwm, vwin);
+
 			break;
 
 		case XK_bracketleft:	/* reconfigure the focused window to occupy the left or top half of the screen or left quarters on repeat */

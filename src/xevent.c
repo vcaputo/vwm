@@ -70,9 +70,8 @@ void vwm_xevent_handle_destroy_notify(vwm_t *vwm, XDestroyWindowEvent *ev)
 {
 	vwm_xwindow_t	*xwin;
 
-	if ((xwin = vwm_xwin_lookup(vwm, ev->window))) {
+	if ((xwin = vwm_xwin_lookup(vwm, ev->window)))
 		vwm_xwin_destroy(vwm, xwin);
-	}
 }
 
 
@@ -92,10 +91,9 @@ void vwm_xevent_handle_configure_request(vwm_t *vwm, XConfigureRequestEvent *ev)
 
 	if ((xwin = vwm_xwin_lookup(vwm, ev->window)) &&
 	    xwin->managed &&
-	    xwin->managed->autoconfigured == VWM_WIN_AUTOCONF_ALL) {
+	    xwin->managed->autoconfigured == VWM_WIN_AUTOCONF_ALL)
 		/* this is to allow auto-allscreen to succeed in getting a borderless window configured */
 		change_mask &= ~CWBorderWidth;
-	}
 
 	XConfigureWindow(VWM_XDISPLAY(vwm), ev->window, change_mask, &changes);
 }
@@ -110,7 +108,8 @@ void vwm_xevent_handle_configure_notify(vwm_t *vwm, XConfigureEvent *ev)
 		vwm_xwin_restack(vwm, xwin, ev->above);
 		XGetWindowAttributes(VWM_XDISPLAY(vwm), ev->window, &attrs);
 		vwm_composite_handle_configure(vwm, xwin, &attrs);
-		if (xwin->overlay) vwm_overlay_set_visible_size(vwm->overlays, xwin->overlay, attrs.width, attrs.height);
+		if (xwin->overlay)
+			vwm_overlay_set_visible_size(vwm->overlays, xwin->overlay, attrs.width, attrs.height);
 
 		VWM_TRACE("pre x=%i y=%i w=%i h=%i\n", xwin->attrs.x, xwin->attrs.y, xwin->attrs.width, xwin->attrs.height);
 		xwin->attrs = attrs;
@@ -155,9 +154,8 @@ void vwm_xevent_handle_map_notify(vwm_t *vwm, XMapEvent *ev)
 		 * which unless the window's an override_redirect is incorrect.
 		 * So implicitly manage the window if it's not managed and !override_redirect, since it's now mapped.
 		 */
-		if (!xwin->managed && !xwin->attrs.override_redirect) {
+		if (!xwin->managed && !xwin->attrs.override_redirect)
 			xwin->managed = vwm_win_manage_xwin(vwm, xwin);
-		}
 
 		if (xwin->managed && xwin->managed->mapping) {
 			VWM_TRACE("swallowed vwm-induced MapNotify");
@@ -200,8 +198,12 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 				domap = 0;
 			}
 
-			if (classhint->res_class) XFree(classhint->res_class);
-			if (classhint->res_name) XFree(classhint->res_name);
+			if (classhint->res_class)
+				XFree(classhint->res_class);
+
+			if (classhint->res_name)
+				XFree(classhint->res_name);
+
 			XFree(classhint);
 		}
 
@@ -271,7 +273,8 @@ void vwm_xevent_handle_property_notify(vwm_t *vwm, XPropertyEvent *ev)
 
 	if ((xwin = vwm_xwin_lookup(vwm, ev->window)) &&
 	    ev->atom == vwm->wm_pid_atom &&
-	    ev->state == PropertyNewValue) vwm_xwin_setup_overlay(vwm, xwin);
+	    ev->state == PropertyNewValue)
+		vwm_xwin_setup_overlay(vwm, xwin);
 }
 
 

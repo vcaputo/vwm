@@ -39,7 +39,8 @@ void vwm_launch(vwm_t *vwm, char **argv, vwm_launch_mode_t mode)
 			setpriority(PRIO_PROCESS, getpid(), vwm->priority + LAUNCHED_RELATIVE_PRIORITY);
 			execvp(argv[0], argv);
 		}
-		if (mode == VWM_LAUNCH_MODE_BG) exit(0);
+		if (mode == VWM_LAUNCH_MODE_BG)
+			exit(0);
 	}
 	wait(NULL); /* TODO: could wait for the specific pid, particularly in FG mode ... */
 }

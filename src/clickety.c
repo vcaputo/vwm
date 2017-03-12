@@ -63,8 +63,11 @@ static void compute_resize(XEvent *terminus, XWindowAttributes *new)
 			width_inc = vwin->hints->width_inc;
 			height_inc = vwin->hints->height_inc;
 			VWM_TRACE("window size hints exist and resize increments are w=%i h=%i", width_inc, height_inc);
-			if (!width_inc) width_inc = 1;
-			if (!height_inc) height_inc = 1;
+			if (!width_inc)
+				width_inc = 1;
+
+			if (!height_inc)
+				height_inc = 1;
 		}
 	}
 
@@ -99,12 +102,16 @@ static void compute_resize(XEvent *terminus, XWindowAttributes *new)
 
 	/* constrain the width and height of the window according to the minimums */
 	if (new->width < min_width) {
-		if (clickety.orig.x != new->x) new->x -= (min_width - new->width);
+		if (clickety.orig.x != new->x)
+			new->x -= (min_width - new->width);
+
 		new->width = min_width;
 	}
 
 	if (new->height < min_height) {
-		if (clickety.orig.y != new->y) new->y -= (min_height - new->height);
+		if (clickety.orig.y != new->y)
+			new->y -= (min_height - new->height);
+
 		new->height = min_height;
 	}
 }
@@ -114,7 +121,8 @@ void vwm_clickety_motion(vwm_t *vwm, Window win, XMotionEvent *motion)
 {
 	XWindowChanges	changes = { .border_width = WINDOW_BORDER_WIDTH };
 
-	if (!clickety.vwin) return;
+	if (!clickety.vwin)
+		return;
 
 	/* TODO: verify win matches clickety.vwin? */
 	switch (clickety.mode) {
@@ -150,7 +158,8 @@ void vwm_clickety_released(vwm_t *vwm, Window win, XButtonPressedEvent *terminus
 {
 	XWindowChanges	changes = { .border_width = WINDOW_BORDER_WIDTH };
 
-	if (!clickety.vwin) return;
+	if (!clickety.vwin)
+		return;
 
 	switch (clickety.mode) {
 		case VWM_ADJUST_MOVE:
@@ -192,9 +201,11 @@ int vwm_clickety_pressed(vwm_t *vwm, Window win, XButtonPressedEvent *impetus)
 	vwm_window_t	*vwin;
 
 	/* verify the window still exists */
-	if (!XGetWindowAttributes(VWM_XDISPLAY(vwm), win, &clickety.orig)) goto _fail;
+	if (!XGetWindowAttributes(VWM_XDISPLAY(vwm), win, &clickety.orig))
+		goto _fail;
 
-	if (!(vwin = vwm_win_lookup(vwm, win))) goto _fail;
+	if (!(vwin = vwm_win_lookup(vwm, win)))
+		goto _fail;
 
 	if (impetus->state & WM_GRAB_MODIFIER) {
 

@@ -60,7 +60,8 @@ static void unbind_namewindow(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 void vwm_composite_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
-	if (!compositing_mode) return;
+	if (!compositing_mode)
+		return;
 
 	bind_namewindow(vwm, xwin);
 	xwin->damage = XDamageCreate(VWM_XDISPLAY(vwm), xwin->id, XDamageReportNonEmpty);
@@ -68,7 +69,8 @@ void vwm_composite_xwin_create(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 void vwm_composite_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
-	if (!compositing_mode) return;
+	if (!compositing_mode)
+		return;
 
 	unbind_namewindow(vwm, xwin);
 	XDamageDestroy(VWM_XDISPLAY(vwm), xwin->damage);
@@ -95,15 +97,18 @@ void vwm_composite_damage_win(vwm_t *vwm, vwm_xwindow_t *xwin)
 				 xwin->attrs.width + xwin->attrs.border_width * 2,
 				 xwin->attrs.height + xwin->attrs.border_width * 2 };
 
-	if (!compositing_mode) return;
+	if (!compositing_mode)
+		return;
 
 	region = XFixesCreateRegion(VWM_XDISPLAY(vwm), &rect, 1);
 	vwm_composite_damage_add(vwm, region);
 }
 
 
-void vwm_composite_handle_configure(vwm_t *vwm, vwm_xwindow_t *xwin, XWindowAttributes *new_attrs) {
-	if (!compositing_mode) return;
+void vwm_composite_handle_configure(vwm_t *vwm, vwm_xwindow_t *xwin, XWindowAttributes *new_attrs)
+{
+	if (!compositing_mode)
+		return;
 
 	/* damage the old and new window areas */
 	XserverRegion	region;
@@ -123,8 +128,10 @@ void vwm_composite_handle_configure(vwm_t *vwm, vwm_xwindow_t *xwin, XWindowAttr
 }
 
 
-void vwm_composite_handle_map(vwm_t *vwm, vwm_xwindow_t *xwin) {
-	if (!compositing_mode) return;
+void vwm_composite_handle_map(vwm_t *vwm, vwm_xwindow_t *xwin)
+{
+	if (!compositing_mode)
+		return;
 
 	vwm_composite_damage_win(vwm, xwin);
 	unbind_namewindow(vwm, xwin);
@@ -154,7 +161,8 @@ void vwm_composite_damage_event(vwm_t *vwm, XDamageNotifyEvent *ev)
 /* used in response to screen configuration changes... */
 void vwm_composite_invalidate_root(vwm_t *vwm)
 {
-	if (!compositing_mode) return;
+	if (!compositing_mode)
+		return;
 
 	if (root_picture) XRenderFreePicture(VWM_XDISPLAY(vwm), root_picture);
 	root_picture = None;
@@ -164,7 +172,8 @@ void vwm_composite_invalidate_root(vwm_t *vwm)
 
 void vwm_composite_repaint_needed(vwm_t *vwm)
 {
-	if (!compositing_mode) return;
+	if (!compositing_mode)
+		return;
 
 	repaint_needed = 1;
 }
@@ -179,7 +188,8 @@ void vwm_composite_paint_all(vwm_t *vwm)
 	static XserverRegion	undamage_region = None;
 
 	/* if there's no damage to repaint, short-circuit, this happens when compositing for overlays is disabled. */
-	if (!compositing_mode || (combined_damage == None && !repaint_needed)) return;
+	if (!compositing_mode || (combined_damage == None && !repaint_needed))
+		return;
 
 	repaint_needed = 0;
 
@@ -203,7 +213,8 @@ void vwm_composite_paint_all(vwm_t *vwm)
 	list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
 		XRectangle	r;
 
-		if (!vwm_xwin_is_mapped(vwm, xwin)) continue;	/* if !mapped skip */
+		if (!vwm_xwin_is_mapped(vwm, xwin))
+			continue;	/* if !mapped skip */
 
 		/* Everything mapped next goes through an occlusion check.
 		 * Since the composite extension stops delivery of VisibilityNotify events for redirected windows,
@@ -254,7 +265,8 @@ void vwm_composite_paint_all(vwm_t *vwm)
 	list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
 		XRectangle		r;
 
-		if (!vwm_xwin_is_mapped(vwm, xwin) || xwin->occluded) continue;	/* if !mapped or occluded skip */
+		if (!vwm_xwin_is_mapped(vwm, xwin) || xwin->occluded)
+			continue;	/* if !mapped or occluded skip */
 
 		/* these coordinates + dimensions incorporate the border (since XCompositeNameWindowPixmap is being used) */
 		r.x = xwin->attrs.x;

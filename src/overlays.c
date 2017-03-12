@@ -361,7 +361,8 @@ static void argv2xtext(vmon_proc_t *proc, XTextItem *items, int max_items, int *
 
 
 /* helper for counting number of existing descendants subtrees */
-static int count_rows(vmon_proc_t *proc) {
+static int count_rows(vmon_proc_t *proc)
+{
 	int		count = 1; /* XXX maybe suppress proc->is_new? */
 	vmon_proc_t	*child;
 
@@ -380,19 +381,23 @@ static int count_rows(vmon_proc_t *proc) {
 
 
 /* helper for detecting if any children/threads in the process heirarchy rooted @ proc are new/stale this sample */
-static int proc_heirarchy_changed(vmon_proc_t *proc) {
+static int proc_heirarchy_changed(vmon_proc_t *proc)
+{
 	vmon_proc_t	*child;
 
-	if (proc->children_changed || proc->threads_changed) return 1;
+	if (proc->children_changed || proc->threads_changed)
+		return 1;
 
 	if (!proc->is_thread) {
 		list_for_each_entry(child, &proc->threads, threads) {
-			if (proc_heirarchy_changed(child)) return 1;
+			if (proc_heirarchy_changed(child))
+				return 1;
 		}
 	}
 
 	list_for_each_entry(child, &proc->children, siblings) {
-		if (proc_heirarchy_changed(child)) return 1;
+		if (proc_heirarchy_changed(child))
+			return 1;
 	}
 
 	return 0;
@@ -411,8 +416,11 @@ static void draw_bars(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int row,
 
 	/* round up to 1 pixel when the scaled result is a fraction less than 1,
 	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
-	if (a_fraction && !a_height) a_height = 1;
-	if (b_fraction && !b_height) b_height = 1;
+	if (a_fraction && !a_height)
+		a_height = 1;
+
+	if (b_fraction && !b_height)
+		b_height = 1;
 
 	/* draw the two bars for this sample at the current phase in the graphs, note the first is ceiling-based, second floor-based */
 	XRenderFillRectangle(xserver->display, PictOpSrc, overlay->grapha_picture, &overlay_visible_color,
@@ -443,7 +451,8 @@ static void draw_heirarchy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay,
 	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_WCHAN) &&
 	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_PID) &&
 	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_STATE) &&
-	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_ARGV)) return;
+	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_ARGV))
+		return;
 
 	/* TODO: make the columns interactively configurable @ runtime */
 	if (!proc->is_new) {
@@ -519,13 +528,15 @@ static void draw_heirarchy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay,
 
 		/* find the last sibling (this has to be done due to the potential for stale siblings at the tail, and we'd rather not repeatedly check for it) */
 		list_for_each_entry(sibling, &proc->parent->children, siblings) {
-			if (!sibling->is_stale) last_sibling = sibling;
+			if (!sibling->is_stale)
+				last_sibling = sibling;
 		}
 
 		/* now look for siblings with non-stale children to determine if a tee is needed, ignoring the last sibling */
 		list_for_each_entry(sibling, &proc->parent->children, siblings) {
 			/* skip stale siblings, they aren't interesting as they're invisible, and the last sibling has no bearing on wether we tee or not. */
-			if (sibling->is_stale || sibling == last_sibling) continue;
+			if (sibling->is_stale || sibling == last_sibling)
+				continue;
 
 			/* if any of the other siblings have children which are not stale, put a tee in front of our name, but ignore stale children */
 			list_for_each_entry(child, &sibling->children, siblings) {
@@ -747,7 +758,8 @@ static void draw_overlay(vwm_overlays_t *overlays, vwm_overlay_t *overlay, vmon_
 	}
 	(*row)++;
 
-	if (!overlay->redraw_needed) heirarchy_changed = proc_heirarchy_changed(proc);
+	if (!overlay->redraw_needed)
+		heirarchy_changed = proc_heirarchy_changed(proc);
 
 
 	draw_overlay_rest(overlays, overlay, proc, depth, row, heirarchy_changed);
@@ -764,7 +776,8 @@ static void maintain_overlay(vwm_overlays_t *overlays, vwm_overlay_t *overlay)
 	vwm_xserver_t	*xserver = overlays->xserver;
 	int		row = 0, depth = 0;
 
-	if (!overlay->monitor || !overlay->monitor->stores[VMON_STORE_PROC_STAT]) return;
+	if (!overlay->monitor || !overlay->monitor->stores[VMON_STORE_PROC_STAT])
+		return;
 
 	/* TODO:
 	 * A side effect of responding to window resizes in this function is there's a latency proportional to the current sample_interval.
@@ -849,7 +862,8 @@ int vwm_overlay_set_visible_size(vwm_overlays_t *overlays, vwm_overlay_t *overla
 {
 	vwm_xserver_t	*xserver = overlays->xserver;
 
-	if (width != overlay->visible_width || height != overlay->visible_height) overlay->redraw_needed = 1;
+	if (width != overlay->visible_width || height != overlay->visible_height)
+		overlay->redraw_needed = 1;
 
 	/* TODO error handling: if a create failed but we had an overlay, free whatever we created and leave it be, succeed.
 	 * if none existed it's a hard error and we must propagate it. */
@@ -989,9 +1003,12 @@ void vwm_overlay_compose(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Xserv
 	vwm_xserver_t	*xserver = overlays->xserver;
 	int		height;
 
-	if (!overlay->width || !overlay->height) return;
+	if (!overlay->width || !overlay->height)
+		return;
 
-	if (overlay->gen_last_composed == overlay->monitor->generation) return; /* noop if no sampling occurred since last compose */
+	if (overlay->gen_last_composed == overlay->monitor->generation)
+		return; /* noop if no sampling occurred since last compose */
+
 	overlay->gen_last_composed = overlay->monitor->generation; /* remember this generation */
 
 	//VWM_TRACE("composing %p", overlay);
@@ -1054,7 +1071,8 @@ void vwm_overlay_render(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Pictur
 {
 	vwm_xserver_t	*xserver = overlays->xserver;
 
-	if (!overlay->width || !overlay->height) return;
+	if (!overlay->width || !overlay->height)
+		return;
 
 	/* draw the monitoring overlay atop dest, note we stay within the window borders here. */
 	XRenderComposite(xserver->display, PictOpOver, overlay->picture, None, dest,
@@ -1067,13 +1085,15 @@ void vwm_overlay_render(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Pictur
 
 void vwm_overlays_rate_increase(vwm_overlays_t *overlays)
 {
-	if (overlays->sampling_interval + 1 < sizeof(sampling_intervals) / sizeof(sampling_intervals[0])) overlays->sampling_interval++;
+	if (overlays->sampling_interval + 1 < sizeof(sampling_intervals) / sizeof(sampling_intervals[0]))
+		overlays->sampling_interval++;
 }
 
 
 void vwm_overlays_rate_decrease(vwm_overlays_t *overlays)
 {
-	if (overlays->sampling_interval >= 0) overlays->sampling_interval--;
+	if (overlays->sampling_interval >= 0)
+		overlays->sampling_interval--;
 }
 
 
@@ -1109,7 +1129,8 @@ int vwm_overlays_update(vwm_overlays_t *overlays, int *desired_delay)
 		    this_delta >= (sampling_intervals[overlays->sampling_interval] * 1.5)) {
 			overlays->contiguous_drops++;
 			/* require > 1 contiguous drops before lowering the rate, tolerates spurious one-off stalls */
-			if (overlays->contiguous_drops > 2) overlays->sampling_interval--;
+			if (overlays->contiguous_drops > 2)
+				overlays->sampling_interval--;
 		} else overlays->contiguous_drops = 0;
 
 		/* age the sys-wide sample data into "last" variables, before the new sample overwrites them. */
@@ -1137,7 +1158,6 @@ int vwm_overlays_update(vwm_overlays_t *overlays, int *desired_delay)
 		overlays->sampling_paused = (overlays->sampling_interval == -1);
 		overlays->prev_sampling_interval = overlays->sampling_interval;
 	}
-
 
 	/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
 	*desired_delay = overlays->sampling_interval != -1 ? sampling_intervals[overlays->sampling_interval] * 300.0 : -1;
