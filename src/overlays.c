@@ -1067,7 +1067,7 @@ void vwm_overlay_compose(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Xserv
 
 
 /* render the overlay into a picture at the specified coordinates and dimensions */
-void vwm_overlay_render(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Picture dest, int x, int y, int width, int height)
+void vwm_overlay_render(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int op, Picture dest, int x, int y, int width, int height)
 {
 	vwm_xserver_t	*xserver = overlays->xserver;
 
@@ -1075,7 +1075,7 @@ void vwm_overlay_render(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Pictur
 		return;
 
 	/* draw the monitoring overlay atop dest, note we stay within the window borders here. */
-	XRenderComposite(xserver->display, PictOpOver, overlay->picture, None, dest,
+	XRenderComposite(xserver->display, op, overlay->picture, None, dest,
 			 0, 0, 0, 0,										/* src x,y, maxk x, y */
 			 x,											/* dst x */
 			 y,											/* dst y */

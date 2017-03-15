@@ -282,7 +282,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 
 		if (xwin->overlay) {
 			/* draw the monitoring overlay atop the window, note we stay within the window borders here. */
-			vwm_overlay_render(vwm->overlays, xwin->overlay, root_buffer,
+			vwm_overlay_render(vwm->overlays, xwin->overlay, PictOpOver, root_buffer,
 					xwin->attrs.x + xwin->attrs.border_width,
 					xwin->attrs.y + xwin->attrs.border_width,
 					xwin->attrs.width,

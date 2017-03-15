@@ -20,6 +20,6 @@ void vwm_overlay_destroy(vwm_overlays_t *overlays, vwm_overlay_t *overlay);
 void vwm_overlay_reset_snowflakes(vwm_overlays_t *overlays, vwm_overlay_t *overlay);
 int vwm_overlay_set_visible_size(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int width, int height);
 void vwm_overlay_compose(vwm_overlays_t *overlays, vwm_overlay_t *overlay, XserverRegion *res_damaged_region);
-void vwm_overlay_render(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Picture dest, int x, int y, int width, int height);
+void vwm_overlay_render(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int op, Picture dest, int x, int y, int width, int height);
 
 #endif
