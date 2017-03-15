@@ -347,7 +347,7 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 		vmon_proc_t		*ancestor, *sibling, *last_sibling = NULL;
 		struct list_head	*rem;
 		int			needs_tee = 0;
-		int			bar_x = 0, bar_y = 0;
+		int			bar_x = 0, bar_y = (row + 1) * OVERLAY_ROW_HEIGHT;
 		int			sub;
 
 		/* XXX: everything done in this code block only dirties _this_ process' row in the rendered overlay output */
@@ -357,7 +357,6 @@ static void draw_heirarchy_row(vwm_t *vwm, vwm_xwindow_t *xwin, vmon_proc_t *pro
 		for (sub = 1, ancestor = proc->parent; ancestor && ancestor != xwin->monitor; ancestor = ancestor->parent) {
 			sub++;
 			bar_x = (depth - sub) * (OVERLAY_ROW_HEIGHT / 2) + 4;
-			bar_y = (row + 1) * OVERLAY_ROW_HEIGHT;
 
 			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
 			for (rem = ancestor->siblings.next; rem != &ancestor->parent->children; rem = rem->next) {
