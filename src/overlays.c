@@ -22,6 +22,8 @@
 #include <X11/Xlib.h>
 #include <X11/extensions/Xfixes.h>
 #include <X11/extensions/Xrender.h>
+#include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <sys/time.h>
 
@@ -53,7 +55,7 @@ typedef struct _vwm_overlays_t {
 	unsigned long long			last_total, this_total, total_delta;
 	unsigned long long			last_idle, last_iowait, idle_delta, iowait_delta;
 	vmon_t					vmon;
-	int					prev_sampling_interval, sampling_interval;
+	float					prev_sampling_interval, sampling_interval;
 	int					sampling_paused, contiguous_drops;
 
 	/* X */
@@ -100,6 +102,7 @@ typedef struct _vwm_perproc_ctxt_t {
 
 
 static float			sampling_intervals[] = {
+						INFINITY,	/* STOPPED */
 						1,		/* ~1Hz */
 						.1,		/* ~10Hz */
 						.05,		/* ~20Hz */
@@ -165,7 +168,7 @@ vwm_overlays_t * vwm_overlays_create(vwm_xserver_t *xserver)
 	}
 
 	overlays->xserver = xserver;
-	overlays->prev_sampling_interval = overlays->sampling_interval = 1;
+	overlays->prev_sampling_interval = overlays->sampling_interval = 0.1f;	/* default to 10Hz */
 
 	/* initialize libvmon */
 	vmon_init(&overlays->vmon, VMON_FLAG_2PASS, VMON_WANT_SYS_STAT, (VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS));
@@ -746,7 +749,7 @@ static void draw_overlay(vwm_overlays_t *overlays, vwm_overlay_t *overlay, vmon_
 
 	/* only draw the \/\/\ and HZ if necessary */
 	if (overlay->redraw_needed || overlays->prev_sampling_interval != overlays->sampling_interval) {
-		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(overlays->sampling_interval < 0 ? 0 : 1 / sampling_intervals[overlays->sampling_interval]), &str_len);
+		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(overlays->sampling_interval == INFINITY ? 0 : 1 / overlays->sampling_interval), &str_len);
 		XRenderFillRectangle(xserver->display, PictOpSrc, overlay->text_picture, &overlay_trans_color,
 			0, 0,						/* dst x, y */
 			overlay->visible_width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
@@ -1083,17 +1086,45 @@ void vwm_overlay_render(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int op
 }
 
 
+/* increase the sample rate relative to current using the table of intervals */
 void vwm_overlays_rate_increase(vwm_overlays_t *overlays)
 {
-	if (overlays->sampling_interval + 1 < sizeof(sampling_intervals) / sizeof(sampling_intervals[0]))
-		overlays->sampling_interval++;
+	int	i;
+
+	assert(overlays);
+
+	for (i = 0; i < NELEMS(sampling_intervals); i++) {
+		if (sampling_intervals[i] < overlays->sampling_interval) {
+			overlays->sampling_interval = sampling_intervals[i];
+			break;
+		}
+	}
 }
 
 
+/* decrease the sample rate relative to current using the table of intervals */
 void vwm_overlays_rate_decrease(vwm_overlays_t *overlays)
 {
-	if (overlays->sampling_interval >= 0)
-		overlays->sampling_interval--;
+	int	i;
+
+	assert(overlays);
+
+	for (i = NELEMS(sampling_intervals) - 1; i >= 0; i--) {
+		if (sampling_intervals[i] > overlays->sampling_interval) {
+			overlays->sampling_interval = sampling_intervals[i];
+			break;
+		}
+	}
+}
+
+
+/* set an arbitrary sample rate rather than using one of the presets, 0 to pause */
+void vwm_overlays_rate_set(vwm_overlays_t *overlays, unsigned hertz)
+{
+	assert(overlays);
+
+	/* XXX: note floating point divide by 0 simply results in infinity */
+	overlays->sampling_interval = 1.0f / (float)hertz;
 }
 
 
@@ -1120,18 +1151,21 @@ int vwm_overlays_update(vwm_overlays_t *overlays, int *desired_delay)
 	int	ret = 0;
 
 	gettimeofday(&overlays->maybe_sample, NULL);
-	if ((overlays->sampling_interval == -1 && !overlays->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
-	    (overlays->sampling_interval != -1 && ((this_delta = delta(&overlays->maybe_sample, &overlays->this_sample)) >= sampling_intervals[overlays->sampling_interval]))) {
+	if ((overlays->sampling_interval == INFINITY && !overlays->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
+	    (overlays->sampling_interval != INFINITY && ((this_delta = delta(&overlays->maybe_sample, &overlays->this_sample)) >= overlays->sampling_interval))) {
 		vmon_sys_stat_t	*sys_stat;
 
 		/* automatically lower the sample rate if we can't keep up with the current sample rate */
-		if (overlays->sampling_interval != -1 && overlays->sampling_interval <= overlays->prev_sampling_interval &&
-		    this_delta >= (sampling_intervals[overlays->sampling_interval] * 1.5)) {
-			overlays->contiguous_drops++;
+		if (overlays->sampling_interval < INFINITY &&
+		    overlays->sampling_interval <= overlays->prev_sampling_interval &&
+		    this_delta >= (overlays->sampling_interval * 1.5)) {
+
 			/* require > 1 contiguous drops before lowering the rate, tolerates spurious one-off stalls */
-			if (overlays->contiguous_drops > 2)
-				overlays->sampling_interval--;
-		} else overlays->contiguous_drops = 0;
+			if (++overlays->contiguous_drops > 2)
+				vwm_overlays_rate_decrease(overlays);
+		} else {
+			overlays->contiguous_drops = 0;
+		}
 
 		/* age the sys-wide sample data into "last" variables, before the new sample overwrites them. */
 		overlays->last_sample = overlays->this_sample;
@@ -1155,12 +1189,13 @@ int vwm_overlays_update(vwm_overlays_t *overlays, int *desired_delay)
 
 		ret = vmon_sample(&overlays->vmon);	/* XXX: calls proc_sample_callback() for explicitly monitored processes after sampling their descendants */
 						/* XXX: also calls sample_callback() per invocation after sampling the sys wants */
-		overlays->sampling_paused = (overlays->sampling_interval == -1);
+
+		overlays->sampling_paused = (overlays->sampling_interval == INFINITY);
 		overlays->prev_sampling_interval = overlays->sampling_interval;
 	}
 
 	/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
-	*desired_delay = overlays->sampling_interval != -1 ? sampling_intervals[overlays->sampling_interval] * 300.0 : -1;
+	*desired_delay = overlays->sampling_interval == INFINITY ? -1 : overlays->sampling_interval * 300.0;
 
 	return ret;
 }
