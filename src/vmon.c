@@ -55,7 +55,7 @@ typedef struct vmon_t {
 static volatile int got_sigchld;
 
 /* return if arg == flag or altflag if provided */
-static inline int is_flag(const char *arg, const char *flag, const char *altflag)
+static int is_flag(const char *arg, const char *flag, const char *altflag)
 {
 	assert(arg);
 	assert(flag);
