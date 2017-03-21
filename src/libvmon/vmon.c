@@ -355,11 +355,12 @@ _retry:
 #include "defs/proc_stat.def"
 			default:
 				/* we're finished parsing once we've fallen off the end of the symbols */
-				break;
+				goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
 
+_out:
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
 }
 
@@ -830,11 +831,12 @@ static sample_ret_t proc_sample_vm(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_vm
 #include "defs/proc_vm.def"
 			default:
 				/* we're finished parsing once we've fallen off the end of the symbols */
-				break;
+				goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
 
+_out:
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
 }
 
@@ -886,11 +888,12 @@ static sample_ret_t proc_sample_io(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_io
 #include "defs/proc_io.def"
 			default:
 				/* we're finished parsing once we've fallen off the end of the symbols */
-				break;
+				goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
 
+_out:
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
 }
 
@@ -932,11 +935,12 @@ static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 #include "defs/sys_stat.def"
 			default:
 				/* we're finished parsing once we've fallen off the end of the symbols */
-				break;
+				goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
 
+_out:
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
 }
 
@@ -980,11 +984,12 @@ static sample_ret_t sys_sample_vm(vmon_t *vmon, vmon_sys_vm_t **store)
 #include "defs/sys_vm.def"
 			default:
 				/* we're finished parsing once we've fallen off the end of the symbols */
-				break;
+				goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
 
+_out:
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
 }
 
