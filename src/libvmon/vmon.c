@@ -172,12 +172,13 @@ static int openf(vmon_t *vmon, int flags, DIR *dir, char *fmt, ...)
 {
 	int	fd;
 	va_list	va_arg;
+	char	buf[4096];
 
 	va_start(va_arg, fmt);
-	vsnprintf(vmon->buf, sizeof(vmon->buf), fmt, va_arg); /* XXX accepting the possibility of truncating the path */
+	vsnprintf(buf, sizeof(buf), fmt, va_arg); /* XXX accepting the possibility of truncating the path */
 	va_end(va_arg);
 
-	fd = openat(dirfd(dir), vmon->buf, flags);
+	fd = openat(dirfd(dir), buf, flags);
 
 	return fd;
 }
@@ -188,12 +189,13 @@ static DIR * opendirf(vmon_t *vmon, DIR *dir, char *fmt, ...)
 {
 	int	fd;
 	va_list	va_arg;
+	char	buf[4096];
 
 	va_start(va_arg, fmt);
-	vsnprintf(vmon->buf, sizeof(vmon->buf), fmt, va_arg); /* XXX accepting the possibility of truncating the path */
+	vsnprintf(buf, sizeof(buf), fmt, va_arg); /* XXX accepting the possibility of truncating the path */
 	va_end(va_arg);
 
-	fd = openat(dirfd(dir), vmon->buf, O_RDONLY);
+	fd = openat(dirfd(dir), buf, O_RDONLY);
 	if (fd == -1)
 		return NULL;
 
@@ -222,18 +224,19 @@ static int grow_array(vmon_char_array_t *array, int amount)
 #define READLINKF_GROWBY	2
 static char * readlinkf(vmon_t *vmon, vmon_char_array_t *array, DIR *dir, char *fmt, ...)
 {
-	va_list		va_arg;
-	int		len;
+	va_list	va_arg;
+	int	len;
+	char	buf[4096];
 
 	va_start(va_arg, fmt);
-	vsnprintf(vmon->buf, sizeof(vmon->buf), fmt, va_arg);
+	vsnprintf(buf, sizeof(buf), fmt, va_arg);
 	va_end(va_arg);
 
 	if (!array->array && !grow_array(array, READLINKF_GROWINIT))
 		goto _fail;
 
 	do {
-		len = readlinkat(dirfd(dir), vmon->buf, array->array, (array->alloc_len - 1));
+		len = readlinkat(dirfd(dir), buf, array->array, (array->alloc_len - 1));
 	} while (len != -1 && len == (array->alloc_len - 1) && (len = grow_array(array, READLINKF_GROWBY)));
 
 	if (len <= 0)
