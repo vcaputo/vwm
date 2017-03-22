@@ -35,7 +35,6 @@
 #include "xwindow.h"
 
 #define OVERLAY_MASK_DEPTH		8					/* XXX: 1 would save memory, but Xorg isn't good at it */
-#define OVERLAY_MASK_FORMAT		PictStandardA8
 #define OVERLAY_FIXED_FONT		"-misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1"
 #define OVERLAY_ROW_HEIGHT		15					/* this should always be larger than the font height */
 #define OVERLAY_GRAPH_MIN_WIDTH		200					/* always create graphs at least this large */
@@ -61,13 +60,13 @@ typedef struct _vwm_overlays_t {
 	/* X */
 	XFontStruct				*overlay_font;
 	GC					text_gc;
-	Picture					overlay_shadow_fill,
-						overlay_text_fill,
-						overlay_bg_fill,
-						overlay_snowflakes_text_fill,
-						overlay_grapha_fill,
-						overlay_graphb_fill,
-						overlay_finish_fill;
+	Picture					shadow_fill,
+						text_fill,
+						bg_fill,
+						snowflakes_text_fill,
+						grapha_fill,
+						graphb_fill,
+						finish_fill;
 } vwm_overlays_t;
 
 /* everything needed by the per-window overlay's context */
@@ -155,11 +154,66 @@ static void vmon_dtor_cb(vmon_t *vmon, vmon_proc_t *proc)
 }
 
 
+/* convenience helper for creating a pixmap */
+static Pixmap create_pixmap(vwm_overlays_t *overlays, unsigned width, unsigned height, unsigned depth)
+{
+	vwm_xserver_t	*xserver = overlays->xserver;
+
+	return XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), width, height, depth);
+}
+
+
+/* convenience helper for creating a picture, supply res_pixmap to keep a reference to the pixmap drawable. */
+static Picture create_picture(vwm_overlays_t *overlays, unsigned width, unsigned height, unsigned depth, unsigned long attr_mask, XRenderPictureAttributes *attr, Pixmap *res_pixmap)
+{
+	vwm_xserver_t	*xserver = overlays->xserver;
+	Pixmap		pixmap;
+	Picture		picture;
+	int		format;
+
+	/* FIXME this pixmap->picture dance seems silly, investigate further. TODO */
+	switch (depth) {
+		case 8:
+			format = PictStandardA8;
+			break;
+		case 32:
+			format = PictStandardARGB32;
+			break;
+		default:
+			assert(0);
+	}
+
+	pixmap = create_pixmap(overlays, width, height, depth);
+	picture = XRenderCreatePicture(xserver->display, pixmap, XRenderFindStandardFormat(xserver->display, format), attr_mask, attr);
+
+	if (res_pixmap) {
+		*res_pixmap = pixmap;
+	} else {
+		XFreePixmap(xserver->display, pixmap);
+	}
+
+	return picture;
+}
+
+
+/* convenience helper for creating a filled picture, supply res_pixmap to keep a reference to the pixmap drawable. */
+static Picture create_picture_fill(vwm_overlays_t *overlays, unsigned width, unsigned height, unsigned depth, unsigned long attrs_mask, XRenderPictureAttributes *attrs, XRenderColor *color, Pixmap *res_pixmap)
+{
+	vwm_xserver_t	*xserver = overlays->xserver;
+	Picture		picture;
+
+	picture = create_picture(overlays, width, height, depth, attrs_mask, attrs, res_pixmap);
+	XRenderFillRectangle(xserver->display, PictOpSrc, picture, color, 0, 0, width, height);
+
+	return picture;
+}
+
+
 /* initialize overlays system */
 vwm_overlays_t * vwm_overlays_create(vwm_xserver_t *xserver)
 {
 	vwm_overlays_t	*overlays;
-	Window		bitmask;
+	Pixmap		bitmask;
 
 	overlays = calloc(1, sizeof(vwm_overlays_t));
 	if (!overlays) {
@@ -182,41 +236,26 @@ vwm_overlays_t * vwm_overlays_create(vwm_xserver_t *xserver)
 	overlays->overlay_font = XLoadQueryFont(xserver->display, OVERLAY_FIXED_FONT);
 
 	/* create a GC for rendering the text using Xlib into the text overlay stencils */
-	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, OVERLAY_MASK_DEPTH);
+	bitmask = create_pixmap(overlays, 1, 1, OVERLAY_MASK_DEPTH);
 	overlays->text_gc = XCreateGC(xserver->display, bitmask, 0, NULL);
 	XSetForeground(xserver->display, overlays->text_gc, WhitePixel(xserver->display, xserver->screen_num));
 	XFreePixmap(xserver->display, bitmask);
 
 	/* create some repeating source fill pictures for drawing through the text and graph stencils */
-	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
-	overlays->overlay_text_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_text_fill, &overlay_visible_color, 0, 0, 1, 1);
+	overlays->text_fill = create_picture_fill(overlays, 1, 1, 32, CPRepeat, &pa_repeat, &overlay_visible_color, NULL);
+	overlays->shadow_fill = create_picture_fill(overlays, 1, 1, 32, CPRepeat, &pa_repeat, &overlay_shadow_color, NULL);
 
-	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
-	overlays->overlay_shadow_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_shadow_fill, &overlay_shadow_color, 0, 0, 1, 1);
+	overlays->bg_fill = create_picture(overlays, 1, OVERLAY_ROW_HEIGHT, 32, CPRepeat, &pa_repeat, NULL);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->bg_fill, &overlay_bg_color, 0, 0, 1, OVERLAY_ROW_HEIGHT);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->bg_fill, &overlay_div_color, 0, OVERLAY_ROW_HEIGHT - 1, 1, 1);
 
-	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, OVERLAY_ROW_HEIGHT, 32);
-	overlays->overlay_bg_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_bg_fill, &overlay_bg_color, 0, 0, 1, OVERLAY_ROW_HEIGHT);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_bg_fill, &overlay_div_color, 0, OVERLAY_ROW_HEIGHT - 1, 1, 1);
+	overlays->snowflakes_text_fill = create_picture_fill(overlays, 1, 1, 32, CPRepeat, &pa_repeat, &overlay_snowflakes_visible_color, NULL);
+	overlays->grapha_fill = create_picture_fill(overlays, 1, 1, 32, CPRepeat, &pa_repeat, &overlay_grapha_color, NULL);
+	overlays->graphb_fill = create_picture_fill(overlays, 1, 1, 32, CPRepeat, &pa_repeat, &overlay_graphb_color, NULL);
 
-	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
-	overlays->overlay_snowflakes_text_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_snowflakes_text_fill, &overlay_snowflakes_visible_color, 0, 0, 1, 1);
-
-	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
-	overlays->overlay_grapha_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_grapha_fill, &overlay_grapha_color, 0, 0, 1, 1);
-
-	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 1, 32);
-	overlays->overlay_graphb_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_graphb_fill, &overlay_graphb_color, 0, 0, 1, 1);
-
-	bitmask = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), 1, 2, 32);
-	overlays->overlay_finish_fill = XRenderCreatePicture(xserver->display, bitmask, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), CPRepeat, &pa_repeat);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_finish_fill, &overlay_visible_color, 0, 0, 1, 1);
-	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->overlay_finish_fill, &overlay_trans_color, 0, 1, 1, 1);
+	overlays->finish_fill = create_picture(overlays, 1, 2, 32, CPRepeat, &pa_repeat, NULL);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->finish_fill, &overlay_visible_color, 0, 0, 1, 1);
+	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->finish_fill, &overlay_trans_color, 0, 1, 1, 1);
 
 	return overlays;
 }
@@ -230,43 +269,55 @@ void vwm_overlays_destroy(vwm_overlays_t *overlays)
 }
 
 
-/* moves what's below a given row up above it if specified, the row becoming discarded */
-static void snowflake_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Picture pic, int copy, int row)
+/* copies a row from src to dest */
+static void copy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int src_row, Picture src, int dest_row, Picture dest)
+{
+	XRenderComposite(overlays->xserver->display, PictOpSrc, src, None, dest,
+		0, src_row * OVERLAY_ROW_HEIGHT,	/* src */
+		0, 0,					/* mask */
+		0, dest_row * OVERLAY_ROW_HEIGHT,	/* dest */
+		overlay->width, OVERLAY_ROW_HEIGHT);	/* dimensions */
+}
+
+
+/* fills a row with the specified color */
+static void fill_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int row, Picture pic, XRenderColor *color)
+{
+	XRenderFillRectangle(overlays->xserver->display, PictOpSrc, pic, color,
+		0, row * OVERLAY_ROW_HEIGHT,		/* dest */
+		overlay->width, OVERLAY_ROW_HEIGHT);	/* dimensions */
+}
+
+
+/* copy what's below a given row up the specified amount within the same picture */
+static void shift_below_row_up(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int row, Picture pic, int rows)
 {
 	vwm_xserver_t	*xserver = overlays->xserver;
 
-	VWM_TRACE("pid=%i overlay=%p row=%i copy=%i heirarhcy_end=%i", overlay->monitor->pid, overlay, row, copy, overlay->heirarchy_end);
-
-	if (copy) {
-		/* copy row to tmp */
-		XRenderComposite(xserver->display, PictOpSrc, pic, None, overlay->tmp_picture,
-			0, row * OVERLAY_ROW_HEIGHT,		/* src */
-			0, 0,					/* mask */
-			0, 0,					/* dest */
-			overlay->width, OVERLAY_ROW_HEIGHT);	/* dimensions */
-	}
-
-	/* shift up */
 	XRenderChangePicture(xserver->display, pic, CPRepeat, &pa_no_repeat);
 	XRenderComposite(xserver->display, PictOpSrc, pic, None, pic,
-		0, (1 + row) * OVERLAY_ROW_HEIGHT,									/* src */
-		0, 0,													/* mask */
-		0, row * OVERLAY_ROW_HEIGHT,										/* dest */
-		overlay->width, (1 + overlay->heirarchy_end) * OVERLAY_ROW_HEIGHT - (1 + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
+		0, (rows + row) * OVERLAY_ROW_HEIGHT,										/* src */
+		0, 0,														/* mask */
+		0, row * OVERLAY_ROW_HEIGHT,											/* dest */
+		overlay->width, (rows + overlay->heirarchy_end) * OVERLAY_ROW_HEIGHT - (rows + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
 	XRenderChangePicture(xserver->display, pic, CPRepeat, &pa_repeat);
+}
+
+
+/* moves what's below a given row up above it if specified, the row becoming discarded */
+static void snowflake_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Picture pic, int copy, int row)
+{
+	VWM_TRACE("pid=%i overlay=%p row=%i copy=%i heirarhcy_end=%i", overlay->monitor->pid, overlay, row, copy, overlay->heirarchy_end);
+
+	if (copy)
+		copy_row(overlays, overlay, row, pic, 0, overlay->tmp_picture);
+
+	shift_below_row_up(overlays, overlay, row, pic, 1);
 
 	if (copy) {
-		/* copy tmp to top of snowflakes */
-		XRenderComposite(xserver->display, PictOpSrc, overlay->tmp_picture, None, pic,
-			0, 0,								/* src */
-			0, 0,								/* mask */
-			0, (overlay->heirarchy_end) * OVERLAY_ROW_HEIGHT,		/* dest */
-			overlay->width, OVERLAY_ROW_HEIGHT);				/* dimensions */
+		copy_row(overlays, overlay, 0, overlay->tmp_picture, overlay->heirarchy_end, pic);
 	} else {
-		/* clear the snowflake row */
-		XRenderFillRectangle(xserver->display, PictOpSrc, pic, &overlay_trans_color,
-			0, (overlay->heirarchy_end) * OVERLAY_ROW_HEIGHT,		/* dest */
-			overlay->width, OVERLAY_ROW_HEIGHT);				/* dimensions */
+		fill_row(overlays, overlay, overlay->heirarchy_end, pic, &overlay_trans_color);
 	}
 }
 
@@ -274,23 +325,24 @@ static void snowflake_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Pict
  *     currently the only visible difference is the snowflakes gap (heirarchy_end) varies, which is why I haven't bothered to fix it, I barely even notice.
  */
 
+
+static void shift_below_row_down(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int row, Picture pic, int rows)
+{
+	XRenderComposite(overlays->xserver->display, PictOpSrc, pic, None, pic,
+		0, row * OVERLAY_ROW_HEIGHT,						/* src */
+		0, 0,									/* mask */
+		0, (row + rows) * OVERLAY_ROW_HEIGHT,					/* dest */
+		overlay->width, overlay->height - (rows + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
+}
+
+
 /* shifts what's below a given row down a row, and clears the row, preparing it for populating */
 static void allocate_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Picture pic, int row)
 {
-	vwm_xserver_t	*xserver = overlays->xserver;
-
 	VWM_TRACE("pid=%i overlay=%p row=%i", overlay->monitor->pid, overlay, row);
 
-	/* shift everything below the row down */
-	XRenderComposite(xserver->display, PictOpSrc, pic, None, pic,
-		0, row * OVERLAY_ROW_HEIGHT,						/* src */
-		0, 0,									/* mask */
-		0, (1 + row) * OVERLAY_ROW_HEIGHT,					/* dest */
-		overlay->width, overlay->height - (1 + row) * OVERLAY_ROW_HEIGHT);	/* dimensions */
-	/* fill the space created with transparent pixels */
-	XRenderFillRectangle(xserver->display, PictOpSrc, pic, &overlay_trans_color,
-		0, row * OVERLAY_ROW_HEIGHT,						/* dest */
-		overlay->width, OVERLAY_ROW_HEIGHT);					/* dimensions */
+	shift_below_row_down(overlays, overlay, row, pic, 1);
+	fill_row(overlays, overlay, row, pic, &overlay_trans_color);
 }
 
 
@@ -300,25 +352,25 @@ static void shadow_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int row
 	vwm_xserver_t *xserver = overlays->xserver;
 
 	/* the current technique for creating the shadow is to simply render the text at +1/-1 pixel offsets on both axis in translucent black */
-	XRenderComposite(xserver->display, PictOpSrc, overlays->overlay_shadow_fill, overlay->text_picture, overlay->shadow_picture,
+	XRenderComposite(xserver->display, PictOpSrc, overlays->shadow_fill, overlay->text_picture, overlay->shadow_picture,
 		0, 0,
 		-1, row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		overlay->visible_width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(xserver->display, PictOpOver, overlays->overlay_shadow_fill, overlay->text_picture, overlay->shadow_picture,
+	XRenderComposite(xserver->display, PictOpOver, overlays->shadow_fill, overlay->text_picture, overlay->shadow_picture,
 		0, 0,
 		0, -1 + row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		overlay->visible_width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(xserver->display, PictOpOver, overlays->overlay_shadow_fill, overlay->text_picture, overlay->shadow_picture,
+	XRenderComposite(xserver->display, PictOpOver, overlays->shadow_fill, overlay->text_picture, overlay->shadow_picture,
 		0, 0,
 		1, row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
 		overlay->visible_width, OVERLAY_ROW_HEIGHT);
 
-	XRenderComposite(xserver->display, PictOpOver, overlays->overlay_shadow_fill, overlay->text_picture, overlay->shadow_picture,
+	XRenderComposite(xserver->display, PictOpOver, overlays->shadow_fill, overlay->text_picture, overlay->shadow_picture,
 		0, 0,
 		0, 1 + row * OVERLAY_ROW_HEIGHT,
 		0, row * OVERLAY_ROW_HEIGHT,
@@ -433,6 +485,38 @@ static void draw_bars(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int row,
 }
 
 
+/* helper for marking a finish line at the current phase for the specified row */
+static void mark_finish(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int row)
+{
+	vwm_xserver_t	*xserver = overlays->xserver;
+
+	XRenderComposite(xserver->display, PictOpSrc, overlays->finish_fill, None, overlay->grapha_picture,
+			 0, 0,						/* src x, y */
+			 0, 0,						/* mask x, y */
+			 overlay->phase, row * OVERLAY_ROW_HEIGHT,	/* dst x, y */
+			 1, OVERLAY_ROW_HEIGHT - 1);
+	XRenderComposite(xserver->display, PictOpSrc, overlays->finish_fill, None, overlay->graphb_picture,
+			 0, 0,						/* src x, y */
+			 0, 0,						/* mask x, y */
+			 overlay->phase, row * OVERLAY_ROW_HEIGHT,	/* dst x, y */
+			 1, OVERLAY_ROW_HEIGHT - 1);
+}
+
+
+/* helper for drawing a proc's argv @ specified x offset and row on the overlay */
+static void print_argv(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int x, int row, vmon_proc_t *proc)
+{
+	vwm_xserver_t	*xserver = overlays->xserver;
+	XTextItem	items[OVERLAY_MAX_ARGC];
+	int		nr_items;
+
+	argv2xtext(proc, items, NELEMS(items), &nr_items);
+	XDrawText(xserver->display, overlay->text_pixmap, overlays->text_gc,
+		  x, (row + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
+		  items, nr_items);
+}
+
+
 /* draws proc in a row of the process heirarchy */
 static void draw_heirarchy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay, vmon_proc_t *proc, int depth, int row, int heirarchy_changed)
 {
@@ -441,8 +525,6 @@ static void draw_heirarchy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay,
 	vmon_proc_t		*child;
 	char			str[256];
 	int			str_len, str_width;
-	XTextItem		items[OVERLAY_MAX_ARGC];
-	int			nr_items;
 
 /* process heirarchy text and accompanying per-process details like wchan/pid/state... */
 
@@ -476,10 +558,7 @@ static void draw_heirarchy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay,
 	str_width = XTextWidth(overlays->overlay_font, str, str_len);
 
 	/* the process' comm label indented according to depth, followed with their respective argv's */
-	argv2xtext(proc, items, NELEMS(items), &nr_items);
-	XDrawText(xserver->display, overlay->text_pixmap, overlays->text_gc,
-		  depth * (OVERLAY_ROW_HEIGHT / 2), (row + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */
-		  items, nr_items);
+	print_argv(overlays, overlay, depth * (OVERLAY_ROW_HEIGHT / 2), row, proc);
 
 	/* ensure the area for the rest of the stuff is cleared, we don't put much text into thread rows so skip it for those. */
 	if (!proc->is_thread)
@@ -587,17 +666,10 @@ static void draw_heirarchy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay,
 /* recursive draw function for "rest" of overlay: the per-process rows (heirarchy, argv, state, wchan, pid...) */
 static void draw_overlay_rest(vwm_overlays_t *overlays, vwm_overlay_t *overlay, vmon_proc_t *proc, int *depth, int *row, int heirarchy_changed)
 {
-	vwm_xserver_t		*xserver = overlays->xserver;
-	vmon_proc_t		*child;
-	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
-
-	/* graph variables */
+	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
+	vmon_proc_t		*child;
 	double			utime_delta, stime_delta;
-
-	/* text variables */
-	XTextItem		items[OVERLAY_MAX_ARGC];
-	int			nr_items;
 
 	/* Some parts of this we must do on every sample to maintain coherence in the graphs, since they're incrementally kept
 	 * in sync with the process heirarchy, allocating and shifting the rows as processes are created and destroyed.  Everything
@@ -638,17 +710,7 @@ static void draw_overlay_rest(vwm_overlays_t *overlays, vwm_overlay_t *overlay, 
 			((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.array,
 			(*depth), (*row), proc->is_thread);
 
-		/* stamp the graphs with the finish line */
-		XRenderComposite(xserver->display, PictOpSrc, overlays->overlay_finish_fill, None, overlay->grapha_picture,
-				 0, 0,							/* src x, y */
-				 0, 0,							/* mask x, y */
-				 overlay->phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
-				 1, OVERLAY_ROW_HEIGHT - 1);
-		XRenderComposite(xserver->display, PictOpSrc, overlays->overlay_finish_fill, None, overlay->graphb_picture,
-				 0, 0,							/* src x, y */
-				 0, 0,							/* mask x, y */
-				 overlay->phase, (*row) * OVERLAY_ROW_HEIGHT,	/* dst x, y */
-				 1, OVERLAY_ROW_HEIGHT - 1);
+		mark_finish(overlays, overlay, (*row));
 
 		/* extract the row from the various layers */
 		snowflake_row(overlays, overlay, overlay->grapha_picture, 1, (*row));
@@ -658,10 +720,7 @@ static void draw_overlay_rest(vwm_overlays_t *overlays, vwm_overlay_t *overlay, 
 		overlay->snowflakes_cnt++;
 
 		/* stamp the name (and whatever else we include) into overlay.text_picture */
-		argv2xtext(proc, items, NELEMS(items), &nr_items);
-		XDrawText(xserver->display, overlay->text_pixmap, overlays->text_gc,
-			  5, (overlay->heirarchy_end + 1) * OVERLAY_ROW_HEIGHT - 3,/* dst x, y */
-			  items, nr_items);
+		print_argv(overlays, overlay, 5, overlay->heirarchy_end, proc);
 		shadow_row(overlays, overlay, overlay->heirarchy_end);
 
 		overlay->heirarchy_end--;
@@ -729,15 +788,9 @@ static void draw_overlay_rest(vwm_overlays_t *overlays, vwm_overlay_t *overlay, 
 static void draw_overlay(vwm_overlays_t *overlays, vwm_overlay_t *overlay, vmon_proc_t *proc, int *depth, int *row)
 {
 	vwm_xserver_t		*xserver = overlays->xserver;
-	vmon_proc_t		*child;
-	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
-	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
-
-	/* text variables */
-	char			str[256];
-	int			str_len, str_width;
-
 	int			heirarchy_changed = 0;
+	int			str_len, str_width;
+	char			str[256];
 
 /* CPU utilization graphs */
 	/* IOWait and Idle % @ row 0 */
@@ -841,7 +894,7 @@ void vwm_overlay_reset_snowflakes(vwm_overlays_t *overlays, vwm_overlay_t *overl
 }
 
 
-static void vwm_overlay_free_pictures(vwm_overlays_t *overlays, vwm_overlay_t *overlay)
+static void free_overlay_pictures(vwm_overlays_t *overlays, vwm_overlay_t *overlay)
 {
 	vwm_xserver_t	*xserver = overlays->xserver;
 
@@ -856,11 +909,45 @@ static void vwm_overlay_free_pictures(vwm_overlays_t *overlays, vwm_overlay_t *o
 }
 
 
-/* (re)size the specified overlay's visible dimensions */
-int vwm_overlay_set_visible_size(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int width, int height)
+static void copy_overlay_pictures(vwm_overlays_t *overlays, vwm_overlay_t *src, vwm_overlay_t *dest)
 {
 	vwm_xserver_t	*xserver = overlays->xserver;
 
+	if (!src->width)
+		return;
+
+	/* XXX: note the graph pictures are copied from their current phase in the x dimension */
+	XRenderComposite(xserver->display, PictOpSrc, src->grapha_picture, None, dest->grapha_picture,
+		src->phase, 0,		/* src x, y */
+		0, 0,			/* mask x, y */
+		dest->phase, 0,		/* dest x, y */
+		src->width, src->height);
+	XRenderComposite(xserver->display, PictOpSrc, src->graphb_picture, None, dest->graphb_picture,
+		src->phase, 0,		/* src x, y */
+		0, 0,			/* mask x, y */
+		dest->phase, 0,		/* dest x, y */
+		src->width, src->height);
+	XRenderComposite(xserver->display, PictOpSrc, src->text_picture, None, dest->text_picture,
+		0, 0,			/* src x, y */
+		0, 0,			/* mask x, y */
+		0, 0,			/* dest x, y */
+		src->width, src->height);
+	XRenderComposite(xserver->display, PictOpSrc, src->shadow_picture, None, dest->shadow_picture,
+		0, 0,			/* src x, y */
+		0, 0,			/* mask x, y */
+		0, 0,			/* dest x, y */
+		src->width, src->height);
+	XRenderComposite(xserver->display, PictOpSrc, src->picture, None, dest->picture,
+		0, 0,			/* src x, y */
+		0, 0,			/* mask x, y */
+		0, 0,			/* dest x, y */
+		src->width, src->height);
+}
+
+
+/* (re)size the specified overlay's visible dimensions */
+int vwm_overlay_set_visible_size(vwm_overlays_t *overlays, vwm_overlay_t *overlay, int width, int height)
+{
 	if (width != overlay->visible_width || height != overlay->visible_height)
 		overlay->redraw_needed = 1;
 
@@ -869,73 +956,23 @@ int vwm_overlay_set_visible_size(vwm_overlays_t *overlays, vwm_overlay_t *overla
 
 	/* if larger than the overlays currently are, enlarge them */
 	if (width > overlay->width || height > overlay->height) {
-		vwm_overlay_t	existing;
-		Pixmap		pixmap;
-
-		existing = *overlay;
+		vwm_overlay_t	existing = *overlay;
 
 		overlay->width = MAX(overlay->width, MAX(width, OVERLAY_GRAPH_MIN_WIDTH));
 		overlay->height = MAX(overlay->height, MAX(height, OVERLAY_GRAPH_MIN_HEIGHT));
 
-		pixmap = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), overlay->width, overlay->height, OVERLAY_MASK_DEPTH);
-		overlay->grapha_picture = XRenderCreatePicture(xserver->display, pixmap, XRenderFindStandardFormat(xserver->display, OVERLAY_MASK_FORMAT), CPRepeat, &pa_repeat);
-		XFreePixmap(xserver->display, pixmap);
-		XRenderFillRectangle(xserver->display, PictOpSrc, overlay->grapha_picture, &overlay_trans_color, 0, 0, overlay->width, overlay->height);
-
-		pixmap = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), overlay->width, overlay->height, OVERLAY_MASK_DEPTH);
-		overlay->graphb_picture = XRenderCreatePicture(xserver->display, pixmap, XRenderFindStandardFormat(xserver->display, OVERLAY_MASK_FORMAT), CPRepeat, &pa_repeat);
-		XFreePixmap(xserver->display, pixmap);
-		XRenderFillRectangle(xserver->display, PictOpSrc, overlay->graphb_picture, &overlay_trans_color, 0, 0, overlay->width, overlay->height);
-
-		pixmap = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), overlay->width, OVERLAY_ROW_HEIGHT, OVERLAY_MASK_DEPTH);
-		overlay->tmp_picture = XRenderCreatePicture(xserver->display, pixmap, XRenderFindStandardFormat(xserver->display, OVERLAY_MASK_FORMAT), 0, NULL);
-		XFreePixmap(xserver->display, pixmap);
+		overlay->grapha_picture = create_picture_fill(overlays, overlay->width, overlay->height, OVERLAY_MASK_DEPTH, CPRepeat, &pa_repeat, &overlay_trans_color, NULL);
+		overlay->graphb_picture = create_picture_fill(overlays, overlay->width, overlay->height, OVERLAY_MASK_DEPTH, CPRepeat, &pa_repeat, &overlay_trans_color, NULL);
+		overlay->tmp_picture = create_picture(overlays, overlay->width, OVERLAY_ROW_HEIGHT, OVERLAY_MASK_DEPTH, 0, NULL, NULL);
 
 		/* keep the text_pixmap reference around for XDrawText usage */
-		overlay->text_pixmap = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), overlay->width, overlay->height, OVERLAY_MASK_DEPTH);
-		overlay->text_picture = XRenderCreatePicture(xserver->display, overlay->text_pixmap, XRenderFindStandardFormat(xserver->display, OVERLAY_MASK_FORMAT), 0, NULL);
-		XRenderFillRectangle(xserver->display, PictOpSrc, overlay->text_picture, &overlay_trans_color, 0, 0, overlay->width, overlay->height);
+		overlay->text_picture = create_picture_fill(overlays, overlay->width, overlay->height, OVERLAY_MASK_DEPTH, 0, NULL, &overlay_trans_color, &overlay->text_pixmap);
 
-		pixmap = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), overlay->width, overlay->height, OVERLAY_MASK_DEPTH);
-		overlay->shadow_picture = XRenderCreatePicture(xserver->display, pixmap, XRenderFindStandardFormat(xserver->display, OVERLAY_MASK_FORMAT), 0, NULL);
-		XFreePixmap(xserver->display, pixmap);
-		XRenderFillRectangle(xserver->display, PictOpSrc, overlay->shadow_picture, &overlay_trans_color, 0, 0, overlay->width, overlay->height);
+		overlay->shadow_picture = create_picture_fill(overlays, overlay->width, overlay->height, OVERLAY_MASK_DEPTH, 0, NULL, &overlay_trans_color, NULL);
+		overlay->picture = create_picture(overlays, overlay->width, overlay->height, 32, 0, NULL, NULL);
 
-		pixmap = XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), overlay->width, overlay->height, 32);
-		overlay->picture = XRenderCreatePicture(xserver->display, pixmap, XRenderFindStandardFormat(xserver->display, PictStandardARGB32), 0, NULL);
-		XFreePixmap(xserver->display, pixmap);
-
-		if (existing.width) {
-			/* XXX: note the graph pictures are copied from their current phase in the x dimension */
-			XRenderComposite(xserver->display, PictOpSrc, existing.grapha_picture, None, overlay->grapha_picture,
-				existing.phase, 0,	/* src x, y */
-				0, 0,			/* mask x, y */
-				0, 0,			/* dest x, y */
-				existing.width, existing.height);
-			XRenderComposite(xserver->display, PictOpSrc, existing.graphb_picture, None, overlay->graphb_picture,
-				existing.phase, 0,	/* src x, y */
-				0, 0,			/* mask x, y */
-				0, 0,			/* dest x, y */
-				existing.width, existing.height);
-			XRenderComposite(xserver->display, PictOpSrc, existing.text_picture, None, overlay->text_picture,
-				0, 0,			/* src x, y */
-				0, 0,			/* mask x, y */
-				0, 0,			/* dest x, y */
-				existing.width, existing.height);
-			XRenderComposite(xserver->display, PictOpSrc, existing.shadow_picture, None, overlay->shadow_picture,
-				0, 0,			/* src x, y */
-				0, 0,			/* mask x, y */
-				0, 0,			/* dest x, y */
-				existing.width, existing.height);
-			XRenderComposite(xserver->display, PictOpSrc, existing.picture, None, overlay->picture,
-				0, 0,			/* src x, y */
-				0, 0,			/* mask x, y */
-				0, 0,			/* dest x, y */
-				existing.width, existing.height);
-			overlay->phase = 0;	/* having unrolled the existing graph[ab] pictures into the larger ones, phase is reset to 0 */
-
-			vwm_overlay_free_pictures(overlays, &existing);
-		}
+		copy_overlay_pictures(overlays, &existing, overlay);
+		free_overlay_pictures(overlays, &existing);
 	}
 
 	overlay->visible_width = width;
@@ -990,7 +1027,7 @@ _err:
 void vwm_overlay_destroy(vwm_overlays_t *overlays, vwm_overlay_t *overlay)
 {
 	vmon_proc_unmonitor(&overlays->vmon, overlay->monitor, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, overlay);
-	vwm_overlay_free_pictures(overlays, overlay);
+	free_overlay_pictures(overlays, overlay);
 	free(overlay);
 }
 
@@ -1015,39 +1052,39 @@ void vwm_overlay_compose(vwm_overlays_t *overlays, vwm_overlay_t *overlay, Xserv
 	height = vwm_overlay_composed_height(overlays, overlay);
 
 	/* fill the overlay picture with the background */
-	XRenderComposite(xserver->display, PictOpSrc, overlays->overlay_bg_fill, None, overlay->picture,
+	XRenderComposite(xserver->display, PictOpSrc, overlays->bg_fill, None, overlay->picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		overlay->visible_width, height);
 
 	/* draw the graphs into the overlay through the stencils being maintained by the sample callbacks */
-	XRenderComposite(xserver->display, PictOpOver, overlays->overlay_grapha_fill, overlay->grapha_picture, overlay->picture,
+	XRenderComposite(xserver->display, PictOpOver, overlays->grapha_fill, overlay->grapha_picture, overlay->picture,
 		0, 0,
 		overlay->phase, 0,
 		0, 0,
 		overlay->visible_width, height);
-	XRenderComposite(xserver->display, PictOpOver, overlays->overlay_graphb_fill, overlay->graphb_picture, overlay->picture,
+	XRenderComposite(xserver->display, PictOpOver, overlays->graphb_fill, overlay->graphb_picture, overlay->picture,
 		0, 0,
 		overlay->phase, 0,
 		0, 0,
 		overlay->visible_width, height);
 
 	/* draw the shadow into the overlay picture using a translucent black source drawn through the shadow mask */
-	XRenderComposite(xserver->display, PictOpOver, overlays->overlay_shadow_fill, overlay->shadow_picture, overlay->picture,
+	XRenderComposite(xserver->display, PictOpOver, overlays->shadow_fill, overlay->shadow_picture, overlay->picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		overlay->visible_width, height);
 
 	/* render overlay text into the overlay picture using a white source drawn through the overlay text as a mask, on top of everything */
-	XRenderComposite(xserver->display, PictOpOver, overlays->overlay_text_fill, overlay->text_picture, overlay->picture,
+	XRenderComposite(xserver->display, PictOpOver, overlays->text_fill, overlay->text_picture, overlay->picture,
 		0, 0,
 		0, 0,
 		0, 0,
 		overlay->visible_width, (overlay->heirarchy_end * OVERLAY_ROW_HEIGHT));
 
-	XRenderComposite(xserver->display, PictOpOver, overlays->overlay_snowflakes_text_fill, overlay->text_picture, overlay->picture,
+	XRenderComposite(xserver->display, PictOpOver, overlays->snowflakes_text_fill, overlay->text_picture, overlay->picture,
 		0, 0,
 		0, overlay->heirarchy_end * OVERLAY_ROW_HEIGHT,
 		0, overlay->heirarchy_end * OVERLAY_ROW_HEIGHT,
@@ -1143,7 +1180,7 @@ static float delta(struct timeval *cur, struct timeval *prev)
 /* update the overlays if necessary, return if updating occurred, and duration before another update needed in *desired_delay */
 int vwm_overlays_update(vwm_overlays_t *overlays, int *desired_delay)
 {
-	float	this_delta;
+	float	this_delta = 0.0f;
 	int	ret = 0;
 
 	gettimeofday(&overlays->maybe_sample, NULL);
