@@ -75,22 +75,10 @@ static void try_closedir(DIR **dir)
 }
 
 
-/* these have been wrapped to suppress syscall overhead when we have a bad file descriptor without cluttering the samplers with checks */
-static off_t try_lseek(int fd, off_t offset, int whence)
+static ssize_t try_pread(int fd, void *buf, size_t count, off_t offset)
 {
 	if (fd != -1) {
-		return lseek(fd, offset, whence);
-	} else {
-		errno = EBADF;
-		return fd;
-	}
-}
-
-
-static ssize_t try_read(int fd, void *buf, size_t count)
-{
-	if (fd != -1) {
-		return read(fd, buf, count);
+		return pread(fd, buf, count, offset);
 	} else {
 		errno = EBADF;
 		return fd;
@@ -135,7 +123,7 @@ static char * load_contents_fd(vmon_t *vmon, vmon_char_array_t *array, int fd, v
 	int	total = 0, len, alloc_len = array->alloc_len;
 	char	*alloc = array->array, *tmp;
 
-	while ((len = read(fd, vmon->buf, sizeof(vmon->buf))) > 0) {
+	while ((len = pread(fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
 		if (total + len > alloc_len) {
 			/* realloc to accomodate the new total */
 			tmp = realloc(alloc, total + len);
@@ -263,7 +251,7 @@ typedef enum _vmon_proc_stat_fsm_t {
 static sample_ret_t proc_sample_stat(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_stat_t **store)
 {
 	int			changes = 0;
-	int			i, len;
+	int			i, len, total = 0;
 	char			*arg;
 	int			argn, prev_argc;
 	vmon_proc_stat_fsm_t	state = VMON_PARSER_STATE_PROC_STAT_PID;
@@ -302,11 +290,6 @@ _retry:
 		/* initially everything is considered changed */
 		memset((*store)->changed, 0xff, sizeof((*store)->changed));
 	} else {
-		try_lseek((*store)->comm_fd, 0, SEEK_SET);
-		try_lseek((*store)->cmdline_fd, 0, SEEK_SET);
-		try_lseek((*store)->wchan_fd, 0, SEEK_SET);
-		try_lseek((*store)->stat_fd, 0, SEEK_SET);
-
 		/* clear the entire changed bitmap */
 		memset((*store)->changed, 0, sizeof((*store)->changed));
 	}
@@ -348,7 +331,9 @@ _retry:
 	 * scenario and retry the sample when detected by goto _retry */
 
 	/* read in stat and parse it assigning the stat members accordingly */
-	while ((len = try_read((*store)->stat_fd, vmon->buf, sizeof(vmon->buf))) > 0) {
+	while ((len = try_pread((*store)->stat_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
+		total += len;
+
 		for (i = 0; i < len; i++) {
 			/* parse the fields from the file, stepping through... */
 			input = vmon->buf[i];
@@ -372,7 +357,7 @@ _out:
 static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow_children_t **store)
 {
 	int		changes = 0;
-	int		len, i, child_pid = 0, found;
+	int		len, total = 0, i, child_pid = 0, found;
 	vmon_proc_t	*tmp, *_tmp;
 	list_head_t	*cur, *start;
 
@@ -389,8 +374,6 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 		*store = calloc(1, sizeof(vmon_proc_follow_children_t));
 
 		(*store)->children_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/children", proc->pid, proc->pid);
-	} else {
-		try_lseek((*store)->children_fd, 0, SEEK_SET);
 	}
 
 	/* unmonitor stale children on entry, this concludes the two-phase removal of a process */
@@ -414,7 +397,9 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 
 	/* maintain our awareness of children, if we detect a new child initiate monitoring for it, existing children get their generation number updated */
 	start = &proc->children;
-	while ((len = try_read((*store)->children_fd, vmon->buf, sizeof(vmon->buf))) > 0) {
+	while ((len = try_pread((*store)->children_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
+		total += len;
+
 		for (i = 0; i < len; i++) {
 			switch (vmon->buf[i]) {
 			case '0' ... '9':
@@ -795,7 +780,7 @@ typedef enum _vmon_proc_vm_fsm_t {
 
 static sample_ret_t proc_sample_vm(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_vm_t **store)
 {
-	int			i, len;
+	int			i, len, total = 0;
 	int			changes = 0;
 	vmon_proc_vm_fsm_t	state = VMON_PARSER_STATE_PROC_VM_SIZE_PAGES;
 #define VMON_PREPARE_PARSER
@@ -818,14 +803,14 @@ static sample_ret_t proc_sample_vm(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_vm
 		/* initially everything is considered changed */
 		memset((*store)->changed, 0xff, sizeof((*store)->changed));
 	} else {
-		try_lseek((*store)->statm_fd, 0, SEEK_SET);
-
 		/* clear the entire changed bitmap */
 		memset((*store)->changed, 0, sizeof((*store)->changed));
 	}
 
 	/* read in statm and parse it assigning the vm members accordingly */
-	while ((len = try_read((*store)->statm_fd, vmon->buf, sizeof(vmon->buf))) > 0) {
+	while ((len = try_pread((*store)->statm_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
+		total += len;
+
 		for (i = 0; i < len; i++) {
 			/* parse the fields from the file, stepping through... */
 			input = vmon->buf[i];
@@ -852,7 +837,7 @@ typedef enum _vmon_proc_io_fsm_t {
 
 static sample_ret_t proc_sample_io(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_io_t **store)
 {
-	int			i, len;
+	int			i, len, total = 0;
 	int			changes = 0;
 	vmon_proc_io_fsm_t	state = VMON_PARSER_STATE_PROC_IO_RCHAR_LABEL;
 #define VMON_PREPARE_PARSER
@@ -875,14 +860,14 @@ static sample_ret_t proc_sample_io(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_io
 		/* initially everything is considered changed */
 		memset((*store)->changed, 0xff, sizeof((*store)->changed));
 	} else {
-		try_lseek((*store)->io_fd, 0, SEEK_SET);
-
 		/* clear the entire changed bitmap */
 		memset((*store)->changed, 0, sizeof((*store)->changed));
 	}
 
 	/* read in io and parse it assigning the io members accordingly */
-	while ((len = try_read((*store)->io_fd, vmon->buf, sizeof(vmon->buf))) > 0) {
+	while ((len = try_pread((*store)->io_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
+		total += len;
+
 		for (i = 0; i < len; i++) {
 			/* parse the fields from the file, stepping through... */
 			input = vmon->buf[i];
@@ -911,7 +896,7 @@ typedef enum _vmon_sys_stat_fsm_t {
 /* system-wide stat sampling, things like CPU usages, stuff in /proc/stat */
 static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 {
-	int			i, len;
+	int			i, len, total = 0;
 	int			changes = 0;
 	vmon_sys_stat_fsm_t	state = VMON_PARSER_STATE_SYS_STAT_CPU_PREFIX;	/* this could be defined as the "VMON_PARSER_INITIAL_STATE" */
 #define VMON_PREPARE_PARSER
@@ -925,11 +910,11 @@ static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 	if (!(*store)) { /* ctor */
 		(*store) = calloc(1, sizeof(vmon_sys_stat_t));
 		(*store)->stat_fd = openat(dirfd(vmon->proc_dir), "stat", O_RDONLY);
-	} else {
-		try_lseek((*store)->stat_fd, 0, SEEK_SET);
 	}
 
-	while ((len = try_read((*store)->stat_fd, vmon->buf, sizeof(vmon->buf))) > 0) {
+	while ((len = try_pread((*store)->stat_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
+		total += len;
+
 		for (i = 0; i < len; i++) {
 			input = vmon->buf[i];
 			switch (state) {
@@ -956,7 +941,7 @@ typedef enum _vmon_sys_vm_fsm_t {
 
 static sample_ret_t sys_sample_vm(vmon_t *vmon, vmon_sys_vm_t **store)
 {
-	int			i, len;
+	int			i, len, total = 0;
 	int			changes = 0;
 	vmon_sys_vm_fsm_t	state = VMON_PARSER_STATE_SYS_VM_TOTAL_KB_LABEL; /* this could be defined as the "VMON_PARSER_INITIAL_STATE" */
 #define VMON_PREPARE_PARSER
@@ -974,11 +959,12 @@ static sample_ret_t sys_sample_vm(vmon_t *vmon, vmon_sys_vm_t **store)
 		/* initially everything is considered changed */
 		memset((*store)->changed, 0xff, sizeof((*store)->changed));
 	} else {
-		try_lseek((*store)->meminfo_fd, 0, SEEK_SET);
 		memset((*store)->changed, 0, sizeof((*store)->changed));
 	}
 
-	while ((len = try_read((*store)->meminfo_fd, vmon->buf, sizeof(vmon->buf))) > 0) {
+	while ((len = try_pread((*store)->meminfo_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
+		total += len;
+
 		for (i = 0; i < len; i++) {
 			input = vmon->buf[i];
 			switch (state) {
