@@ -5,7 +5,7 @@
  *  This has been written specifically for use in vwm, my window manager,
  *  but includes some facilities for other uses.
  *
- *  Copyright (c) 2012-2014  Vito Caputo - <vcaputo@gnugeneration.com>
+ *  Copyright (c) 2012-2017  Vito Caputo - <vcaputo@gnugeneration.com>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 3 as
