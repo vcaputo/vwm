@@ -218,14 +218,17 @@ vwm_overlays_t * vwm_overlays_create(vwm_xserver_t *xserver)
 	overlays = calloc(1, sizeof(vwm_overlays_t));
 	if (!overlays) {
 		VWM_PERROR("unable to allocate vwm_overlays_t");
-		return NULL;
+		goto _err;
 	}
 
 	overlays->xserver = xserver;
 	overlays->prev_sampling_interval = overlays->sampling_interval = 0.1f;	/* default to 10Hz */
 
-	/* initialize libvmon */
-	vmon_init(&overlays->vmon, VMON_FLAG_2PASS, VMON_WANT_SYS_STAT, (VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS));
+	if (!vmon_init(&overlays->vmon, VMON_FLAG_2PASS, VMON_WANT_SYS_STAT, (VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS))) {
+		VWM_ERROR("unable to initialize libvmon");
+		goto _err_overlays;
+	}
+
 	overlays->vmon.proc_ctor_cb = vmon_ctor_cb;
 	overlays->vmon.proc_dtor_cb = vmon_dtor_cb;
 	overlays->vmon.sample_cb = sample_callback;
@@ -234,6 +237,10 @@ vwm_overlays_t * vwm_overlays_create(vwm_xserver_t *xserver)
 
 	/* get all the text and graphics stuff setup for overlays */
 	overlays->overlay_font = XLoadQueryFont(xserver->display, OVERLAY_FIXED_FONT);
+	if (!overlays->overlay_font) {
+		VWM_ERROR("unable to load overlay font \"%s\"", OVERLAY_FIXED_FONT);
+		goto _err_vmon;
+	}
 
 	/* create a GC for rendering the text using Xlib into the text overlay stencils */
 	bitmask = create_pixmap(overlays, 1, 1, OVERLAY_MASK_DEPTH);
@@ -258,6 +265,15 @@ vwm_overlays_t * vwm_overlays_create(vwm_xserver_t *xserver)
 	XRenderFillRectangle(xserver->display, PictOpSrc, overlays->finish_fill, &overlay_trans_color, 0, 1, 1, 1);
 
 	return overlays;
+
+_err_vmon:
+	vmon_destroy(&overlays->vmon);
+
+_err_overlays:
+	free(overlays);
+
+_err:
+	return NULL;
 }
 
 
