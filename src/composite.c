@@ -32,7 +32,7 @@
 	/* compositing manager stuff */
 typedef enum _vwm_compositing_mode_t {
 	VWM_COMPOSITING_OFF = 0,	/* non-composited, no redirected windows, most efficient */
-	VWM_COMPOSITING_MONITORS = 1	/* composited process monitoring overlays, slower but really useful. */
+	VWM_COMPOSITING_MONITORS = 1	/* composited process monitoring charts, slower but really useful. */
 } vwm_compositing_mode_t;
 
 static vwm_compositing_mode_t	compositing_mode = VWM_COMPOSITING_OFF;		/* current compositing mode */
@@ -192,7 +192,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 	Region			occluded;
 	static XserverRegion	undamage_region = None;
 
-	/* if there's no damage to repaint, short-circuit, this happens when compositing for overlays is disabled. */
+	/* if there's no damage to repaint, short-circuit, this happens when compositing for charts is disabled. */
 	if (!compositing_mode || (combined_damage == None && !repaint_needed))
 		return;
 
@@ -215,7 +215,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 	}
 
 	occluded = XCreateRegion();
-	/* compose overlays for all visible windows up front in a separate pass (kind of lame, but it's simpler since compose_overlay() adds to combined_damage) */
+	/* compose charts for all visible windows up front in a separate pass (kind of lame, but it's simpler since compose_chart() adds to combined_damage) */
 	list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
 		XRectangle	r;
 
@@ -226,15 +226,15 @@ void vwm_composite_paint_all(vwm_t *vwm)
 		 * Since the composite extension stops delivery of VisibilityNotify events for redirected windows,
 		 * (it assumes redirected windows should be treated as part of a potentially transparent composite, and provides no api to alter this assumption)
 		 * we can't simply select the VisibilityNotify events on all windows and cache their visibility state in vwm_xwindow_t then skip
-		 * xwin->state==VisibilityFullyObscured windows here to avoid the cost of pointlessly composing overlays and rendering fully obscured windows :(.
+		 * xwin->state==VisibilityFullyObscured windows here to avoid the cost of pointlessly composing charts and rendering fully obscured windows :(.
 		 *
 		 * Instead we accumulate an occluded region (starting empty) of painted windows from the top-down on every paint_all().
-		 * Before we compose_overlay() a window, we check if the window's rectangle fits entirely within the occluded region.
-		 * If it does, no compose_overlay() is performed.
-		 * If it doesn't, compose_overlay() is called, and the window's rect is added to the occluded region.
+		 * Before we compose_chart() a window, we check if the window's rectangle fits entirely within the occluded region.
+		 * If it does, no compose_chart() is performed.
+		 * If it doesn't, compose_chart() is called, and the window's rect is added to the occluded region.
 		 * The occluded knowledge is also cached for the XRenderComposite() loop immediately following, where we skip the rendering of
 		 * occluded windows as well.
-		 * This does technically break SHAPE windows (xeyes, xmms), but only when monitoring is enabled which covers them with rectangular overlays anyways.
+		 * This does technically break SHAPE windows (xeyes, xmms), but only when monitoring is enabled which covers them with rectangular charts anyways.
 		 */
 		r.x = xwin->attrs.x;
 		r.y = xwin->attrs.y;
@@ -242,23 +242,23 @@ void vwm_composite_paint_all(vwm_t *vwm)
 		r.height = xwin->attrs.height + xwin->attrs.border_width * 2;
 		if (XRectInRegion(occluded, r.x, r.y, r.width, r.height) != RectangleIn) {
 			/* the window isn't fully occluded, compose it and add it to occluded */
-			if (xwin->overlay) {
-				XserverRegion	overlay_damage = None;
+			if (xwin->chart) {
+				XserverRegion	chart_damage = None;
 
-				vwm_overlay_compose(vwm->overlays, xwin->overlay, &overlay_damage);
-				if (overlay_damage != None) {
-					/* the damage region is in overlay coordinate space, translation necessary. */
-					XFixesTranslateRegion(VWM_XDISPLAY(vwm), overlay_damage,
+				vwm_chart_compose(vwm->charts, xwin->chart, &chart_damage);
+				if (chart_damage != None) {
+					/* the damage region is in chart coordinate space, translation necessary. */
+					XFixesTranslateRegion(VWM_XDISPLAY(vwm), chart_damage,
 							xwin->attrs.x + xwin->attrs.border_width,
 							xwin->attrs.y + xwin->attrs.border_width);
-					vwm_composite_damage_add(vwm, overlay_damage);
+					vwm_composite_damage_add(vwm, chart_damage);
 				}
 			}
 			XUnionRectWithRegion(&r, occluded, occluded);
 			xwin->occluded = 0;
 		} else {
 			xwin->occluded = 1;
-			VWM_TRACE("window %#x occluded, skipping compose_overlay()", (int)xwin->id);
+			VWM_TRACE("window %#x occluded, skipping compose_chart()", (int)xwin->id);
 		}
 	}
 	XDestroyRegion(occluded);
@@ -286,9 +286,9 @@ void vwm_composite_paint_all(vwm_t *vwm)
 				 r.x, r.y, /* dst x, y */
 				 r.width, r.height);
 
-		if (xwin->overlay) {
-			/* draw the monitoring overlay atop the window, note we stay within the window borders here. */
-			vwm_overlay_render(vwm->overlays, xwin->overlay, PictOpOver, root_buffer,
+		if (xwin->chart) {
+			/* draw the monitoring chart atop the window, note we stay within the window borders here. */
+			vwm_chart_render(vwm->charts, xwin->chart, PictOpOver, root_buffer,
 					xwin->attrs.x + xwin->attrs.border_width,
 					xwin->attrs.y + xwin->attrs.border_width,
 					xwin->attrs.width,
@@ -315,7 +315,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 }
 
 
-/* toggle compositing/monitoring overlays on/off */
+/* toggle compositing/monitoring charts on/off */
 void vwm_composite_toggle(vwm_t *vwm)
 {
 	vwm_xwindow_t	*xwin;

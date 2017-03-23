@@ -34,7 +34,7 @@ typedef struct _vwm_desktop_t vwm_desktop_t;
 
 typedef struct _vwm_t {
 	vwm_xserver_t		*xserver;		/* global xserver instance */
-	vwm_overlays_t		*overlays;		/* golbal overlays instance */
+	vwm_charts_t		*charts;		/* golbal charts instance */
 
 	/* extra X stuff needed by vwm */
 	Atom			wm_delete_atom;

@@ -31,12 +31,12 @@
 #include "util.h"
 #include "xserver.h"
 
-/* vmon exposes the monitoring overlays to the shell in an strace-like cli */
+/* vmon exposes the monitoring charts to the shell in an strace-like cli */
 
 typedef struct vmon_t {
 	vwm_xserver_t	*xserver;
-	vwm_overlays_t	*overlays;
-	vwm_overlay_t	*overlay;
+	vwm_charts_t	*charts;
+	vwm_chart_t	*chart;
 	Window		window;
 	int		width, height;
 	Picture		picture;
@@ -225,7 +225,7 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 			if (!parse_flag_int(argv, end, argv + 1, 1, 1000, &hertz))
 				return 0;
 
-			vwm_overlays_rate_set(vmon->overlays, hertz);
+			vwm_charts_rate_set(vmon->charts, hertz);
 
 			last = ++argv;
 		} else if (is_flag(*argv, "-h", "--help")) {
@@ -310,21 +310,21 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 		goto _err_free;
 	}
 
-	vmon->overlays = vwm_overlays_create(vmon->xserver);
-	if (!vmon->overlays) {
-		VWM_ERROR("unable to create overlays instance");
+	vmon->charts = vwm_charts_create(vmon->xserver);
+	if (!vmon->charts) {
+		VWM_ERROR("unable to create charts instance");
 		goto _err_xserver;
 	}
 
 	if (!vmon_handle_argv(vmon, argc, argv)) {
 		VWM_ERROR("unable to handle arguments");
-		goto _err_overlays;
+		goto _err_charts;
 	}
 
-	vmon->overlay = vwm_overlay_create(vmon->overlays, vmon->pid, vmon->width, vmon->height);
-	if (!vmon->overlay) {
-		VWM_ERROR("unable to create overlay");
-		goto _err_overlays;
+	vmon->chart = vwm_chart_create(vmon->charts, vmon->pid, vmon->width, vmon->height);
+	if (!vmon->chart) {
+		VWM_ERROR("unable to create chart");
+		goto _err_charts;
 	}
 
 	vmon->window = XCreateSimpleWindow(vmon->xserver->display, XSERVER_XROOT(vmon->xserver), 0, 0, vmon->width, vmon->height, 1, 0, 0);
@@ -337,8 +337,8 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 
 	return vmon;
 
-_err_overlays:
-	vwm_overlays_destroy(vmon->overlays);
+_err_charts:
+	vwm_charts_destroy(vmon->charts);
 _err_xserver:
 	vwm_xserver_close(vmon->xserver);
 _err_free:
@@ -355,21 +355,21 @@ static void vmon_shutdown(vmon_t *vmon)
 	assert(vmon->xserver);
 
 	XDestroyWindow(vmon->xserver->display, vmon->window);
-	vwm_overlay_destroy(vmon->overlays, vmon->overlay);
-	vwm_overlays_destroy(vmon->overlays);
+	vwm_chart_destroy(vmon->charts, vmon->chart);
+	vwm_charts_destroy(vmon->charts);
 	vwm_xserver_close(vmon->xserver);
 	free(vmon);
 }
 
 
-/* resize the overlay (in response to configure events) */
+/* resize the chart (in response to configure events) */
 static void vmon_resize(vmon_t *vmon, int width, int height)
 {
 	assert(vmon);
 
 	vmon->width = width;
 	vmon->height = height;
-	vwm_overlay_set_visible_size(vmon->overlays, vmon->overlay, width, height);
+	vwm_chart_set_visible_size(vmon->charts, vmon->chart, width, height);
 }
 
 
@@ -385,11 +385,11 @@ static void vmon_process_event(vmon_t *vmon)
 	switch (ev.type) {
 		case ConfigureNotify:
 			vmon_resize(vmon, ev.xconfigure.width, ev.xconfigure.height);
-			vwm_overlay_compose(vmon->overlays, vmon->overlay, NULL);
-			vwm_overlay_render(vmon->overlays, vmon->overlay, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
+			vwm_chart_compose(vmon->charts, vmon->chart, NULL);
+			vwm_chart_render(vmon->charts, vmon->chart, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
 			break;
 		case Expose:
-			vwm_overlay_render(vmon->overlays, vmon->overlay, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
+			vwm_chart_render(vmon->charts, vmon->chart, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
 			break;
 		default:
 			VWM_TRACE("unhandled event: %x\n", ev.type);
@@ -414,9 +414,9 @@ int main(int argc, char * const argv[])
 	while (!vmon->done) {
 		int	delay;
 
-		if (vwm_overlays_update(vmon->overlays, &delay)) {
-			vwm_overlay_compose(vmon->overlays, vmon->overlay, NULL);
-			vwm_overlay_render(vmon->overlays, vmon->overlay, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
+		if (vwm_charts_update(vmon->charts, &delay)) {
+			vwm_chart_compose(vmon->charts, vmon->chart, NULL);
+			vwm_chart_render(vmon->charts, vmon->chart, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
 		}
 
 		if (XPending(vmon->xserver->display) || poll(&pfd, 1, delay) > 0)

@@ -343,23 +343,23 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			}
 			break;
 
-		case XK_semicolon:	/* toggle composited overlays */
+		case XK_semicolon:	/* toggle composited charts */
 			vwm_composite_toggle(vwm);
 			break;
 
 		case XK_apostrophe:	/* reset snowflakes of the focused window */
-			if (vwin && vwin->xwindow->overlay) {
-				vwm_overlay_reset_snowflakes(vwm->overlays, vwin->xwindow->overlay);
+			if (vwin && vwin->xwindow->chart) {
+				vwm_chart_reset_snowflakes(vwm->charts, vwin->xwindow->chart);
 				vwm_composite_damage_win(vwm, vwin->xwindow);
 			}
 			break;
 
 		case XK_Right:	/* increase sampling frequency */
-			vwm_overlays_rate_increase(vwm->overlays);
+			vwm_charts_rate_increase(vwm->charts);
 			break;
 
 		case XK_Left:	/* decrease sampling frequency */
-			vwm_overlays_rate_decrease(vwm->overlays);
+			vwm_charts_rate_decrease(vwm->charts);
 			break;
 
 		default:

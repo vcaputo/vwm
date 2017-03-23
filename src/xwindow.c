@@ -111,17 +111,17 @@ static int vwm_xwin_get_pid(vwm_t *vwm, vwm_xwindow_t *xwin)
 }
 
 
-/* establishes an overlay on xwin if appropriate and the pid is available */
-void vwm_xwin_setup_overlay(vwm_t *vwm, vwm_xwindow_t *xwin)
+/* establishes an chart on xwin if appropriate and the pid is available */
+void vwm_xwin_setup_chart(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
 	/* XXX FIXME: handle getting called multiple times on the same xwin */
 
-	/* for regular windows create a monitoring overlay */
+	/* for regular windows create a monitoring chart */
 	if (!xwin->attrs.override_redirect) {
 		int	pid = vwm_xwin_get_pid(vwm, xwin);
 
 		if (pid != -1)
-			xwin->overlay = vwm_overlay_create(vwm->overlays, pid, xwin->attrs.width, xwin->attrs.height);
+			xwin->chart = vwm_chart_create(vwm->charts, pid, xwin->attrs.width, xwin->attrs.height);
 	}
 }
 
@@ -168,7 +168,7 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	 */
 	xwin->client_mapped = (attrs.map_state != IsUnmapped);
 
-	vwm_xwin_setup_overlay(vwm, xwin);
+	vwm_xwin_setup_chart(vwm, xwin);
 	vwm_composite_xwin_create(vwm, xwin);
 
 	list_add_tail(&xwin->xwindows, &vwm->xwindows);	/* created windows are always placed on the top of the stacking order */
@@ -199,8 +199,8 @@ void vwm_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin)
 	if (xwin->name)
 		XFree(xwin->name);
 
-	if (xwin->overlay)
-		vwm_overlay_destroy(vwm->overlays, xwin->overlay);
+	if (xwin->chart)
+		vwm_chart_destroy(vwm->charts, xwin->chart);
 
 	vwm_composite_xwin_destroy(vwm, xwin);
 

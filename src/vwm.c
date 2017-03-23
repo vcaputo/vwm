@@ -79,20 +79,20 @@ static vwm_t * vwm_startup(void)
 		goto _err_free;
 	}
 
-	if (!(vwm->overlays = vwm_overlays_create(vwm->xserver))) {
-		VWM_ERROR("Failed to create overlays");
+	if (!(vwm->charts = vwm_charts_create(vwm->xserver))) {
+		VWM_ERROR("Failed to create charts");
 		goto _err_xclose;
 	}
 
 	/* query the needed X extensions */
 	if (!XQueryExtension(VWM_XDISPLAY(vwm), COMPOSITE_NAME, &composite_opcode, &composite_event, &composite_error)) {
 		VWM_ERROR("No composite extension available");
-		goto _err_overlays;
+		goto _err_charts;
 	}
 
 	if (!XDamageQueryExtension(VWM_XDISPLAY(vwm), &vwm->damage_event, &vwm->damage_error)) {
 		VWM_ERROR("No damage extension available");
-		goto _err_overlays;
+		goto _err_charts;
 	}
 
 	if (XSyncQueryExtension(VWM_XDISPLAY(vwm), &sync_event, &sync_error)) {
@@ -111,7 +111,7 @@ static vwm_t * vwm_startup(void)
 	/* get our scheduling priority, clients are launched with a priority LAUNCHED_RELATIVE_PRIORITY nicer than this */
 	if ((vwm->priority = getpriority(PRIO_PROCESS, getpid())) == -1) {
 		VWM_ERROR("Cannot get scheduling priority");
-		goto _err_overlays;
+		goto _err_charts;
 	}
 
 	vwm->wm_delete_atom = XInternAtom(VWM_XDISPLAY(vwm), "WM_DELETE_WINDOW", False);
@@ -161,8 +161,8 @@ static vwm_t * vwm_startup(void)
 
 	return vwm;
 
-_err_overlays:
-	vwm_overlays_destroy(vwm->overlays);
+_err_charts:
+	vwm_charts_destroy(vwm->charts);
 
 _err_xclose:
 	vwm_xserver_close(vwm->xserver);
@@ -180,7 +180,7 @@ void vwm_shutdown(vwm_t *vwm)
 	char	*quit_console_args[] = {"/bin/sh", "-c", "screen -dr " CONSOLE_SESSION_STRING " -X quit", NULL};
 
 	vwm_launch(vwm, quit_console_args, VWM_LAUNCH_MODE_FG);
-	vwm_overlays_destroy(vwm->overlays);
+	vwm_charts_destroy(vwm->charts);
 	vwm_xserver_close(vwm->xserver);
 	/* TODO there's more shit to cleanup here, but we're exiting anyways. */
 	free(vwm);
@@ -312,7 +312,7 @@ int main(int argc, char *argv[])
 		do {
 			int	delay;
 
-			if (vwm_overlays_update(vwm->overlays, &delay))
+			if (vwm_charts_update(vwm->charts, &delay))
 				vwm_composite_repaint_needed(vwm);
 
 			XFlush(VWM_XDISPLAY(vwm));

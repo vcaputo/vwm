@@ -108,8 +108,8 @@ void vwm_xevent_handle_configure_notify(vwm_t *vwm, XConfigureEvent *ev)
 		vwm_xwin_restack(vwm, xwin, ev->above);
 		XGetWindowAttributes(VWM_XDISPLAY(vwm), ev->window, &attrs);
 		vwm_composite_handle_configure(vwm, xwin, &attrs);
-		if (xwin->overlay)
-			vwm_overlay_set_visible_size(vwm->overlays, xwin->overlay, attrs.width, attrs.height);
+		if (xwin->chart)
+			vwm_chart_set_visible_size(vwm->charts, xwin->chart, attrs.width, attrs.height);
 
 		VWM_TRACE("pre x=%i y=%i w=%i h=%i\n", xwin->attrs.x, xwin->attrs.y, xwin->attrs.width, xwin->attrs.height);
 		xwin->attrs = attrs;
@@ -222,7 +222,7 @@ void vwm_xevent_handle_property_notify(vwm_t *vwm, XPropertyEvent *ev)
 	if ((xwin = vwm_xwin_lookup(vwm, ev->window)) &&
 	    ev->atom == vwm->wm_pid_atom &&
 	    ev->state == PropertyNewValue)
-		vwm_xwin_setup_overlay(vwm, xwin);
+		vwm_xwin_setup_chart(vwm, xwin);
 }
 
 

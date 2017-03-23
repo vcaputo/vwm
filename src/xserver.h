@@ -7,7 +7,7 @@
 #define XSERVER_XVISUAL(_xserver)	DefaultVisual((_xserver)->display, (_xserver)->screen_num)
 #define XSERVER_XDEPTH(_xserver)	DefaultDepth((_xserver)->display, (_xserver)->screen_num)
 
-/* bare xserver context, split out for vmon's shared monitoring overlay use sake */
+/* bare xserver context, split out for vmon's shared monitoring chart use sake */
 typedef struct vwm_xserver_t {
 	Display		*display;
 	Colormap	cmap;

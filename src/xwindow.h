@@ -21,7 +21,7 @@ typedef struct _vwm_xwindow_t {
 	Picture			picture;		/* X picture object representing the window (for compositing) */
 	Pixmap			pixmap;			/* X pixmap object representing the window (for compositing) */
 
-	vwm_overlay_t		*overlay;		/* monitoring overlay state */
+	vwm_chart_t		*chart;			/* monitoring chart state */
 
 	char			*name;			/* client name */
 	unsigned int		client_mapped:1;	/* is the window currently mapped (by client) */
@@ -44,7 +44,7 @@ void vwm_xwin_monitor(vwm_t *vwm, vwm_xwindow_t *xwin);
 vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed);
 void vwm_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin);
 void vwm_xwin_restack(vwm_t *vwm, vwm_xwindow_t *xwin, Window new_above);
-void vwm_xwin_setup_overlay(vwm_t *vwm, vwm_xwindow_t *xwin);
+void vwm_xwin_setup_chart(vwm_t *vwm, vwm_xwindow_t *xwin);
 int vwm_xwin_create_existing(vwm_t *vwm);
 
 
