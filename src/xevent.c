@@ -18,10 +18,11 @@
 
 #include "X11/Xlib.h"
 
-#include "key.h"
+#include "charts.h"
 #include "clickety.h"
 #include "composite.h"
 #include "desktop.h"
+#include "key.h"
 #include "screen.h"
 #include "vwm.h"
 #include "window.h"

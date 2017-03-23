@@ -27,7 +27,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "overlays.h"
+#include "charts.h"
 #include "util.h"
 #include "xserver.h"
 

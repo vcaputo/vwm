@@ -6,7 +6,7 @@
 
 #include "context.h"
 #include "list.h"
-#include "overlays.h"
+#include "charts.h"
 #include "util.h"
 #include "xserver.h"
 

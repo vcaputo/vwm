@@ -25,7 +25,7 @@
 #include <X11/extensions/Xfixes.h>
 #include <X11/extensions/Xrender.h>
 
-#include "overlays.h"
+#include "charts.h"
 #include "xwindow.h"
 #include "vwm.h"
 

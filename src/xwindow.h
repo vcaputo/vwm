@@ -6,7 +6,7 @@
 #include <X11/Xlib.h>
 
 #include "list.h"
-#include "overlays.h"
+#include "charts.h"
 
 typedef struct _vwm_t vwm_t;
 typedef struct _vwm_window_t vwm_window_t;

@@ -38,11 +38,11 @@
 #include <sys/resource.h>
 #include <poll.h>
 
+#include "charts.h"
 #include "composite.h"
 #include "desktop.h"
 #include "launch.h"
 #include "logo.h"
-#include "overlays.h"
 #include "vwm.h"
 #include "xevent.h"
 #include "xwindow.h"

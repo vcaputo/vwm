@@ -21,9 +21,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "charts.h"
 #include "composite.h"
 #include "list.h"
-#include "overlays.h"
 #include "vwm.h"
 #include "window.h"
 #include "xwindow.h"

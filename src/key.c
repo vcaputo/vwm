@@ -20,6 +20,7 @@
 #include <X11/keysym.h>
 #include <stdlib.h>
 
+#include "charts.h"
 #include "composite.h"
 #include "desktop.h"
 #include "launch.h"

@@ -27,10 +27,10 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
+#include "charts.h"
 #include "composite.h"
 #include "libvmon/vmon.h"
 #include "list.h"
-#include "overlays.h"
 #include "vwm.h"
 #include "xwindow.h"
 
