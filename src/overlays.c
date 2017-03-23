@@ -42,6 +42,8 @@
 #define OVERLAY_ISTHREAD_ARGV		"~"					/* use this string to mark threads in the argv field */
 #define OVERLAY_NOCOMM_ARGV		"#missed it!"				/* use this string to substitute the command when missing in argv field */
 #define OVERLAY_MAX_ARGC		512					/* this is a huge amount */
+#define OVERLAY_VMON_PROC_WANTS		(VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS)
+#define OVERLAY_VMON_SYS_WANTS		(VMON_WANT_SYS_STAT)
 
 /* the global overlays state, supplied to vwm_overlay_create() which keeps a reference for future use. */
 typedef struct _vwm_overlays_t {
@@ -224,7 +226,7 @@ vwm_overlays_t * vwm_overlays_create(vwm_xserver_t *xserver)
 	overlays->xserver = xserver;
 	overlays->prev_sampling_interval = overlays->sampling_interval = 0.1f;	/* default to 10Hz */
 
-	if (!vmon_init(&overlays->vmon, VMON_FLAG_2PASS, VMON_WANT_SYS_STAT, (VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS))) {
+	if (!vmon_init(&overlays->vmon, VMON_FLAG_2PASS, OVERLAY_VMON_SYS_WANTS, OVERLAY_VMON_PROC_WANTS)) {
 		VWM_ERROR("unable to initialize libvmon");
 		goto _err_overlays;
 	}
