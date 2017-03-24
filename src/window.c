@@ -18,6 +18,7 @@
 	/* vwm "managed" windows (vwm_window_t) (which are built upon the "core" X windows (vwm_xwindow_t)) */
 
 #include <X11/Xlib.h>
+#include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
 
@@ -81,24 +82,17 @@ vwm_window_t * vwm_win_lookup(vwm_t *vwm, Window win)
 /* return the currently focused window (considers current context...), may return NULL */
 vwm_window_t * vwm_win_focused(vwm_t *vwm)
 {
-	vwm_window_t	*vwin = NULL;
-
 	switch (vwm->focused_context) {
-		case VWM_CONTEXT_SHELF:
-			vwin = vwm->focused_shelf;
-			break;
+	case VWM_CONTEXT_SHELF:
+		return vwm->focused_shelf;
 
-		case VWM_CONTEXT_DESKTOP:
-			if (vwm->focused_desktop)
-				vwin = vwm->focused_desktop->focused_window;
-			break;
+	case VWM_CONTEXT_DESKTOP:
+		return vwm->focused_desktop->focused_window;
 
-		default:
-			VWM_BUG("Unsupported context");
-			break;
+	default:
+		VWM_BUG("Unsupported context");
+		assert(0);
 	}
-
-	return vwin;
 }
 
 
