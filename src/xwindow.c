@@ -66,32 +66,26 @@ vwm_xwindow_t * vwm_xwin_lookup(vwm_t *vwm, Window win)
 /* determine if a window is mapped (vwm-mapped) according to the current context */
 int vwm_xwin_is_mapped(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
-	int ret = 0;
+	vwm_window_t	*vwin = xwin->managed;
+	int		ret = 0;
 
-	if (!xwin->mapped) return 0;
+	if (!xwin->mapped || !vwin)
+		return xwin->mapped;
 
-	if (xwin->managed) {
-		switch (vwm->focused_context) {
-			case VWM_CONTEXT_SHELF:
-				if (vwm->focused_shelf == xwin->managed)
-					ret = xwin->mapped;
-				break;
+	switch (vwm->focused_context) {
+	case VWM_CONTEXT_SHELF:
+		if (vwm->focused_shelf == vwin)
+			ret = 1;
+		break;
 
-			case VWM_CONTEXT_DESKTOP:
-				if (vwm->focused_desktop == xwin->managed->desktop && !xwin->managed->shelved)
-					ret = xwin->mapped;
-				break;
+	case VWM_CONTEXT_DESKTOP:
+		if (vwm->focused_desktop == vwin->desktop && !vwin->shelved)
+			ret = 1;
+		break;
 
-			default:
-				VWM_BUG("Unsupported context");
-				break;
-		}
-	} else { /* unmanaged xwins like popup dialogs when mapped are always visible */
-		ret = 1;
+	default:
+		VWM_BUG("Unsupported context");
 	}
-
-	/* annoyingly, Xorg stops delivering VisibilityNotify events for redirected windows, so we don't conveniently know if a window is obscured or not :( */
-	/* I could maintain my own data structure for answering this question, but that's pretty annoying when Xorg already has that knowledge. */
 
 	return ret;
 }
