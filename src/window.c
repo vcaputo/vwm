@@ -377,6 +377,83 @@ vwm_xwindow_t * vwm_win_unmanage(vwm_t *vwm, vwm_window_t *vwin)
 }
 
 
+/* helper for doing the classification/placement of a window becoming managed */
+static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
+{
+	vwm_xwindow_t		*xwin = vwin->xwindow;
+	XWindowAttributes	attrs;
+	XWindowChanges		changes = {};
+	unsigned		changes_mask = (CWX | CWY);
+	XClassHint		*classhint;
+	const vwm_screen_t	*scr = NULL;
+
+	/* figure out if the window is the console */
+	if ((classhint = XAllocClassHint())) {
+		if (XGetClassHint(VWM_XDISPLAY(vwm), xwin->id, classhint) && !strcmp(classhint->res_class, CONSOLE_WM_CLASS)) {
+			vwm->console = vwin;
+			vwm_win_shelve(vwm, vwin);
+			vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
+		}
+
+		if (classhint->res_class)
+			XFree(classhint->res_class);
+
+		if (classhint->res_name)
+			XFree(classhint->res_name);
+
+		XFree(classhint);
+	}
+
+	/* TODO: this is a good place to hook in a window placement algo */
+
+	/* on client-requested mapping we place the window */
+	if (!vwin->shelved) {
+		/* we place the window on the screen containing the the pointer only if that screen is empty,
+		 * otherwise we place windows on the screen containing the currently focused window */
+		/* since we query the geometry of windows in determining where to place them, a configuring
+		 * flag is used to exclude the window being configured from those queries */
+		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_POINTER);
+		vwin->configuring = 1;
+		if (vwm_screen_is_empty(vwm, scr)) {
+			/* focus the new window if it isn't already focused when it's going to an empty screen */
+			VWM_TRACE("window \"%s\" is alone on screen \"%i\", focusing", vwin->xwindow->name, scr->screen_number);
+			vwm_win_focus(vwm, vwin);
+		} else {
+			scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_desktop->focused_window->xwindow);
+		}
+		vwin->configuring = 0;
+
+		changes.x = scr->x_org;
+		changes.y = scr->y_org;
+	} else if (vwm->focused_context == VWM_CONTEXT_SHELF) {
+		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_shelf->xwindow);
+		changes.x = scr->x_org;
+		changes.y = scr->y_org;
+	}
+
+	/* XXX TODO: does this belong here? */
+	XGetWMNormalHints(VWM_XDISPLAY(vwm), xwin->id, vwin->hints, &vwin->hints_supplied);
+	XGetWindowAttributes(VWM_XDISPLAY(vwm), xwin->id, &attrs);
+
+	/* if the window size is precisely the screen size then directly "allscreen" the window right here */
+	if (!vwin->shelved && scr &&
+	    attrs.width == scr->width &&
+	    attrs.height == scr->height) {
+		VWM_TRACE("auto-allscreened window \"%s\"", vwin->xwindow->name);
+		changes.border_width = 0;
+		changes_mask |= CWBorderWidth;
+		vwin->autoconfigured = VWM_WIN_AUTOCONF_ALL;
+	}
+
+	vwin->client.x = changes.x;
+	vwin->client.y = changes.y;
+	vwin->client.height = attrs.height;
+	vwin->client.width = attrs.width;
+
+	XConfigureWindow(VWM_XDISPLAY(vwm), xwin->id, changes_mask, &changes);
+}
+
+
 /* promote an unmanaged window to a managed one */
 vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
@@ -435,6 +512,8 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 	} else {
 		list_add(&vwin->windows_mru, &vwm->windows_mru);
 	}
+
+	vwm_win_assimilate(vwm, vwin);
 
 	/* always raise newly managed windows so we know about them. */
 	XRaiseWindow(VWM_XDISPLAY(vwm), xwin->id);

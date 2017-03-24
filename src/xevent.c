@@ -176,85 +176,25 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 	vwm_window_t	*vwin = NULL;
 	int		domap = 1;
 
-	/* FIXME TODO: this is a fairly spuriously open-coded mess, this stuff
-	 * needs to be factored and moved elsewhere */
+	if ((xwin = vwm_xwin_lookup(vwm, ev->window)) && !(vwin = xwin->managed)) {
+		/* Basically all managed windows become managed on the map request,
+		 * even previously managed ones are unmanaged on unmap, then remanaged
+		 * on subsequent map request.  Exceptions are preexisting windows that
+		 * are already mapped at create time, those won't generate map requests
+		 * but are managed at create.
+		 */
+		vwin = vwm_win_manage_xwin(vwm, xwin);
+		VWM_TRACE("managed xwin \"%s\" at map request", xwin->name);
+	}
 
-	if ((xwin = vwm_xwin_lookup(vwm, ev->window)) &&
-	    ((vwin = xwin->managed) || (vwin = vwm_win_manage_xwin(vwm, xwin)))) {
-		XWindowAttributes	attrs;
-		XWindowChanges		changes = {.x = 0, .y = 0};
-		unsigned		changes_mask = (CWX | CWY);
-		XClassHint		*classhint;
-		const vwm_screen_t	*scr = NULL;
+	/* XXX: note that _normally_ both xwin and vwin should be non-NULL here, and
+	 * the care being taken WRT !xwin or !vwin is purely defensive to permit the
+	 * default of simply mapping windows on request when things are broken.
+	 */
 
-		xwin->mapped = 1;	/* note that the client mapped the window */
-
-		/* figure out if the window is the console */
-		if ((classhint = XAllocClassHint())) {
-			if (XGetClassHint(VWM_XDISPLAY(vwm), ev->window, classhint) && !strcmp(classhint->res_class, CONSOLE_WM_CLASS)) {
-				vwm->console = vwin;
-				vwm_win_shelve(vwm, vwin);
-				vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
-				domap = 0;
-			}
-
-			if (classhint->res_class)
-				XFree(classhint->res_class);
-
-			if (classhint->res_name)
-				XFree(classhint->res_name);
-
-			XFree(classhint);
-		}
-
-		/* TODO: this is a good place to hook in a window placement algo */
-
-		/* on client-requested mapping we place the window */
-		if (!vwin->shelved) {
-			/* we place the window on the screen containing the the pointer only if that screen is empty,
-			 * otherwise we place windows on the screen containing the currently focused window */
-			/* since we query the geometry of windows in determining where to place them, a configuring
-			 * flag is used to exclude the window being configured from those queries */
-			scr = vwm_screen_find(vwm, VWM_SCREEN_REL_POINTER);
-			vwin->configuring = 1;
-			if (vwm_screen_is_empty(vwm, scr)) {
-				/* focus the new window if it isn't already focused when it's going to an empty screen */
-				VWM_TRACE("window \"%s\" is alone on screen \"%i\", focusing", vwin->xwindow->name, scr->screen_number);
-				vwm_win_focus(vwm, vwin);
-			} else {
-				scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_desktop->focused_window->xwindow);
-			}
-			vwin->configuring = 0;
-
-			changes.x = scr->x_org;
-			changes.y = scr->y_org;
-		} else if (vwm->focused_context == VWM_CONTEXT_SHELF) {
-			scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_shelf->xwindow);
-			changes.x = scr->x_org;
-			changes.y = scr->y_org;
-		}
-
-		/* XXX TODO: does this belong here? */
-		XGetWMNormalHints(VWM_XDISPLAY(vwm), ev->window, vwin->hints, &vwin->hints_supplied);
-		XGetWindowAttributes(VWM_XDISPLAY(vwm), ev->window, &attrs);
-
-
-		/* if the window size is precisely the screen size then directly "allscreen" the window right here */
-		if (!vwin->shelved && scr &&
-		    attrs.width == scr->width &&
-		    attrs.height == scr->height) {
-			VWM_TRACE("auto-allscreened window \"%s\"", vwin->xwindow->name);
-			changes.border_width = 0;
-			changes_mask |= CWBorderWidth;
-			vwin->autoconfigured = VWM_WIN_AUTOCONF_ALL;
-		}
-
-		vwin->client.x = changes.x;
-		vwin->client.y = changes.y;
-		vwin->client.height = attrs.height;
-		vwin->client.width = attrs.width;
-
-		XConfigureWindow(VWM_XDISPLAY(vwm), ev->window, changes_mask, &changes);
+	if (xwin) {
+		xwin->mapped = 1;
+		domap = vwm_xwin_is_mapped(vwm, xwin);
 	}
 
 	if (domap) {
