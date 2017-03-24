@@ -28,7 +28,6 @@
 #include "window.h"
 #include "xwindow.h"
 
-#define HONOR_OVERRIDE_REDIRECT
 
 /* send a client message to a window (currently used for WM_DELETE) */
 void vwm_xwin_message(vwm_t *vwm, vwm_xwindow_t *xwin, Atom type, long foo)
@@ -131,8 +130,8 @@ void vwm_xwin_setup_overlay(vwm_t *vwm, vwm_xwindow_t *xwin)
 /* if the window is already mapped and not an override_redirect window, it becomes managed here. */
 vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 {
-	XWindowAttributes	attrs;
 	vwm_xwindow_t		*xwin = NULL;
+	XWindowAttributes	attrs;
 
 	VWM_TRACE("creating %#x", (unsigned int)win);
 
@@ -165,7 +164,8 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 
 	/* we must track the mapped-by-client state of the window independent of managed vs. unmanaged because
 	 * in the case of override_redirect windows they may be unmapped (invisible) or mapped (visible) like menus without being managed.
-	 * otherwise we could just use !xwin.managed to indicate unmapped, which is more vwm2-like, but insufficient when compositing. */
+	 * otherwise we could just use !xwin.managed to indicate unmapped, which is more vwm2-like, but insufficient when compositing.
+	 */
 	xwin->mapped = (attrs.map_state != IsUnmapped);
 
 	vwm_xwin_setup_overlay(vwm, xwin);
@@ -173,13 +173,9 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 
 	list_add_tail(&xwin->xwindows, &vwm->xwindows);	/* created windows are always placed on the top of the stacking order */
 
-#ifdef HONOR_OVERRIDE_REDIRECT
 	if (!attrs.override_redirect && xwin->mapped)
 		vwm_win_manage_xwin(vwm, xwin);
-#else
-	if (xwin->mapped)
-		vwm_win_manage_xwin(vwm, xwin);
-#endif
+
 _out_grabbed:
 	if (!grabbed)
 		XUngrabServer(VWM_XDISPLAY(vwm));
@@ -222,9 +218,8 @@ void vwm_xwin_restack(vwm_t *vwm, vwm_xwindow_t *xwin, Window new_above)
 	vwm_xwindow_t	*tmp;
 	fprintf(stderr, "restack of %#x new_above=%#x\n", (unsigned int)xwin->id, (unsigned int)new_above);
 	fprintf(stderr, "restack pre:");
-	list_for_each_entry(tmp, &vwm->xwindows, xwindows) {
+	list_for_each_entry(tmp, &vwm->xwindows, xwindows)
 		fprintf(stderr, " %#x", (unsigned int)tmp->id);
-	}
 	fprintf(stderr, "\n");
 #endif
 	if (xwin->xwindows.prev != &vwm->xwindows) {
@@ -244,12 +239,12 @@ void vwm_xwin_restack(vwm_t *vwm, vwm_xwindow_t *xwin, Window new_above)
 	}
 #ifdef TRACE
 	fprintf(stderr, "restack post:");
-	list_for_each_entry(tmp, &vwm->xwindows, xwindows) {
+	list_for_each_entry(tmp, &vwm->xwindows, xwindows)
 		fprintf(stderr, " %#x", (unsigned int)tmp->id);
-	}
 	fprintf(stderr, "\n\n");
 #endif
 }
+
 
 /* create xwindows for all existing windows (for startup) */
 int vwm_xwin_create_existing(vwm_t *vwm)
