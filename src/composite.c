@@ -164,10 +164,15 @@ void vwm_composite_invalidate_root(vwm_t *vwm)
 	if (!compositing_mode)
 		return;
 
-	if (root_picture) XRenderFreePicture(VWM_XDISPLAY(vwm), root_picture);
-	root_picture = None;
-	if (root_buffer) XRenderFreePicture(VWM_XDISPLAY(vwm), root_picture);
-	root_buffer = None;
+	if (root_picture) {
+		XRenderFreePicture(VWM_XDISPLAY(vwm), root_picture);
+		root_picture = None;
+	}
+
+	if (root_buffer) {
+		XRenderFreePicture(VWM_XDISPLAY(vwm), root_buffer);
+		root_buffer = None;
+	}
 }
 
 void vwm_composite_repaint_needed(vwm_t *vwm)
