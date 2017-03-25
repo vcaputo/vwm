@@ -83,15 +83,15 @@ vwm_window_t * vwm_win_lookup(vwm_t *vwm, Window win)
 vwm_window_t * vwm_win_focused(vwm_t *vwm)
 {
 	switch (vwm->focused_context) {
-	case VWM_CONTEXT_SHELF:
-		return vwm->focused_shelf;
+		case VWM_CONTEXT_SHELF:
+			return vwm->focused_shelf;
 
-	case VWM_CONTEXT_DESKTOP:
-		return vwm->focused_desktop->focused_window;
+		case VWM_CONTEXT_DESKTOP:
+			return vwm->focused_desktop->focused_window;
 
-	default:
-		VWM_BUG("Unsupported context");
-		assert(0);
+		default:
+			VWM_BUG("Unsupported context");
+			assert(0);
 	}
 }
 

@@ -175,27 +175,27 @@
  */
 #define vmon_datum_str(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case VMON_PARSER_DELIM:\
-										/* store accumulated string, reset tmp, and advance */\
-										if ((*store)->_name) {\
-											if (	strncmp((*store)->name, _array, var_array_len) ||\
-												(*store)->name[var_array_len] != '\0') {\
-													BITSET((*store)->changed, VMON_ ## _sym);\
-													changes++;\
+										case VMON_PARSER_DELIM:\
+											/* store accumulated string, reset tmp, and advance */\
+											if ((*store)->_name) {\
+												if (	strncmp((*store)->name, _array, var_array_len) ||\
+													(*store)->name[var_array_len] != '\0') {\
+														BITSET((*store)->changed, VMON_ ## _sym);\
+														changes++;\
+												}\
+												free((*store)->name);\
+											} else {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
 											}\
-											free((*store)->name);\
-										} else {\
-											BITSET((*store)->changed, VMON_ ## _sym);\
-											changes++;\
-										}\
-										(*store)->_name = strndup(var_array, var_array_len);\
-										var_array_len = 0;\
-										state++;\
-										break;\
-									default:\
-										/* accumulate string */\
-										var_array[var_array_len++] = input;\
-										break;\
+											(*store)->_name = strndup(var_array, var_array_len);\
+											var_array_len = 0;\
+											state++;\
+											break;\
+										default:\
+											/* accumulate string */\
+											var_array[var_array_len++] = input;\
+											break;\
 									}\
 									break;
 
@@ -219,27 +219,27 @@
 
 #define vmon_datum_int(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '-':\
-										/* TODO: we don't verify the '-' is leading... */\
-										var_isneg = 1;\
-										break;\
-									case '0' ... '9':\
-										var_int *= 10;\
-										var_int += input - '0';\
-										break;\
-									default:\
-										if (var_isneg) {\
-											var_int = -var_int;\
-											var_isneg = 0;\
-										}\
-										if ((*store)->_name != var_int) {\
-											BITSET((*store)->changed, VMON_ ## _sym);\
-											changes++;\
-											(*store)->_name = var_int;\
-										}\
-										var_int = 0;\
-										state++;\
-										break;\
+										case '-':\
+											/* TODO: we don't verify the '-' is leading... */\
+											var_isneg = 1;\
+											break;\
+										case '0' ... '9':\
+											var_int *= 10;\
+											var_int += input - '0';\
+											break;\
+										default:\
+											if (var_isneg) {\
+												var_int = -var_int;\
+												var_isneg = 0;\
+											}\
+											if ((*store)->_name != var_int) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_int;\
+											}\
+											var_int = 0;\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -247,19 +247,19 @@
 
 #define vmon_datum_uint(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-										var_uint *= 10;\
-										var_uint += input - '0';\
-										break;\
-									default:\
-										if ((*store)->_name != var_uint) {\
-											BITSET((*store)->changed, VMON_ ## _sym);\
-											changes++;\
-											(*store)->_name = var_uint;\
-										}\
-										var_uint = 0;\
-										state++;\
-										break;\
+										case '0' ... '9':\
+											var_uint *= 10;\
+											var_uint += input - '0';\
+											break;\
+										default:\
+											if ((*store)->_name != var_uint) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_uint;\
+											}\
+											var_uint = 0;\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -267,19 +267,19 @@
 
 #define vmon_datum_ulong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-										var_ulong *= 10;\
-										var_ulong += input - '0';\
-										break;\
-									default:\
-										if ((*store)->_name != var_ulong) {\
-											BITSET((*store)->changed, VMON_ ## _sym);\
-											changes++;\
-											(*store)->_name = var_ulong;\
-										}\
-										var_ulong = 0;\
-										state++;\
-										break;\
+										case '0' ... '9':\
+											var_ulong *= 10;\
+											var_ulong += input - '0';\
+											break;\
+										default:\
+											if ((*store)->_name != var_ulong) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_ulong;\
+											}\
+											var_ulong = 0;\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -287,19 +287,19 @@
 
 #define vmon_datum_ulonglong(_name, _sym, _label, _desc)	case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-										var_ulonglong *= 10;\
-										var_ulonglong += input - '0';\
-										break;\
-									default:\
-										if ((*store)->_name != var_ulonglong) {\
-											BITSET((*store)->changed, VMON_ ## _sym);\
-											changes++;\
-											(*store)->_name = var_ulonglong;\
-										}\
-										var_ulonglong = 0;\
-										state++;\
-										break;\
+										case '0' ... '9':\
+											var_ulonglong *= 10;\
+											var_ulonglong += input - '0';\
+											break;\
+										default:\
+											if ((*store)->_name != var_ulonglong) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_ulonglong;\
+											}\
+											var_ulonglong = 0;\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -307,27 +307,27 @@
 
 #define vmon_datum_long(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '-':\
-										/* TODO: we dont verify the '-' is leading... */\
-										var_isneg = 1;\
-										break;\
-									case '0' ... '9':\
-										var_long *= 10;\
-										var_long += input - '0';\
-										break;\
-									default:\
-										if (var_isneg) {\
-											var_long = -var_long;\
-											var_isneg = 0;\
-										}\
-										if ((*store)->_name != var_long) {\
-											BITSET((*store)->changed, VMON_ ## _sym);\
-											changes++;\
-											(*store)->_name = var_long;\
-										}\
-										var_long = 0;\
-										state++;\
-										break;\
+										case '-':\
+											/* TODO: we dont verify the '-' is leading... */\
+											var_isneg = 1;\
+											break;\
+										case '0' ... '9':\
+											var_long *= 10;\
+											var_long += input - '0';\
+											break;\
+										default:\
+											if (var_isneg) {\
+												var_long = -var_long;\
+												var_isneg = 0;\
+											}\
+											if ((*store)->_name != var_long) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_long;\
+											}\
+											var_long = 0;\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -335,27 +335,27 @@
 
 #define vmon_datum_longlong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '-':\
-										/* TODO: we dont verify the '-' is leading... */\
-										var_isneg = 1;\
-										break;\
-									case '0' ... '9':\
-										var_longlong *= 10;\
-										var_longlong += input - '0';\
-										break;\
-									default:\
-										if (var_isneg) {\
-											var_longlong = -var_longlong;\
-											var_isneg = 0;\
-										}\
-										if ((*store)->_name != var_longlong) {\
-											BITSET((*store)->changed, VMON_ ## _sym);\
-											changes++;\
-											(*store)->_name = var_longlong;\
-										}\
-										var_longlong = 0;\
-										state++;\
-										break;\
+										case '-':\
+											/* TODO: we dont verify the '-' is leading... */\
+											var_isneg = 1;\
+											break;\
+										case '0' ... '9':\
+											var_longlong *= 10;\
+											var_longlong += input - '0';\
+											break;\
+										default:\
+											if (var_isneg) {\
+												var_longlong = -var_longlong;\
+												var_isneg = 0;\
+											}\
+											if ((*store)->_name != var_longlong) {\
+												BITSET((*store)->changed, VMON_ ## _sym);\
+												changes++;\
+												(*store)->_name = var_longlong;\
+											}\
+											var_longlong = 0;\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -415,12 +415,12 @@
 
 #define vmon_omit_int(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-									case '-':\
-										break;\
-									default:\
-										state++;\
-										break;\
+										case '0' ... '9':\
+										case '-':\
+											break;\
+										default:\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -428,11 +428,11 @@
 
 #define vmon_omit_uint(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-										break;\
-									default:\
-										state++;\
-										break;\
+										case '0' ... '9':\
+											break;\
+										default:\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -440,11 +440,11 @@
 
 #define vmon_omit_ulong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-										break;\
-									default:\
-										state++;\
-										break;\
+										case '0' ... '9':\
+											break;\
+										default:\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -452,11 +452,11 @@
 
 #define vmon_omit_ulonglong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-										break;\
-									default:\
-										state++;\
-										break;\
+										case '0' ... '9':\
+											break;\
+										default:\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -464,12 +464,12 @@
 
 #define vmon_omit_long(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-									case '-':\
-										break;\
-									default:\
-										state++;\
-										break;\
+										case '0' ... '9':\
+										case '-':\
+											break;\
+										default:\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\
@@ -477,12 +477,12 @@
 
 #define vmon_omit_longlong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
 									switch (input) {\
-									case '0' ... '9':\
-									case '-':\
-										break;\
-									default:\
-										state++;\
-										break;\
+										case '0' ... '9':\
+										case '-':\
+											break;\
+										default:\
+											state++;\
+											break;\
 									}\
 									if (state == VMON_PARSER_STATE_ ## _sym)\
 										/* we want to fall-through when the state advances */\

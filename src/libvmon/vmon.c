@@ -341,9 +341,9 @@ _retry:
 #define VMON_PARSER_DELIM ' '	/* TODO XXX eliminate the need for this, I want the .def's to include all the data format knowledge */
 #define VMON_IMPLEMENT_PARSER
 #include "defs/proc_stat.def"
-			default:
-				/* we're finished parsing once we've fallen off the end of the symbols */
-				goto _out; /* this saves us the EOF read syscall */
+				default:
+					/* we're finished parsing once we've fallen off the end of the symbols */
+					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
@@ -402,37 +402,37 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 
 		for (i = 0; i < len; i++) {
 			switch (vmon->buf[i]) {
-			case '0' ... '9':
-				/* PID component, accumulate it */
-				child_pid *= 10;
-				child_pid += (vmon->buf[i] - '0');
-				break;
+				case '0' ... '9':
+					/* PID component, accumulate it */
+					child_pid *= 10;
+					child_pid += (vmon->buf[i] - '0');
+					break;
 
-			case ' ':
-				/* separator, terminates a PID, search for it in the childrens list */
-				found = 0;
-				list_for_each(cur, start) {
-					if (list_entry(cur, vmon_proc_t, siblings)->pid == child_pid) {
-						/* found the child already monitored, update its generation number and stop searching */
-						tmp = list_entry(cur, vmon_proc_t, siblings);
-						tmp->generation = vmon->generation;
-						found = 1;
-						tmp->is_new = 0;
-						break;
+				case ' ':
+					/* separator, terminates a PID, search for it in the childrens list */
+					found = 0;
+					list_for_each(cur, start) {
+						if (list_entry(cur, vmon_proc_t, siblings)->pid == child_pid) {
+							/* found the child already monitored, update its generation number and stop searching */
+							tmp = list_entry(cur, vmon_proc_t, siblings);
+							tmp->generation = vmon->generation;
+							found = 1;
+							tmp->is_new = 0;
+							break;
+						}
 					}
-				}
 
-				if (found || (tmp = vmon_proc_monitor(vmon, proc, child_pid, proc->wants, NULL, NULL))) {
-					/* position the process in the siblings list, and update the start */
-					/* move to front breaks vwm, we rely on the stale processes maintaining their position! maybe make it an option to vmon_init() since it can be a useful optimization. */
+					if (found || (tmp = vmon_proc_monitor(vmon, proc, child_pid, proc->wants, NULL, NULL))) {
+						/* position the process in the siblings list, and update the start */
+						/* move to front breaks vwm, we rely on the stale processes maintaining their position! maybe make it an option to vmon_init() since it can be a useful optimization. */
 #ifdef _MOVE_STALE_TO_FRONT
-					list_move_tail(&tmp->siblings, start);
+						list_move_tail(&tmp->siblings, start);
 #endif
-					start = &tmp->siblings;
-				} /* else { vmon_proc_monitor failed just move on } */
+						start = &tmp->siblings;
+					} /* else { vmon_proc_monitor failed just move on } */
 
-				child_pid = 0;
-				break;
+					child_pid = 0;
+					break;
 			}
 		}
 	}
@@ -815,9 +815,9 @@ static sample_ret_t proc_sample_vm(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_vm
 			switch (state) {
 #define VMON_IMPLEMENT_PARSER
 #include "defs/proc_vm.def"
-			default:
-				/* we're finished parsing once we've fallen off the end of the symbols */
-				goto _out; /* this saves us the EOF read syscall */
+				default:
+					/* we're finished parsing once we've fallen off the end of the symbols */
+					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
@@ -872,9 +872,9 @@ static sample_ret_t proc_sample_io(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_io
 			switch (state) {
 #define VMON_IMPLEMENT_PARSER
 #include "defs/proc_io.def"
-			default:
-				/* we're finished parsing once we've fallen off the end of the symbols */
-				goto _out; /* this saves us the EOF read syscall */
+				default:
+					/* we're finished parsing once we've fallen off the end of the symbols */
+					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
@@ -919,9 +919,9 @@ static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 #define VMON_PARSER_DELIM ' ' /* TODO XXX eliminate the need for this, I want the .def's to include all the data format knowledge */
 #define VMON_IMPLEMENT_PARSER
 #include "defs/sys_stat.def"
-			default:
-				/* we're finished parsing once we've fallen off the end of the symbols */
-				goto _out; /* this saves us the EOF read syscall */
+				default:
+					/* we're finished parsing once we've fallen off the end of the symbols */
+					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}
@@ -969,9 +969,9 @@ static sample_ret_t sys_sample_vm(vmon_t *vmon, vmon_sys_vm_t **store)
 #define VMON_PARSER_DELIM ' ' /* TODO XXX eliminate the need for this, I want the .def's to include all the data format knowledge */
 #define VMON_IMPLEMENT_PARSER
 #include "defs/sys_vm.def"
-			default:
-				/* we're finished parsing once we've fallen off the end of the symbols */
-				goto _out; /* this saves us the EOF read syscall */
+				default:
+					/* we're finished parsing once we've fallen off the end of the symbols */
+					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
 	}

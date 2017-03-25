@@ -383,16 +383,16 @@ static void vmon_process_event(vmon_t *vmon)
 	XNextEvent(vmon->xserver->display, &ev);
 
 	switch (ev.type) {
-	case ConfigureNotify:
-		vmon_resize(vmon, ev.xconfigure.width, ev.xconfigure.height);
-		vwm_overlay_compose(vmon->overlays, vmon->overlay, NULL);
-		vwm_overlay_render(vmon->overlays, vmon->overlay, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
-		break;
-	case Expose:
-		vwm_overlay_render(vmon->overlays, vmon->overlay, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
-		break;
-	default:
-		VWM_TRACE("unhandled event: %x\n", ev.type);
+		case ConfigureNotify:
+			vmon_resize(vmon, ev.xconfigure.width, ev.xconfigure.height);
+			vwm_overlay_compose(vmon->overlays, vmon->overlay, NULL);
+			vwm_overlay_render(vmon->overlays, vmon->overlay, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
+			break;
+		case Expose:
+			vwm_overlay_render(vmon->overlays, vmon->overlay, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
+			break;
+		default:
+			VWM_TRACE("unhandled event: %x\n", ev.type);
 	}
 }
 

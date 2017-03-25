@@ -72,18 +72,18 @@ int vwm_xwin_is_mapped(vwm_t *vwm, vwm_xwindow_t *xwin)
 		return xwin->client_mapped;
 
 	switch (vwm->focused_context) {
-	case VWM_CONTEXT_SHELF:
-		if (vwm->focused_shelf == vwin)
-			ret = 1;
-		break;
+		case VWM_CONTEXT_SHELF:
+			if (vwm->focused_shelf == vwin)
+				ret = 1;
+			break;
 
-	case VWM_CONTEXT_DESKTOP:
-		if (vwm->focused_desktop == vwin->desktop && !vwin->shelved)
-			ret = 1;
-		break;
+		case VWM_CONTEXT_DESKTOP:
+			if (vwm->focused_desktop == vwin->desktop && !vwin->shelved)
+				ret = 1;
+			break;
 
-	default:
-		VWM_BUG("Unsupported context");
+		default:
+			VWM_BUG("Unsupported context");
 	}
 
 	return ret;
