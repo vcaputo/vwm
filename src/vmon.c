@@ -176,7 +176,6 @@ static void handle_sigchld(int signum)
 /* parse and apply argv, implementing an strace-like cli, mutates vmon. */
 static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 {
-	int	i;
 	char	*const*end = &argv[argc - 1], *const*last = argv;
 
 	assert(vmon);
@@ -187,7 +186,7 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 	for (argv++; argv <= end; argv++) {
 		if (is_flag(*argv, "-p", "--pid")) {
 			if (vmon->pid) {
-				VWM_ERROR("--pid may only be specified once currently (TODO)", *argv);
+				VWM_ERROR("--pid may only be specified once currently (TODO)");
 				return 0;
 			}
 
