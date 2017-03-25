@@ -143,7 +143,7 @@ int vwm_screen_is_empty(vwm_t *vwm, const vwm_screen_t *scr)
 	int		is_empty = 1;
 
 	list_for_each_entry(xwin, &vwm->xwindows, xwindows) {
-		if (!xwin->mapped)
+		if (!xwin->client_mapped)
 			continue;
 
 		if (!xwin->managed || (xwin->managed->desktop == vwm->focused_desktop && !xwin->managed->shelved && !xwin->managed->configuring)) {

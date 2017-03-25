@@ -31,7 +31,7 @@
 /* unmap the specified window and set the unmapping-in-progress flag so we can discard vwm-generated UnmapNotify events */
 void vwm_win_unmap(vwm_t *vwm, vwm_window_t *vwin)
 {
-	if (!vwin->xwindow->mapped) {
+	if (!vwin->xwindow->client_mapped) {
 		VWM_TRACE("inhibited unmap of \"%s\", not mapped by client", vwin->xwindow->name);
 		return;
 	}
@@ -45,7 +45,7 @@ void vwm_win_unmap(vwm_t *vwm, vwm_window_t *vwin)
 /* map the specified window and set the mapping-in-progress flag so we can discard vwm-generated MapNotify events */
 void vwm_win_map(vwm_t *vwm, vwm_window_t *vwin)
 {
-	if (!vwin->xwindow->mapped) {
+	if (!vwin->xwindow->client_mapped) {
 		VWM_TRACE("inhibited map of \"%s\", not mapped by client", vwin->xwindow->name);
 		return;
 	}

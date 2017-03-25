@@ -68,8 +68,8 @@ int vwm_xwin_is_mapped(vwm_t *vwm, vwm_xwindow_t *xwin)
 	vwm_window_t	*vwin = xwin->managed;
 	int		ret = 0;
 
-	if (!xwin->mapped || !vwin)
-		return xwin->mapped;
+	if (!xwin->client_mapped || !vwin)
+		return xwin->client_mapped;
 
 	switch (vwm->focused_context) {
 	case VWM_CONTEXT_SHELF:
@@ -166,14 +166,14 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	 * in the case of override_redirect windows they may be unmapped (invisible) or mapped (visible) like menus without being managed.
 	 * otherwise we could just use !xwin.managed to indicate unmapped, which is more vwm2-like, but insufficient when compositing.
 	 */
-	xwin->mapped = (attrs.map_state != IsUnmapped);
+	xwin->client_mapped = (attrs.map_state != IsUnmapped);
 
 	vwm_xwin_setup_overlay(vwm, xwin);
 	vwm_composite_xwin_create(vwm, xwin);
 
 	list_add_tail(&xwin->xwindows, &vwm->xwindows);	/* created windows are always placed on the top of the stacking order */
 
-	if (!attrs.override_redirect && xwin->mapped)
+	if (!attrs.override_redirect && xwin->client_mapped)
 		vwm_win_manage_xwin(vwm, xwin);
 
 _out_grabbed:

@@ -24,7 +24,7 @@ typedef struct _vwm_xwindow_t {
 	vwm_overlay_t		*overlay;		/* monitoring overlay state */
 
 	char			*name;			/* client name */
-	unsigned int		mapped:1;		/* is the window currently mapped (by client) */
+	unsigned int		client_mapped:1;	/* is the window currently mapped (by client) */
 	unsigned int		occluded:1;		/* is the window occluded entirely by another window? (used and valid only during paint_all()) */
 							/* if only Xorg could send VisibilityNotify events when requested for redirected windows :( */
 	vwm_window_t		*managed;		/* is the window "managed"? NULL or this points to the managed context of the window */

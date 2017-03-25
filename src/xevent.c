@@ -131,11 +131,11 @@ void vwm_xevent_handle_unmap_notify(vwm_t *vwm, XUnmapEvent *ev)
 			} else {
 				/* client requested unmap, demote the window and note the unmapped state */
 				vwm_win_unmanage(vwm, xwin->managed);
-				xwin->mapped = 0;
+				xwin->client_mapped = 0;
 			}
 		} else {
 			/* if it's not managed, we can't have caused the map */
-			xwin->mapped = 0;
+			xwin->client_mapped = 0;
 		}
 
 		vwm_composite_damage_win(vwm, xwin);
@@ -162,7 +162,7 @@ void vwm_xevent_handle_map_notify(vwm_t *vwm, XMapEvent *ev)
 			xwin->managed->mapping = 0;
 		} else {
 			/* some windows like popup dialog boxes bypass MapRequest */
-			xwin->mapped = 1;
+			xwin->client_mapped = 1;
 		}
 
 		vwm_composite_handle_map(vwm, xwin);
@@ -178,7 +178,7 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 
 	xwin = vwm_xwin_lookup(vwm, ev->window);
 	if (xwin) {
-		xwin->mapped = 1;
+		xwin->client_mapped = 1;
 
 		if (!(vwin = xwin->managed)) {
 			/* Basically all managed windows become managed on the map request,
