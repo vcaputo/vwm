@@ -198,7 +198,8 @@ void vwm_composite_paint_all(vwm_t *vwm)
 
 	repaint_needed = 0;
 
-	if (!undamage_region) undamage_region = XFixesCreateRegion(VWM_XDISPLAY(vwm), NULL, 0);
+	if (!undamage_region)
+		undamage_region = XFixesCreateRegion(VWM_XDISPLAY(vwm), NULL, 0);
 
 	/* (re)create the root picture from the root window and allocate a double buffer for the off-screen composition of the damaged contents */
 	if (root_picture == None) {
@@ -268,7 +269,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 
 	/* since translucent windows aren't supported in vwm, I can do this more efficiently */
 	list_for_each_entry_prev(xwin, &vwm->xwindows, xwindows) {
-		XRectangle		r;
+		XRectangle	r;
 
 		if (!vwm_xwin_is_mapped(vwm, xwin) || xwin->occluded)
 			continue;	/* if !mapped or occluded skip */

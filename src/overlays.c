@@ -370,14 +370,12 @@ static int count_rows(vmon_proc_t *proc)
 	vmon_proc_t	*child;
 
 	if (!proc->is_thread) {
-		list_for_each_entry(child, &proc->threads, threads) {
+		list_for_each_entry(child, &proc->threads, threads)
 			count += count_rows(child);
-		}
 	}
 
-	list_for_each_entry(child, &proc->children, siblings) {
+	list_for_each_entry(child, &proc->children, siblings)
 		count += count_rows(child);
-	}
 
 	return count;
 }
@@ -458,12 +456,11 @@ static void draw_heirarchy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay,
 		return;
 
 	/* TODO: make the columns interactively configurable @ runtime */
-	if (!proc->is_new) {
+	if (!proc->is_new)
 	/* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
 		XRenderFillRectangle(xserver->display, PictOpSrc, overlay->text_picture, &overlay_trans_color,
 			0, row * OVERLAY_ROW_HEIGHT,		/* dst x, y */
 			overlay->width, OVERLAY_ROW_HEIGHT);	/* dst w, h */
-	}
 
 	/* put the process' wchan, state, and PID columns @ the far right */
 	if (proc->is_thread || list_empty(&proc->threads)) {	/* only threads or non-threaded processes include the wchan and state */
@@ -485,11 +482,10 @@ static void draw_heirarchy_row(vwm_overlays_t *overlays, vwm_overlay_t *overlay,
 		  items, nr_items);
 
 	/* ensure the area for the rest of the stuff is cleared, we don't put much text into thread rows so skip it for those. */
-	if (!proc->is_thread) {
+	if (!proc->is_thread)
 		XRenderFillRectangle(xserver->display, PictOpSrc, overlay->text_picture, &overlay_trans_color,
 				     overlay->visible_width - str_width, row * OVERLAY_ROW_HEIGHT,			/* dst x,y */
 				     overlay->width - (overlay->visible_width - str_width), OVERLAY_ROW_HEIGHT);	/* dst w,h */
-	}
 
 	XDrawString(xserver->display, overlay->text_pixmap, overlays->text_gc,
 		    overlay->visible_width - str_width, (row + 1) * OVERLAY_ROW_HEIGHT - 3,		/* dst x, y */

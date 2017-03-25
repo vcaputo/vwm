@@ -219,10 +219,9 @@ void vwm_win_focus(vwm_t *vwm, vwm_window_t *vwin)
 		/* fullscreen windows in the shelf when focused, since we don't intend to overlap there */
 		vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_POINTER, VWM_WIN_AUTOCONF_FULL);	/* XXX TODO: for now the shelf follows the pointer, it's simple. */
 	} else {
-		if (vwin->desktop->focused_window) {
+		if (vwin->desktop->focused_window)
 			/* set the border of the previously focused window on the same desktop to the unfocused color */
 			XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->desktop->focused_window->xwindow->id, vwm->colors.unfocused_window_border_color.pixel);
-		}
 
 		/* set the border of the newly focused window to the focused color */
 		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwm->colors.focused_window_border_color.pixel);
