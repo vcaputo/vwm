@@ -176,32 +176,40 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 	vwm_window_t	*vwin = NULL;
 	int		domap = 1;
 
-	if ((xwin = vwm_xwin_lookup(vwm, ev->window)) && !(vwin = xwin->managed)) {
-		/* Basically all managed windows become managed on the map request,
-		 * even previously managed ones are unmanaged on unmap, then remanaged
-		 * on subsequent map request.  Exceptions are preexisting windows that
-		 * are already mapped at create time, those won't generate map requests
-		 * but are managed at create.
-		 */
-		vwin = vwm_win_manage_xwin(vwm, xwin);
-		VWM_TRACE("managed xwin \"%s\" at map request", xwin->name);
-	}
-
-	/* XXX: note that _normally_ both xwin and vwin should be non-NULL here, and
-	 * the care being taken WRT !xwin or !vwin is purely defensive to permit the
-	 * default of simply mapping windows on request when things are broken.
-	 */
-
+	xwin = vwm_xwin_lookup(vwm, ev->window);
 	if (xwin) {
 		xwin->mapped = 1;
+
+		if (!(vwin = xwin->managed)) {
+			/* Basically all managed windows become managed on the map request,
+			 * even previously managed ones are unmanaged on unmap, then remanaged
+			 * on subsequent map request.  Exceptions are preexisting windows that
+			 * are already mapped at create time, those won't generate map requests
+			 * but are managed at create.
+			 */
+			vwin = vwm_win_manage_xwin(vwm, xwin);
+			VWM_TRACE("managed xwin \"%s\" at map request", xwin->name);
+		}
+
+		/* XXX: note that _normally_ both xwin and vwin should be non-NULL here, and
+		 * the care being taken WRT !xwin or !vwin is purely defensive to permit the
+		 * default of simply mapping windows on request when things are broken.
+		 */
+
 		domap = vwm_xwin_is_mapped(vwm, xwin);
 	}
 
 	if (domap) {
-		XMapWindow(VWM_XDISPLAY(vwm), ev->window);
-		if (vwin && vwin->desktop->focused_window == vwin) {
-			XSync(VWM_XDISPLAY(vwm), False);
-			XSetInputFocus(VWM_XDISPLAY(vwm), vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
+		if (vwin) {
+			vwm_win_map(vwm, vwin);
+
+			/* XSetInputFocus() must to happen after XMapWindow(), so do it here. */
+			if (vwm_win_focused(vwm) == vwin)
+				XSetInputFocus(VWM_XDISPLAY(vwm), vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
+		} else {
+			/* this is unexpected */
+			XMapWindow(VWM_XDISPLAY(vwm), ev->window);
+			VWM_BUG("handled map request of unmanaged window vwin=%p xwin=%p id=%u", vwin, xwin, ev->window);
 		}
 	}
 }
