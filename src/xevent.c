@@ -210,7 +210,7 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 		} else {
 			/* this is unexpected */
 			XMapWindow(VWM_XDISPLAY(vwm), ev->window);
-			VWM_BUG("handled map request of unmanaged window vwin=%p xwin=%p id=%u", vwin, xwin, ev->window);
+			VWM_BUG("handled map request of unmanaged window vwin=%p xwin=%p id=%u", vwin, xwin, (unsigned int)ev->window);
 		}
 	}
 }

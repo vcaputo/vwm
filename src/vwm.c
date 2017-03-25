@@ -36,6 +36,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
+#include <unistd.h>
 #include <poll.h>
 
 #include "charts.h"

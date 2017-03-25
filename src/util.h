@@ -1,8 +1,9 @@
 #ifndef _UTIL_H
 #define _UTIL_H
 
-#include <stdio.h>
 #include <errno.h>
+#include <stdio.h>
+#include <string.h>
 
 #define VWM_ERROR(_fmt, _args...)	fprintf(stderr, "%s:%i\t%s() "_fmt"\n", __FILE__, __LINE__, __FUNCTION__, ##_args)
 #define VWM_PERROR(_fmt, _args...)	fprintf(stderr, "%s:%i\t%s() "_fmt"; %s\n", __FILE__, __LINE__, __FUNCTION__, ##_args, strerror(errno))
