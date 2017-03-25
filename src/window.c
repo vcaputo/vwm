@@ -464,7 +464,7 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 		goto _fail;
 	}
 
-	if (!(vwin = (vwm_window_t *)malloc(sizeof(vwm_window_t)))) {
+	if (!(vwin = (vwm_window_t *)calloc(1, sizeof(vwm_window_t)))) {
 		VWM_PERROR("Failed to allocate vwin");
 		goto _fail;
 	}
@@ -486,7 +486,6 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 	vwin->desktop = vwm->focused_desktop;
 	vwin->autoconfigured = VWM_WIN_AUTOCONF_NONE;
-	vwin->mapping = vwin->unmapping = vwin->configuring = 0;
 	vwin->shelved = (vwm->focused_context == VWM_CONTEXT_SHELF);	/* if we're in the shelf when the window is created, the window is shelved */
 	vwin->client = xwin->attrs;					/* remember whatever the current attributes are */
 

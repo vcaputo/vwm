@@ -122,14 +122,13 @@ vwm_desktop_t * vwm_desktop_create(vwm_t *vwm, char *name)
 {
 	vwm_desktop_t	*desktop;
 
-	desktop = malloc(sizeof(vwm_desktop_t));
+	desktop = calloc(1, sizeof(vwm_desktop_t));
 	if (desktop == NULL) {
 		VWM_PERROR("Failed to allocate desktop");
 		goto _fail;
 	}
 
 	desktop->name = name == NULL ? name : strdup(name);
-	desktop->focused_window = NULL;
 
 	list_add_tail(&desktop->desktops, &vwm->desktops);
 	list_add_tail(&desktop->desktops_mru, &vwm->desktops_mru);

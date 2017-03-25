@@ -309,7 +309,7 @@ _retry:
 	if (BITTEST((*store)->changed, VMON_PROC_STAT_CMDLINE)) {
 		if (prev_argc != (*store)->argc) {
 			try_free((void **)&(*store)->argv); /* XXX could realloc */
-			(*store)->argv = malloc((*store)->argc * sizeof(char *));
+			(*store)->argv = calloc(1, (*store)->argc * sizeof(char *));
 		}
 
 		for (argn = 0, arg = (*store)->cmdline.array, i = 0; i < (*store)->cmdline.len; i++) {
@@ -591,14 +591,12 @@ static vmon_fobject_t * fobject_lookup_hinted(vmon_t *vmon, const char *path, vm
 
 	if (!fobject) {
 		/* create a new fobject */
-		fobject = malloc(sizeof(vmon_fobject_t));
+		fobject = calloc(1, sizeof(vmon_fobject_t));
 
 		fobject->type = VMON_FOBJECT_TYPE_PIPE;
 		fobject->inum = inum;
 		INIT_LIST_HEAD(&fobject->ref_fds);
 		INIT_LIST_HEAD(&fobject->bucket);
-		fobject->refcnt = 0;
-		fobject->foo = NULL;
 		list_add_tail(&fobject->bucket, &vmon->fobjects);
 		vmon->fobjects_nr++;
 
@@ -1093,7 +1091,7 @@ static int maybe_install_proc_callback(vmon_t *vmon, list_head_t *callbacks, voi
 		}
 
 		if (&cb->callbacks == callbacks) {
-			cb = malloc(sizeof(vmon_proc_callback_t));
+			cb = calloc(1, sizeof(vmon_proc_callback_t));
 			if (!cb)
 				return 0;
 
@@ -1153,7 +1151,7 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 		}
 	}
 
-	proc = (vmon_proc_t *)malloc(sizeof(vmon_proc_t));
+	proc = (vmon_proc_t *)calloc(1, sizeof(vmon_proc_t));
 	if (proc == NULL)
 		return NULL; /* TODO: report an error */
 
@@ -1162,9 +1160,7 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 	proc->generation = vmon->generation;
 	proc->refcnt = 1;
 	proc->is_new = 1; /* newly created process */
-	proc->is_stale = 0; /* implicitly not stale, since it is new */
 	proc->is_thread = is_thread;
-	memset(proc->stores, 0, sizeof(proc->stores));
 	proc->parent = parent;
 	INIT_LIST_HEAD(&proc->sample_callbacks);
 	INIT_LIST_HEAD(&proc->children);
