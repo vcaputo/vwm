@@ -127,16 +127,19 @@
 
 /* most the stuff we need in scope for the parser generated via VMON_IMPLEMENT_PARSER before including the appropriate .def */
 #ifdef VMON_PREPARE_PARSER
-	char			input;
-	int			var_isneg = 0;
-	int			var_int = 0;
-	unsigned int		var_uint = 0;
-	long			var_long = 0;
-	long long 		var_longlong = 0;
-	unsigned long		var_ulong = 0;
-	unsigned long long 	var_ulonglong = 0;
-	char			*var_array = NULL;
-	int			var_array_alloc_len = 0, var_array_len = 0;
+	struct _parser {
+		char			input;
+		int			var_isneg;
+		int			var_int;
+		unsigned int		var_uint;
+		long			var_long;
+		long long 		var_longlong;
+		unsigned long		var_ulong;
+		unsigned long long 	var_ulonglong;
+		char			*var_array;
+		int			var_array_alloc_len;
+		int			var_array_len;
+	} _p = {};
 
 #define vmon_datum_str(_name, _sym, _label, _desc)
 #define vmon_datum_str_array(_name, _sym, _label, _desc)
@@ -174,12 +177,12 @@
  * names etc.
  */
 #define vmon_datum_str(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case VMON_PARSER_DELIM:\
 											/* store accumulated string, reset tmp, and advance */\
 											if ((*store)->_name) {\
-												if (	strncmp((*store)->name, _array, var_array_len) ||\
-													(*store)->name[var_array_len] != '\0') {\
+												if (	strncmp((*store)->name, _p.var_array, _p.var_array_len) ||\
+													(*store)->name[_p.var_array_len] != '\0') {\
 														BITSET((*store)->changed, VMON_ ## _sym);\
 														changes++;\
 												}\
@@ -188,13 +191,13 @@
 												BITSET((*store)->changed, VMON_ ## _sym);\
 												changes++;\
 											}\
-											(*store)->_name = strndup(var_array, var_array_len);\
-											var_array_len = 0;\
+											(*store)->_name = strndup(_p.var_array, _p.var_array_len);\
+											_p.var_array_len = 0;\
 											state++;\
 											break;\
 										default:\
 											/* accumulate string */\
-											var_array[var_array_len++] = input;\
+											_p.var_array[_p.var_array_len++] = _p.input;\
 											break;\
 									}\
 									break;
@@ -204,10 +207,10 @@
 									break;
 
 #define vmon_datum_char(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									if ((*store)->_name != input) {\
+									if ((*store)->_name != _p.input) {\
 										BITSET((*store)->changed, VMON_ ## _sym);\
 										changes++;\
-										(*store)->_name = input;\
+										(*store)->_name = _p.input;\
 									}\
 									state++;\
 									break;
@@ -218,26 +221,26 @@
 									break;
 
 #define vmon_datum_int(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '-':\
 											/* TODO: we don't verify the '-' is leading... */\
-											var_isneg = 1;\
+											_p.var_isneg = 1;\
 											break;\
 										case '0' ... '9':\
-											var_int *= 10;\
-											var_int += input - '0';\
+											_p.var_int *= 10;\
+											_p.var_int += _p.input - '0';\
 											break;\
 										default:\
-											if (var_isneg) {\
-												var_int = -var_int;\
-												var_isneg = 0;\
+											if (_p.var_isneg) {\
+												_p.var_int = -_p.var_int;\
+												_p.var_isneg = 0;\
 											}\
-											if ((*store)->_name != var_int) {\
+											if ((*store)->_name != _p.var_int) {\
 												BITSET((*store)->changed, VMON_ ## _sym);\
 												changes++;\
-												(*store)->_name = var_int;\
+												(*store)->_name = _p.var_int;\
 											}\
-											var_int = 0;\
+											_p.var_int = 0;\
 											state++;\
 											break;\
 									}\
@@ -246,18 +249,18 @@
 										break;
 
 #define vmon_datum_uint(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
-											var_uint *= 10;\
-											var_uint += input - '0';\
+											_p.var_uint *= 10;\
+											_p.var_uint += _p.input - '0';\
 											break;\
 										default:\
-											if ((*store)->_name != var_uint) {\
+											if ((*store)->_name != _p.var_uint) {\
 												BITSET((*store)->changed, VMON_ ## _sym);\
 												changes++;\
-												(*store)->_name = var_uint;\
+												(*store)->_name = _p.var_uint;\
 											}\
-											var_uint = 0;\
+											_p.var_uint = 0;\
 											state++;\
 											break;\
 									}\
@@ -266,18 +269,18 @@
 										break;
 
 #define vmon_datum_ulong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
-											var_ulong *= 10;\
-											var_ulong += input - '0';\
+											_p.var_ulong *= 10;\
+											_p.var_ulong += _p.input - '0';\
 											break;\
 										default:\
-											if ((*store)->_name != var_ulong) {\
+											if ((*store)->_name != _p.var_ulong) {\
 												BITSET((*store)->changed, VMON_ ## _sym);\
 												changes++;\
-												(*store)->_name = var_ulong;\
+												(*store)->_name = _p.var_ulong;\
 											}\
-											var_ulong = 0;\
+											_p.var_ulong = 0;\
 											state++;\
 											break;\
 									}\
@@ -286,18 +289,18 @@
 										break;
 
 #define vmon_datum_ulonglong(_name, _sym, _label, _desc)	case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
-											var_ulonglong *= 10;\
-											var_ulonglong += input - '0';\
+											_p.var_ulonglong *= 10;\
+											_p.var_ulonglong += _p.input - '0';\
 											break;\
 										default:\
-											if ((*store)->_name != var_ulonglong) {\
+											if ((*store)->_name != _p.var_ulonglong) {\
 												BITSET((*store)->changed, VMON_ ## _sym);\
 												changes++;\
-												(*store)->_name = var_ulonglong;\
+												(*store)->_name = _p.var_ulonglong;\
 											}\
-											var_ulonglong = 0;\
+											_p.var_ulonglong = 0;\
 											state++;\
 											break;\
 									}\
@@ -306,26 +309,26 @@
 										break;
 
 #define vmon_datum_long(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '-':\
 											/* TODO: we dont verify the '-' is leading... */\
-											var_isneg = 1;\
+											_p.var_isneg = 1;\
 											break;\
 										case '0' ... '9':\
-											var_long *= 10;\
-											var_long += input - '0';\
+											_p.var_long *= 10;\
+											_p.var_long += _p.input - '0';\
 											break;\
 										default:\
-											if (var_isneg) {\
-												var_long = -var_long;\
-												var_isneg = 0;\
+											if (_p.var_isneg) {\
+												_p.var_long = -_p.var_long;\
+												_p.var_isneg = 0;\
 											}\
-											if ((*store)->_name != var_long) {\
+											if ((*store)->_name != _p.var_long) {\
 												BITSET((*store)->changed, VMON_ ## _sym);\
 												changes++;\
-												(*store)->_name = var_long;\
+												(*store)->_name = _p.var_long;\
 											}\
-											var_long = 0;\
+											_p.var_long = 0;\
 											state++;\
 											break;\
 									}\
@@ -334,26 +337,26 @@
 										break;
 
 #define vmon_datum_longlong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '-':\
 											/* TODO: we dont verify the '-' is leading... */\
-											var_isneg = 1;\
+											_p.var_isneg = 1;\
 											break;\
 										case '0' ... '9':\
-											var_longlong *= 10;\
-											var_longlong += input - '0';\
+											_p.var_longlong *= 10;\
+											_p.var_longlong += _p.input - '0';\
 											break;\
 										default:\
-											if (var_isneg) {\
-												var_longlong = -var_longlong;\
-												var_isneg = 0;\
+											if (_p.var_isneg) {\
+												_p.var_longlong = -_p.var_longlong;\
+												_p.var_isneg = 0;\
 											}\
-											if ((*store)->_name != var_longlong) {\
+											if ((*store)->_name != _p.var_longlong) {\
 												BITSET((*store)->changed, VMON_ ## _sym);\
 												changes++;\
-												(*store)->_name = var_longlong;\
+												(*store)->_name = _p.var_longlong;\
 											}\
-											var_longlong = 0;\
+											_p.var_longlong = 0;\
 											state++;\
 											break;\
 									}\
@@ -363,24 +366,24 @@
 
 /* parse but simply skip omitted fields, advance on the delimiter */
 #define vmon_omit_n(_n, _sym, _desc)				case VMON_PARSER_STATE_ ## _sym:\
-									var_int++;\
-									if (var_int >= _n) {\
-										var_int = 0;\
+									_p.var_int++;\
+									if (_p.var_int >= _n) {\
+										_p.var_int = 0;\
 										state++;\
 									}\
 									break;
 
 #define vmon_omit_literal(_lit, _sym)				case VMON_PARSER_STATE_ ## _sym:\
 									/* TODO make this actually match the literal, for now we skip the length. */ \
-									var_int++;\
-									if (var_int >= (sizeof(_lit) - 1)) {\
-										var_int = 0;\
+									_p.var_int++;\
+									if (_p.var_int >= (sizeof(_lit) - 1)) {\
+										_p.var_int = 0;\
 										state++;\
 									}\
 									break;
 
 #define vmon_omit_run(_char, _sym)				case VMON_PARSER_STATE_ ## _sym:\
-									if (input != _char) {\
+									if (_p.input != _char) {\
 										state++;\
 										/* XXX: we fall-through to the next case because this byte belongs to the next state */\
 									} else {\
@@ -389,14 +392,14 @@
 
 
 #define vmon_omit_str(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									if (input == VMON_PARSER_DELIM) {\
+									if (_p.input == VMON_PARSER_DELIM) {\
 										state++;\
 									} else {\
 										break;\
 									}
 
 #define vmon_omit_str_array(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									if (input == VMON_PARSER_DELIM) {\
+									if (_p.input == VMON_PARSER_DELIM) {\
 										state++;\
 									} else {\
 										break;\
@@ -407,14 +410,14 @@
 									break;
 
 #define	vmon_omit_char_array(_name, _sym, _label, _desc)	case VMON_PARSER_STATE_ ## _sym:\
-									if (input == VMON_PARSER_DELIM) {\
+									if (_p.input == VMON_PARSER_DELIM) {\
 										state++;\
 									} else {\
 										break;\
 									}
 
 #define vmon_omit_int(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
 										case '-':\
 											break;\
@@ -427,7 +430,7 @@
 										break;\
 
 #define vmon_omit_uint(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
 											break;\
 										default:\
@@ -439,7 +442,7 @@
 										break;
 
 #define vmon_omit_ulong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
 											break;\
 										default:\
@@ -451,7 +454,7 @@
 										break;
 
 #define vmon_omit_ulonglong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
 											break;\
 										default:\
@@ -463,7 +466,7 @@
 										break;
 
 #define vmon_omit_long(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
 										case '-':\
 											break;\
@@ -476,7 +479,7 @@
 										break;
 
 #define vmon_omit_longlong(_name, _sym, _label, _desc)		case VMON_PARSER_STATE_ ## _sym:\
-									switch (input) {\
+									switch (_p.input) {\
 										case '0' ... '9':\
 										case '-':\
 											break;\

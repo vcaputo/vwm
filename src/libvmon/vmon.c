@@ -270,7 +270,7 @@ static sample_ret_t proc_sample_stat(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_
 		return DTOR_FREE;
 	}
 
-_retry:
+/* _retry: */
 	if (!(*store)) { /* ctor */
 
 		*store = calloc(1, sizeof(vmon_proc_stat_t));
@@ -328,7 +328,7 @@ _retry:
 		readlinkf(vmon, &(*store)->exe, vmon->proc_dir, "%i/exe", proc->pid);
 
 	/* XXX TODO: there's a race between discovering comm_len from /proc/$pid/comm and applying it in the parsing of /proc/$pid/stat, detect the race
-	 * scenario and retry the sample when detected by goto _retry */
+	 * scenario and retry the sample when detected by goto _retry (see commented _retry label above) */
 
 	/* read in stat and parse it assigning the stat members accordingly */
 	while ((len = try_pread((*store)->stat_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
@@ -336,7 +336,7 @@ _retry:
 
 		for (i = 0; i < len; i++) {
 			/* parse the fields from the file, stepping through... */
-			input = vmon->buf[i];
+			_p.input = vmon->buf[i];
 			switch (state) {
 #define VMON_PARSER_DELIM ' '	/* TODO XXX eliminate the need for this, I want the .def's to include all the data format knowledge */
 #define VMON_IMPLEMENT_PARSER
@@ -811,7 +811,7 @@ static sample_ret_t proc_sample_vm(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_vm
 
 		for (i = 0; i < len; i++) {
 			/* parse the fields from the file, stepping through... */
-			input = vmon->buf[i];
+			_p.input = vmon->buf[i];
 			switch (state) {
 #define VMON_IMPLEMENT_PARSER
 #include "defs/proc_vm.def"
@@ -868,7 +868,7 @@ static sample_ret_t proc_sample_io(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_io
 
 		for (i = 0; i < len; i++) {
 			/* parse the fields from the file, stepping through... */
-			input = vmon->buf[i];
+			_p.input = vmon->buf[i];
 			switch (state) {
 #define VMON_IMPLEMENT_PARSER
 #include "defs/proc_io.def"
@@ -914,7 +914,7 @@ static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 		total += len;
 
 		for (i = 0; i < len; i++) {
-			input = vmon->buf[i];
+			_p.input = vmon->buf[i];
 			switch (state) {
 #define VMON_PARSER_DELIM ' ' /* TODO XXX eliminate the need for this, I want the .def's to include all the data format knowledge */
 #define VMON_IMPLEMENT_PARSER
@@ -964,7 +964,7 @@ static sample_ret_t sys_sample_vm(vmon_t *vmon, vmon_sys_vm_t **store)
 		total += len;
 
 		for (i = 0; i < len; i++) {
-			input = vmon->buf[i];
+			_p.input = vmon->buf[i];
 			switch (state) {
 #define VMON_PARSER_DELIM ' ' /* TODO XXX eliminate the need for this, I want the .def's to include all the data format knowledge */
 #define VMON_IMPLEMENT_PARSER
