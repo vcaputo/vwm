@@ -41,7 +41,7 @@
 #define CHART_GRAPH_MIN_HEIGHT	(4 * CHART_ROW_HEIGHT)
 #define CHART_ISTHREAD_ARGV	"~"					/* use this string to mark threads in the argv field */
 #define CHART_NOCOMM_ARGV	"#missed it!"				/* use this string to substitute the command when missing in argv field */
-#define CHART_MAX_ARGC		512					/* this is a huge amount */
+#define CHART_MAX_ARGC		64					/* this is a huge amount */
 #define CHART_VMON_PROC_WANTS	(VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS)
 #define CHART_VMON_SYS_WANTS	(VMON_WANT_SYS_STAT)
 
