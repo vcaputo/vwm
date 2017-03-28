@@ -931,9 +931,6 @@ static void copy_chart_pictures(vwm_charts_t *charts, vwm_chart_t *src, vwm_char
 {
 	vwm_xserver_t	*xserver = charts->xserver;
 
-	if (!src->width)
-		return;
-
 	/* XXX: note the graph pictures are copied from their current phase in the x dimension */
 	XRenderComposite(xserver->display, PictOpSrc, src->grapha_picture, None, dest->grapha_picture,
 		src->phase, 0,		/* src x, y */
@@ -989,8 +986,10 @@ int vwm_chart_set_visible_size(vwm_charts_t *charts, vwm_chart_t *chart, int wid
 		chart->shadow_picture = create_picture_fill(charts, chart->width, chart->height, CHART_MASK_DEPTH, 0, NULL, &chart_trans_color, NULL);
 		chart->picture = create_picture(charts, chart->width, chart->height, 32, 0, NULL, NULL);
 
-		copy_chart_pictures(charts, &existing, chart);
-		free_chart_pictures(charts, &existing);
+		if (existing.width) {
+			copy_chart_pictures(charts, &existing, chart);
+			free_chart_pictures(charts, &existing);
+		}
 	}
 
 	chart->visible_width = width;
