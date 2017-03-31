@@ -34,7 +34,6 @@ typedef struct _vwm_window_t {
 	unsigned int		autoconfigured:3;	/* autoconfigured window states (none/quarter/half/full/all) */
 	unsigned int		mapping:1;		/* is the window being mapped? (by vwm) */
 	unsigned int		unmapping:1;		/* is the window being unmapped? (by vwm) */
-	unsigned int		configuring:1;		/* is the window being configured/placed? (by vwm) */
 	unsigned int		shelved:1;		/* is the window shelved? */
 } vwm_window_t;
 

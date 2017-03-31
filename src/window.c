@@ -410,18 +410,14 @@ static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
 	if (!vwin->shelved) {
 		/* we place the window on the screen containing the the pointer only if that screen is empty,
 		 * otherwise we place windows on the screen containing the currently focused window */
-		/* since we query the geometry of windows in determining where to place them, a configuring
-		 * flag is used to exclude the window being configured from those queries */
 		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_POINTER);
-		vwin->configuring = 1;
-		if (vwm_screen_is_empty(vwm, scr)) {
+		if (vwm_screen_is_empty(vwm, scr, vwin->xwindow)) {
 			/* focus the new window if it isn't already focused when it's going to an empty screen */
 			VWM_TRACE("window \"%s\" is alone on screen \"%i\", focusing", vwin->xwindow->name, scr->screen_number);
 			vwm_win_focus(vwm, vwin);
 		} else {
 			scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_desktop->focused_window->xwindow);
 		}
-		vwin->configuring = 0;
 
 		changes.x = scr->x_org;
 		changes.y = scr->y_org;

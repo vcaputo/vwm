@@ -137,16 +137,16 @@ _out:
 
 
 /* check if a screen contains any windows (assuming the current desktop) */
-int vwm_screen_is_empty(vwm_t *vwm, const vwm_screen_t *scr)
+int vwm_screen_is_empty(vwm_t *vwm, const vwm_screen_t *scr, vwm_xwindow_t *ignore_xwin)
 {
 	vwm_xwindow_t	*xwin;
 	int		is_empty = 1;
 
 	list_for_each_entry(xwin, &vwm->xwindows, xwindows) {
-		if (!xwin->client_mapped)
+		if (xwin == ignore_xwin || !xwin->client_mapped)
 			continue;
 
-		if (!xwin->managed || (xwin->managed->desktop == vwm->focused_desktop && !xwin->managed->shelved && !xwin->managed->configuring)) {
+		if (!xwin->managed || (xwin->managed->desktop == vwm->focused_desktop && !xwin->managed->shelved)) {
 			/* XXX: it may make more sense to see what %age of the screen is overlapped by windows, and consider it empty if < some % */
 			/*      This is just seeing if any window is predominantly within the specified screen, the rationale being if you had a focusable
 			 *      window on the screen you would have used the keyboard to make windows go there; this function is only used in determining
