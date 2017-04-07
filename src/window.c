@@ -377,23 +377,17 @@ vwm_xwindow_t * vwm_win_unmanage(vwm_t *vwm, vwm_window_t *vwin)
 }
 
 
-/* helper for doing the classification/placement of a window becoming managed */
-static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
+/* helper for determining if a window is the console window */
+static int win_is_console(vwm_t *vwm, Window win)
 {
-	vwm_xwindow_t		*xwin = vwin->xwindow;
-	XWindowAttributes	attrs;
-	XWindowChanges		changes = {};
-	unsigned		changes_mask = (CWX | CWY);
-	XClassHint		*classhint;
-	const vwm_screen_t	*scr = NULL;
+	XClassHint	*classhint;
+	int		ret = 0;
 
 	/* figure out if the window is the console */
 	if ((classhint = XAllocClassHint())) {
-		if (XGetClassHint(VWM_XDISPLAY(vwm), xwin->id, classhint) && !strcmp(classhint->res_class, CONSOLE_WM_CLASS)) {
-			vwm->console = vwin;
-			vwm_win_shelve(vwm, vwin);
-			vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
-		}
+		if (XGetClassHint(VWM_XDISPLAY(vwm), win, classhint) &&
+		    !strcmp(classhint->res_class, CONSOLE_WM_CLASS))
+			ret = 1;
 
 		if (classhint->res_class)
 			XFree(classhint->res_class);
@@ -402,6 +396,25 @@ static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
 			XFree(classhint->res_name);
 
 		XFree(classhint);
+	}
+
+	return ret;
+}
+
+
+/* helper for doing the classification/placement of a window becoming managed */
+static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
+{
+	vwm_xwindow_t		*xwin = vwin->xwindow;
+	XWindowAttributes	attrs;
+	XWindowChanges		changes = {};
+	unsigned		changes_mask = (CWX | CWY);
+	const vwm_screen_t	*scr = NULL;
+
+	if (win_is_console(vwm, xwin->id)) {
+		vwm->console = vwin;
+		vwm_win_shelve(vwm, vwin);
+		vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
 	}
 
 	/* TODO: this is a good place to hook in a window placement algo */
