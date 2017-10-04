@@ -211,7 +211,7 @@ int vwm_clickety_pressed(vwm_t *vwm, Window win, XButtonPressedEvent *impetus)
 
 		/* always set the input focus to the clicked window, note if we allow this to happen on the root window, it enters sloppy focus mode
 		 * until a non-root window is clicked, which is an interesting hybrid but not how I prefer it. */
-		if (vwin != vwm->focused_desktop->focused_window && vwin->xwindow->id != VWM_XROOT(vwm)) {
+		if (vwin->xwindow->id != VWM_XROOT(vwm)) {
 			vwm_win_focus(vwm, vwin);
 			vwm_win_mru(vwm, vwin);
 		}
