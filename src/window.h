@@ -42,7 +42,7 @@ void vwm_win_unmap(vwm_t *vwm, vwm_window_t *vwin);
 void vwm_win_map(vwm_t *vwm, vwm_window_t *vwin);
 void vwm_win_mru(vwm_t *vwm, vwm_window_t *vwin);
 vwm_window_t * vwm_win_lookup(vwm_t *vwm, Window win);
-vwm_window_t * vwm_win_focused(vwm_t *vwm);
+vwm_window_t * vwm_win_get_focused(vwm_t *vwm);
 
 typedef enum _vwm_side_t {
 	VWM_SIDE_TOP,

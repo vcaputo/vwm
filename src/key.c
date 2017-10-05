@@ -70,7 +70,7 @@ void vwm_key_released(vwm_t *vwm, Window win, XKeyReleasedEvent *keyrelease)
 			}
 
 			/* make the focused window the most recently used */
-			if ((vwin = vwm_win_focused(vwm)))
+			if ((vwin = vwm_win_get_focused(vwm)))
 				vwm_win_mru(vwm, vwin);
 
 			/* make the focused desktop the most recently used */
@@ -112,7 +112,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 		repeat_cnt = 0;
 	}
 
-	vwin = vwm_win_focused(vwm);
+	vwin = vwm_win_get_focused(vwm);
 
 	switch (sym) {
 

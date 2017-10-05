@@ -205,7 +205,7 @@ void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev)
 			vwm_win_map(vwm, vwin);
 
 			/* XSetInputFocus() must to happen after XMapWindow(), so do it here. */
-			if (vwm_win_focused(vwm) == vwin)
+			if (vwm_win_get_focused(vwm) == vwin)
 				XSetInputFocus(VWM_XDISPLAY(vwm), vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
 		} else {
 			/* this is unexpected */

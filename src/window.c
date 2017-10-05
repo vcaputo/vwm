@@ -81,7 +81,7 @@ vwm_window_t * vwm_win_lookup(vwm_t *vwm, Window win)
 
 
 /* return the currently focused window (considers current context...), may return NULL */
-vwm_window_t * vwm_win_focused(vwm_t *vwm)
+vwm_window_t * vwm_win_get_focused(vwm_t *vwm)
 {
 	switch (vwm->focused_context) {
 		case VWM_CONTEXT_SHELF:
@@ -514,7 +514,7 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 	}
 
 	/* put it on the global windows_mru list, if there's a focused window insert the new one after it */
-	if (!list_empty(&vwm->windows_mru) && (focused = vwm_win_focused(vwm))) {
+	if (!list_empty(&vwm->windows_mru) && (focused = vwm_win_get_focused(vwm))) {
 		/* insert the vwin immediately after the focused window, so Mod1+Tab goes to the new window */
 		list_add(&vwin->windows_mru, &focused->windows_mru);
 	} else {
