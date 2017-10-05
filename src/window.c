@@ -97,6 +97,31 @@ vwm_window_t * vwm_win_get_focused(vwm_t *vwm)
 }
 
 
+/* set the currently focused window */
+/* this sets our internal state of which window is focused, and updates window border color as needed */
+/* note X input focus is not affected by this. */
+void vwm_win_set_focused(vwm_t *vwm, vwm_window_t *vwin)
+{
+	/* update the border color accordingly */
+	if (vwin->shelved) {
+		/* set the border of the newly focused window to the shelved color */
+		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwin == vwm->console ? vwm->colors.shelved_console_border_color.pixel : vwm->colors.shelved_window_border_color.pixel);
+		/* fullscreen windows in the shelf when focused, since we don't intend to overlap there */
+		vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_POINTER, VWM_WIN_AUTOCONF_FULL);	/* XXX TODO: for now the shelf follows the pointer, it's simple. */
+	} else {
+		if (vwin->desktop->focused_window)
+			/* set the border of the previously focused window on the same desktop to the unfocused color */
+			XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->desktop->focused_window->xwindow->id, vwm->colors.unfocused_window_border_color.pixel);
+
+		/* set the border of the newly focused window to the focused color */
+		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwm->colors.focused_window_border_color.pixel);
+
+		/* persist this on a per-desktop basis so it can be restored on desktop switches */
+		vwin->desktop->focused_window = vwin;
+	}
+}
+
+
 /* "autoconfigure" windows (configuration shortcuts like fullscreen/halfscreen/quarterscreen) and restoring the window */
 void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_autoconf_t conf, ...)
 {
@@ -203,33 +228,14 @@ void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_
 
 
 /* focus a window */
-/* this updates window border color as needed and the X input focus if mapped */
 void vwm_win_focus(vwm_t *vwm, vwm_window_t *vwin)
 {
 	VWM_TRACE("focusing: %#x", (unsigned int)vwin->xwindow->id);
 
-	if (vwm_xwin_is_mapped(vwm, vwin->xwindow)) {
-		/* if vwin is mapped give it the input focus */
+	if (vwm_xwin_is_mapped(vwm, vwin->xwindow))	/* note X only allows mapped windows to have input focus */
 		XSetInputFocus(VWM_XDISPLAY(vwm), vwin->xwindow->id, RevertToPointerRoot, CurrentTime);
-	}
 
-	/* update the border color accordingly */
-	if (vwin->shelved) {
-		/* set the border of the newly focused window to the shelved color */
-		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwin == vwm->console ? vwm->colors.shelved_console_border_color.pixel : vwm->colors.shelved_window_border_color.pixel);
-		/* fullscreen windows in the shelf when focused, since we don't intend to overlap there */
-		vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_POINTER, VWM_WIN_AUTOCONF_FULL);	/* XXX TODO: for now the shelf follows the pointer, it's simple. */
-	} else {
-		if (vwin->desktop->focused_window)
-			/* set the border of the previously focused window on the same desktop to the unfocused color */
-			XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->desktop->focused_window->xwindow->id, vwm->colors.unfocused_window_border_color.pixel);
-
-		/* set the border of the newly focused window to the focused color */
-		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwm->colors.focused_window_border_color.pixel);
-
-		/* persist this on a per-desktop basis so it can be restored on desktop switches */
-		vwin->desktop->focused_window = vwin;
-	}
+	vwm_win_set_focused(vwm, vwin);
 }
 
 
