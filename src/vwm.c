@@ -126,7 +126,7 @@ static vwm_t * vwm_startup(void)
 #undef color
 
 	XSelectInput(VWM_XDISPLAY(vwm), VWM_XROOT(vwm),
-		     PropertyChangeMask | SubstructureNotifyMask | SubstructureRedirectMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask);
+		     FocusChangeMask | PropertyChangeMask | SubstructureNotifyMask | SubstructureRedirectMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask);
 	XGrabKey(VWM_XDISPLAY(vwm), AnyKey, WM_GRAB_MODIFIER, VWM_XROOT(vwm), False, GrabModeAsync, GrabModeAsync);
 
 	XFlush(VWM_XDISPLAY(vwm));
@@ -257,6 +257,15 @@ void vwm_process_event(vwm_t *vwm)
 		case PropertyNotify:
 			VWM_TRACE("property notify");
 			vwm_xevent_handle_property_notify(vwm, &event.xproperty);
+			break;
+
+		case FocusIn:
+			VWM_TRACE("focusin");
+			vwm_xevent_handle_focusin(vwm, &event.xfocus);
+			break;
+
+		case FocusOut:
+			VWM_TRACE("focusout");
 			break;
 
 		case MappingNotify:

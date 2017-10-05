@@ -227,6 +227,19 @@ void vwm_xevent_handle_property_notify(vwm_t *vwm, XPropertyEvent *ev)
 }
 
 
+void vwm_xevent_handle_focusin(vwm_t *vwm, XFocusInEvent *ev)
+{
+	vwm_window_t	*vwin;
+
+	if (ev->mode != NotifyNormal)
+		return;
+
+	if ((vwin = vwm_win_lookup(vwm, ev->window)) &&
+	    (vwin != vwm_win_get_focused(vwm)))
+		vwm_win_set_focused(vwm, vwin);
+}
+
+
 void vwm_xevent_handle_mapping_notify(vwm_t *vwm, XMappingEvent *ev)
 {
 	XRefreshKeyboardMapping(ev);

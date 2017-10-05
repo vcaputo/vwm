@@ -15,4 +15,5 @@ void vwm_xevent_handle_unmap_notify(vwm_t *vwm, XUnmapEvent *ev);
 void vwm_xevent_handle_map_notify(vwm_t *vwm, XMapEvent *ev);
 void vwm_xevent_handle_map_request(vwm_t *vwm, XMapRequestEvent *ev);
 void vwm_xevent_handle_property_notify(vwm_t *vwm, XPropertyEvent *ev);
+void vwm_xevent_handle_focusin(vwm_t *vwm, XFocusInEvent *ev);
 void vwm_xevent_handle_mapping_notify(vwm_t *vwm, XMappingEvent *ev);

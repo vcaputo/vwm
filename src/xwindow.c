@@ -159,8 +159,10 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	XFetchName(VWM_XDISPLAY(vwm), win, &xwin->name);
 
 	/* This is so we get the PropertyNotify event and can get the pid when it's set post-create,
-	 * with my _NET_WM_PID patch the property is immediately available */
-	XSelectInput(VWM_XDISPLAY(vwm), win, PropertyChangeMask);
+	 * with my _NET_WM_PID patch the property is immediately available.
+	 * FocusChangeMask is needed to notice when clients call XSetInputFocus().
+	 */
+	XSelectInput(VWM_XDISPLAY(vwm), win, PropertyChangeMask | FocusChangeMask);
 
 	/* we must track the mapped-by-client state of the window independent of managed vs. unmanaged because
 	 * in the case of override_redirect windows they may be unmapped (invisible) or mapped (visible) like menus without being managed.
