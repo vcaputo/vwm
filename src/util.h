@@ -2,6 +2,7 @@
 #define _UTIL_H
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -14,6 +15,9 @@
 #else
 #define VWM_TRACE(_fmt, _args...)	do { } while(0)
 #endif
+
+#define VWM_TRACE_WIN(_win, _fmt, _args...) \
+					VWM_TRACE("win=%#"PRIx64": "_fmt, (uint64_t)_win, ##_args)
 
 #define MIN(_a, _b)			((_a) < (_b) ? (_a) : (_b))
 #define MAX(_a, _b)			((_a) > (_b) ? (_a) : (_b))
