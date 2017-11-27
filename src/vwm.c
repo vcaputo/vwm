@@ -195,99 +195,98 @@ void vwm_process_event(vwm_t *vwm)
 	XNextEvent(VWM_XDISPLAY(vwm), &event);
 	switch (event.type) {
 		case KeyPress:
-			VWM_TRACE("keypress");
+			VWM_TRACE_WIN(event.xkey.window, "keypress");
 			vwm_xevent_handle_key_press(vwm, &event.xkey);
 			break;
 
 		case KeyRelease:
-			VWM_TRACE("keyrelease");
+			VWM_TRACE_WIN(event.xkey.window, "keyrelease");
 			vwm_xevent_handle_key_release(vwm, &event.xkey);
 			break;
 
 		case ButtonPress:
-			VWM_TRACE("buttonpresss");
+			VWM_TRACE_WIN(event.xbutton.window, "buttonpresss");
 			vwm_xevent_handle_button_press(vwm, &event.xbutton);
 			break;
 
 		case MotionNotify:
-			//VWM_TRACE("motionnotify");
+			//VWM_TRACE_WIN(event.xmotion.window, "motionnotify");
 			vwm_xevent_handle_motion_notify(vwm, &event.xmotion);
 			break;
 
 		case ButtonRelease:
-			VWM_TRACE("buttonrelease");
+			VWM_TRACE_WIN(event.xbutton.window, "buttonrelease");
 			vwm_xevent_handle_button_release(vwm, &event.xbutton);
 			break;
 
 		case CreateNotify:
-			VWM_TRACE("createnotify");
+			VWM_TRACE_WIN(event.xcreatewindow.window, "createnotify");
 			vwm_xevent_handle_create_notify(vwm, &event.xcreatewindow);
 			break;
 
 		case DestroyNotify:
-			VWM_TRACE("destroynotify");
+			VWM_TRACE_WIN(event.xdestroywindow.window, "destroynotify");
 			vwm_xevent_handle_destroy_notify(vwm, &event.xdestroywindow);
 			break;
 
 		case ConfigureRequest:
-			VWM_TRACE("configurerequest");
+			VWM_TRACE_WIN(event.xconfigurerequest.window, "configurerequest");
 			vwm_xevent_handle_configure_request(vwm, &event.xconfigurerequest);
 			break;
 
 		case ConfigureNotify:
-			VWM_TRACE("configurenotify");
+			VWM_TRACE_WIN(event.xconfigure.window, "configurenotify");
 			vwm_xevent_handle_configure_notify(vwm, &event.xconfigure);
 			break;
 
 		case UnmapNotify:
-			VWM_TRACE("unmapnotify");
+			VWM_TRACE_WIN(event.xunmap.window, "unmapnotify");
 			vwm_xevent_handle_unmap_notify(vwm, &event.xunmap);
 			break;
 
 		case MapNotify:
-			VWM_TRACE("mapnotify");
+			VWM_TRACE_WIN(event.xmap.window, "mapnotify");
 			vwm_xevent_handle_map_notify(vwm, &event.xmap);
 			break;
 
 		case MapRequest:
-			VWM_TRACE("maprequest");
+			VWM_TRACE_WIN(event.xmaprequest.window, "maprequest");
 			vwm_xevent_handle_map_request(vwm, &event.xmaprequest);
 			break;
 
 		case PropertyNotify:
-			VWM_TRACE("property notify");
+			VWM_TRACE_WIN(event.xproperty.window, "property notify");
 			vwm_xevent_handle_property_notify(vwm, &event.xproperty);
 			break;
 
 		case FocusIn:
-			VWM_TRACE("focusin");
+			VWM_TRACE_WIN(event.xfocus.window, "focusin");
 			vwm_xevent_handle_focusin(vwm, &event.xfocus);
 			break;
 
 		case FocusOut:
-			VWM_TRACE("focusout");
+			VWM_TRACE_WIN(event.xfocus.window, "focusout");
 			break;
 
 		case MappingNotify:
-			VWM_TRACE("mapping notify");
+			VWM_TRACE_WIN(event.xmapping.window, "mapping notify");
 			vwm_xevent_handle_mapping_notify(vwm, &event.xmapping);
 			break;
 
 		case Expose:
-			VWM_TRACE("expose");
+			VWM_TRACE_WIN(event.xexpose.window, "expose");
 			break;
 
 		case GravityNotify:
-			VWM_TRACE("gravitynotify");
+			VWM_TRACE_WIN(event.xgravity.window, "gravitynotify");
 			break;
 
 		case ReparentNotify:
-			VWM_TRACE("reparentnotify");
+			VWM_TRACE_WIN(event.xreparent.window, "reparentnotify");
 			break;
 
 		default:
 			if (event.type == randr_event + RRScreenChangeNotify) {
-				VWM_TRACE("rrscreenchangenotify");
 				if (vwm->xinerama_screens)
 					XFree(vwm->xinerama_screens);
 				vwm->xinerama_screens = XineramaQueryScreens(VWM_XDISPLAY(vwm), &vwm->xinerama_screens_cnt);
@@ -324,8 +323,6 @@ int main(int argc, char *argv[])
 
 			if (vwm_charts_update(vwm->charts, &delay))
 				vwm_composite_repaint_needed(vwm);
-
-			XFlush(VWM_XDISPLAY(vwm));
 
 			if (!XPending(VWM_XDISPLAY(vwm))) {
 				if (poll(&pfd, 1, delay) == 0)
