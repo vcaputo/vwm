@@ -474,8 +474,10 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
 	vwm_window_t	*focused, *vwin = NULL;
 
+	VWM_TRACE_WIN(xwin->id, "managing");
+
 	if (xwin->managed) {
-		VWM_TRACE("suppressed re-management of xwin=%p", xwin);
+		VWM_TRACE_WIN(xwin->id, "suppressed re-management of xwin=%p", xwin);
 		goto _fail;
 	}
 
