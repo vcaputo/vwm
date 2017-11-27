@@ -133,7 +133,7 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 	vwm_xwindow_t		*xwin = NULL;
 	XWindowAttributes	attrs;
 
-	VWM_TRACE("creating %#x", (unsigned int)win);
+	VWM_TRACE_WIN(win, "creating");
 
 	/* prevent races */
 	if (!grabbed) {
