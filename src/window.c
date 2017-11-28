@@ -122,6 +122,24 @@ void vwm_win_set_focused(vwm_t *vwm, vwm_window_t *vwin)
 }
 
 
+/* Using the supplied rect and screen dimensions, discover "allscreen" windows. */
+/* If scr is NULL, the screen best fit to the supplied rect is used. */
+void vwm_win_autoconf_magic(vwm_t *vwm, vwm_window_t *vwin, const vwm_screen_t *scr, int x, int y, int width, int height)
+{
+	vwin->autoconfigured = VWM_WIN_AUTOCONF_NONE;
+
+	if (!scr)
+		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_RECT, x, y, width, height);
+
+	if (!vwin->shelved && scr &&
+	    width == scr->width &&
+	    height == scr->height) {
+		VWM_TRACE_WIN(vwin->xwindow->id, "auto-allscreened window");
+		vwin->autoconfigured = VWM_WIN_AUTOCONF_ALL;
+	}
+}
+
+
 /* "autoconfigure" windows (configuration shortcuts like fullscreen/halfscreen/quarterscreen) and restoring the window */
 void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_autoconf_t conf, ...)
 {
@@ -413,8 +431,7 @@ static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
 {
 	vwm_xwindow_t		*xwin = vwin->xwindow;
 	XWindowAttributes	attrs;
-	XWindowChanges		changes = {};
-	unsigned		changes_mask = (CWX | CWY);
+	XWindowChanges		changes = { .border_width = WINDOW_BORDER_WIDTH };
 	const vwm_screen_t	*scr = NULL;
 
 	if (win_is_console(vwm, xwin->id)) {
@@ -450,22 +467,18 @@ static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
 	XGetWMNormalHints(VWM_XDISPLAY(vwm), xwin->id, vwin->hints, &vwin->hints_supplied);
 	XGetWindowAttributes(VWM_XDISPLAY(vwm), xwin->id, &attrs);
 
-	/* if the window size is precisely the screen size then directly "allscreen" the window right here */
-	if (!vwin->shelved && scr &&
-	    attrs.width == scr->width &&
-	    attrs.height == scr->height) {
-		VWM_TRACE("auto-allscreened window \"%s\"", vwin->xwindow->name);
+	vwm_win_autoconf_magic(vwm, vwin, scr, changes.x, changes.y, attrs.width, attrs.height);
+
+	if (vwin->autoconfigured == VWM_WIN_AUTOCONF_ALL)
 		changes.border_width = 0;
-		changes_mask |= CWBorderWidth;
-		vwin->autoconfigured = VWM_WIN_AUTOCONF_ALL;
-	}
 
 	vwin->client.x = changes.x;
 	vwin->client.y = changes.y;
 	vwin->client.height = attrs.height;
 	vwin->client.width = attrs.width;
+	vwin->client.border_width = changes.border_width;
 
-	XConfigureWindow(VWM_XDISPLAY(vwm), xwin->id, changes_mask, &changes);
+	XConfigureWindow(VWM_XDISPLAY(vwm), xwin->id, (CWX | CWY | CWBorderWidth), &changes);
 }
 
 

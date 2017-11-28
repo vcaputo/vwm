@@ -60,6 +60,7 @@ typedef enum _vwm_corner_t {
 } vwm_corner_t;
 
 void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_autoconf_t conf, ...);
+void vwm_win_autoconf_magic(vwm_t *vwm, vwm_window_t *vwin, const vwm_screen_t *scr, int x, int y, int width, int height);
 void vwm_win_focus(vwm_t *vwm, vwm_window_t *vwin);
 
 typedef enum _vwm_fence_t {

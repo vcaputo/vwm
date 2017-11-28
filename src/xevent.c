@@ -90,11 +90,13 @@ void vwm_xevent_handle_configure_request(vwm_t *vwm, XConfigureRequestEvent *ev)
 
 	/* XXX: windows raising themselves is annoying, so discard CWSibling and CWStackMode. */
 
-	if ((xwin = vwm_xwin_lookup(vwm, ev->window)) &&
-	    xwin->managed &&
-	    xwin->managed->autoconfigured == VWM_WIN_AUTOCONF_ALL)
-		/* this is to allow auto-allscreen to succeed in getting a borderless window configured */
-		change_mask &= ~CWBorderWidth;
+	if ((xwin = vwm_xwin_lookup(vwm, ev->window)) && xwin->managed) {
+		if (change_mask & CWWidth && change_mask & CWHeight)
+			vwm_win_autoconf_magic(vwm, xwin->managed, NULL, ev->x, ev->y, ev->width, ev->height);
+
+		if (xwin->managed->autoconfigured == VWM_WIN_AUTOCONF_ALL)
+			changes.border_width = 0;
+	}
 
 	XConfigureWindow(VWM_XDISPLAY(vwm), ev->window, change_mask, &changes);
 }
