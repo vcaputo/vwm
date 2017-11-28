@@ -29,23 +29,30 @@
 
 	/* Xinerama/multihead screen functions */
 
-/* return what fraction (0.0-1.0) of vwin overlaps with scr */
-static float vwm_screen_overlaps_xwin(vwm_t *vwm, const vwm_screen_t *scr, vwm_xwindow_t *xwin)
+/* return what fraction (0.0-1.0) of the rect x,y,width,height overlaps with scr */
+static float vwm_screen_overlaps_rect(vwm_t *vwm, const vwm_screen_t *scr, int x, int y, int width, int height)
 {
 	float	pct = 0, xover = 0, yover = 0;
 
-	if (scr->x_org + scr->width < xwin->attrs.x || scr->x_org > xwin->attrs.x + xwin->attrs.width ||
-	    scr->y_org + scr->height < xwin->attrs.y || scr->y_org > xwin->attrs.y + xwin->attrs.height)
+	if (scr->x_org + scr->width < x || scr->x_org > x + width ||
+	    scr->y_org + scr->height < y || scr->y_org > y + height)
 		goto _out;
 
 	/* they overlap, by how much? */
-	xover = MIN(scr->x_org + scr->width, xwin->attrs.x + xwin->attrs.width) - MAX(scr->x_org, xwin->attrs.x);
-	yover = MIN(scr->y_org + scr->height, xwin->attrs.y + xwin->attrs.height) - MAX(scr->y_org, xwin->attrs.y);
+	xover = MIN(scr->x_org + scr->width, x + width) - MAX(scr->x_org, x);
+	yover = MIN(scr->y_org + scr->height, y + height) - MAX(scr->y_org, y);
 
-	pct = (xover * yover) / (xwin->attrs.width * xwin->attrs.height);
+	pct = (xover * yover) / (width * height);
 _out:
-	VWM_TRACE("xover=%f yover=%f width=%i height=%i pct=%.4f", xover, yover, xwin->attrs.width, xwin->attrs.height, pct);
+	VWM_TRACE("xover=%f yover=%f width=%i height=%i pct=%.4f", xover, yover, width, height, pct);
 	return pct;
+}
+
+
+/* return what fraction (0.0-1.0) of xwin overlaps with scr */
+static float vwm_screen_overlaps_xwin(vwm_t *vwm, const vwm_screen_t *scr, vwm_xwindow_t *xwin)
+{
+	return vwm_screen_overlaps_rect(vwm, scr, xwin->attrs.x, xwin->attrs.y, xwin->attrs.width, xwin->attrs.height);
 }
 
 
@@ -68,6 +75,28 @@ const vwm_screen_t * vwm_screen_find(vwm_t *vwm, vwm_screen_rel_t rel, ...)
 	for (i = 0, _tmp = vwm->xinerama_screens; i < vwm->xinerama_screens_cnt; _tmp = &vwm->xinerama_screens[++i])
 
 	switch (rel) {
+		case VWM_SCREEN_REL_RECT: {
+			va_list		ap;
+			int		x, y, width, height;
+			float		best_pct = 0, this_pct;
+
+			va_start(ap, rel);
+			x = va_arg(ap, int);
+			y = va_arg(ap, int);
+			width = va_arg(ap, int);
+			height = va_arg(ap, int);
+			va_end(ap);
+
+			for_each_screen(scr) {
+				this_pct = vwm_screen_overlaps_rect(vwm, scr, x, y, width, height);
+				if (this_pct > best_pct) {
+					best = scr;
+					best_pct = this_pct;
+				}
+			}
+			break;
+		}
+
 		case VWM_SCREEN_REL_XWIN: {
 			va_list		ap;
 			vwm_xwindow_t	*xwin;
