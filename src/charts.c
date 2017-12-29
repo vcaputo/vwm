@@ -535,6 +535,23 @@ static void print_argv(vwm_charts_t *charts, vwm_chart_t *chart, int x, int row,
 }
 
 
+/* determine if a given process has subsequent siblings in the heirarchy */
+static inline int proc_has_subsequent_siblings(vmon_t *vmon, vmon_proc_t *proc)
+{
+	struct list_head	*sib, *head = &vmon->processes;
+
+	if (proc->parent)
+		head = &proc->parent->children;
+
+	for (sib = proc->siblings.next; sib != head; sib = sib->next) {
+		if (!(list_entry(sib, vmon_proc_t, siblings)->is_stale))
+			return 1;
+	}
+
+	return 0;
+}
+
+
 /* draws proc in a row of the process heirarchy */
 static void draw_heirarchy_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int depth, int row, int heirarchy_changed)
 {
@@ -591,7 +608,6 @@ static void draw_heirarchy_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_pr
 	/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
 	if (proc != chart->monitor) {
 		vmon_proc_t		*ancestor, *sibling, *last_sibling = NULL;
-		struct list_head	*rem;
 		int			needs_tee = 0;
 		int			bar_x = 0, bar_y = (row + 1) * CHART_ROW_HEIGHT;
 		int			sub;
@@ -605,14 +621,10 @@ static void draw_heirarchy_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_pr
 			bar_x = (depth - sub) * (CHART_ROW_HEIGHT / 2) + 4;
 
 			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
-			for (rem = ancestor->siblings.next; rem != &ancestor->parent->children; rem = rem->next) {
-				if (!(list_entry(rem, vmon_proc_t, siblings)->is_stale)) {
-					XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
-						  bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
-						  bar_x, bar_y);			/* dst x2, y2 (vertical line) */
-					break; /* stop looking for more siblings at this ancestor when we find one that isn't stale */
-				}
-			}
+			if (proc_has_subsequent_siblings(&charts->vmon, ancestor))
+				XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
+					  bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
+					  bar_x, bar_y);			/* dst x2, y2 (vertical line) */
 		}
 
 		/* determine if _any_ of our siblings have children requiring us to draw a tee immediately before our comm string.
