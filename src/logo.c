@@ -42,7 +42,7 @@ void vwm_draw_logo(vwm_t *vwm)
 	yoff = scr->y_org + ((float)height * .333);
 	height /= 3;
 
-	/* the logo gets shrunken vertically until it's essentially a flat line */
+	/* the logo gets shrunken until it's essentially a flat line */
 	while (height > 0 && width > 0) {
 		/* scale and center the points to the screen size */
 		for (i = 0; i < VWM_LOGO_POINTS; i++) {
@@ -56,11 +56,10 @@ void vwm_draw_logo(vwm_t *vwm)
 		XDrawLines(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), VWM_XGC(vwm), points, sizeof(points) / sizeof(XPoint), CoordModeOrigin);
 		XFlush(VWM_XDISPLAY(vwm));
 
-		/* the width is shrunken as well, but only by as much as it is tall */
+		height -= 2;
 		yoff++;
 		width -= 4;
 		xoff += 2;
-		height -= 2;
 	}
 
 	XUngrabServer(VWM_XDISPLAY(vwm));
