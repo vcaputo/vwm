@@ -43,7 +43,7 @@ void vwm_draw_logo(vwm_t *vwm)
 	height /= 3;
 
 	/* the logo gets shrunken vertically until it's essentially a flat line */
-	while (height -= 2) {
+	while (height > 0 && width > 0) {
 		/* scale and center the points to the screen size */
 		for (i = 0; i < VWM_LOGO_POINTS; i++) {
 			points[i].x = xoff + (i * .2 * (float)width);
@@ -60,6 +60,7 @@ void vwm_draw_logo(vwm_t *vwm)
 		yoff++;
 		width -= 4;
 		xoff += 2;
+		height -= 2;
 	}
 
 	XUngrabServer(VWM_XDISPLAY(vwm));
