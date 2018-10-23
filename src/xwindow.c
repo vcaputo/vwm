@@ -1,7 +1,7 @@
 /*
  *                                  \/\/\
  *
- *  Copyright (C) 2012-2017  Vito Caputo - <vcaputo@pengaru.com>
+ *  Copyright (C) 2012-2018  Vito Caputo - <vcaputo@pengaru.com>
  *
  *  This program is free software: you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License version 3 as published
