@@ -67,16 +67,14 @@ void vwm_win_mru(vwm_t *vwm, vwm_window_t *vwin)
 /* look up the X window in the global managed windows list */
 vwm_window_t * vwm_win_lookup(vwm_t *vwm, Window win)
 {
-	vwm_window_t	*tmp, *vwin = NULL;
+	vwm_window_t	*tmp;
 
 	list_for_each_entry(tmp, &vwm->windows_mru, windows_mru) {
-		if (tmp->xwindow->id == win) {
-			vwin = tmp;
-			break;
-		}
+		if (tmp->xwindow->id == win)
+			return tmp;
 	}
 
-	return vwin;
+	return NULL;
 }
 
 
