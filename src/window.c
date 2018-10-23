@@ -301,19 +301,16 @@ _retry:
 
 	if (vwin->shelved) {
 		if (next != vwm->focused_shelf) {
-			/* shelf switch, unmap the focused shelf and take it over */
-			/* TODO FIXME: this makes assumptions about the shelf being focused calling unmap/map directly.. */
-			vwm_win_unmap(vwm, vwm->focused_shelf);
-
-			XFlush(VWM_XDISPLAY(vwm));
-
-			vwm_win_map(vwm, next);
+			if (vwm->focused_context == VWM_CONTEXT_SHELF) {
+				vwm_win_unmap(vwm, vwm->focused_shelf);
+				XFlush(VWM_XDISPLAY(vwm));
+				vwm_win_map(vwm, next);
+			}
 			vwm->focused_shelf = next;
 			vwm_win_focus(vwm, next);
 		}
 	} else {
 		if (next != next->desktop->focused_window) {
-			/* focus the changed window */
 			vwm_win_focus(vwm, next);
 			XRaiseWindow(VWM_XDISPLAY(vwm), next->xwindow->id);
 		}
