@@ -590,6 +590,7 @@ static void draw_heirarchy_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_pr
 	} else { /* we're a process having threads, suppress the wchan and state, as they will be displayed for the thread of same pid */
 		snprintf(str, sizeof(str), "  %5i   %n", proc->pid, &str_len);
 	}
+	str_len = MIN(sizeof(str) - 1, str_len);
 	str_width = XTextWidth(charts->chart_font, str, str_len);
 
 	/* the process' comm label indented according to depth, followed with their respective argv's */
@@ -829,6 +830,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	/* only draw the \/\/\ and HZ if necessary */
 	if (chart->redraw_needed || charts->prev_sampling_interval != charts->sampling_interval) {
 		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(charts->sampling_interval == INFINITY ? 0 : 1 / charts->sampling_interval), &str_len);
+		str_len = MIN(sizeof(str) - 1, str_len);
 		XRenderFillRectangle(xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
 			0, 0,						/* dst x, y */
 			chart->visible_width, CHART_ROW_HEIGHT);	/* dst w, h */
