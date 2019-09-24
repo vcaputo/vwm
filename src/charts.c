@@ -24,6 +24,7 @@
 #include <X11/extensions/Xrender.h>
 #include <assert.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <sys/time.h>
 
@@ -120,6 +121,20 @@ static XRenderColor		chart_visible_color = { 0xffff, 0xffff, 0xffff, 0xffff },
 				chart_graphb_color = { 0x0000, 0xffff, 0xffff, 0x3000 };	/* ~cyan */
 static XRenderPictureAttributes	pa_repeat = { .repeat = 1 };
 static XRenderPictureAttributes	pa_no_repeat = { .repeat = 0 };
+
+
+/* wrapper around snprintf always returning the length of what's in the buf */
+static int snpf(char *str, size_t size, const char *format, ...)
+{
+	va_list	ap;
+	int	ret;
+
+	va_start(ap, format);
+	ret = vsnprintf(str, size, format, ap);
+	va_end(ap);
+
+	return MIN(ret, size - 1);
+}
 
 
 /* this callback gets invoked at sample time once "per sys" */
@@ -581,16 +596,15 @@ static void draw_heirarchy_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_pr
 
 	/* put the process' wchan, state, and PID columns @ the far right */
 	if (proc->is_thread || list_empty(&proc->threads)) {	/* only threads or non-threaded processes include the wchan and state */
-		snprintf(str, sizeof(str), "   %.*s %5i %c %n",
-			proc_stat->wchan.len,
-			proc_stat->wchan.len == 1 && proc_stat->wchan.array[0] == '0' ? "-" : proc_stat->wchan.array,
-			proc->pid,
-			proc_stat->state,
-			&str_len);
+		str_len = snpf(str, sizeof(str), "   %.*s %5i %c ",
+				proc_stat->wchan.len,
+				proc_stat->wchan.len == 1 && proc_stat->wchan.array[0] == '0' ? "-" : proc_stat->wchan.array,
+				proc->pid,
+				proc_stat->state);
 	} else { /* we're a process having threads, suppress the wchan and state, as they will be displayed for the thread of same pid */
-		snprintf(str, sizeof(str), "  %5i   %n", proc->pid, &str_len);
+		str_len = snpf(str, sizeof(str), "  %5i   ", proc->pid);
 	}
-	str_len = MIN(sizeof(str) - 1, str_len);
+
 	str_width = XTextWidth(charts->chart_font, str, str_len);
 
 	/* the process' comm label indented according to depth, followed with their respective argv's */
@@ -829,8 +843,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 
 	/* only draw the \/\/\ and HZ if necessary */
 	if (chart->redraw_needed || charts->prev_sampling_interval != charts->sampling_interval) {
-		snprintf(str, sizeof(str), "\\/\\/\\    %2iHz %n", (int)(charts->sampling_interval == INFINITY ? 0 : 1 / charts->sampling_interval), &str_len);
-		str_len = MIN(sizeof(str) - 1, str_len);
+		str_len = snpf(str, sizeof(str), "\\/\\/\\    %2iHz ", (int)(charts->sampling_interval == INFINITY ? 0 : 1 / charts->sampling_interval));
 		XRenderFillRectangle(xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
 			0, 0,						/* dst x, y */
 			chart->visible_width, CHART_ROW_HEIGHT);	/* dst w, h */
