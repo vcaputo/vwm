@@ -378,9 +378,8 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 
 	/* unmonitor stale children on entry, this concludes the two-phase removal of a process */
 	list_for_each_entry_safe(tmp, _tmp, &proc->children, siblings) {
-		if (tmp->is_stale) {
+		if (tmp->is_stale)
 			vmon_proc_unmonitor(vmon, tmp, NULL, NULL);
-		}
 	}
 
 	/* if we have a parent, and our parent has become stale, ensure this, the child, becomes stale as well */
@@ -435,10 +434,9 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 	/* look for children which seem to no longer exist (found by stale generation numbers) and queue them for unmonitoring, flag this as a children change too */
 	found = 0;
 	list_for_each_entry(tmp, &proc->children, siblings) {
-		if (tmp->generation != vmon->generation) {
-			/* set children not found to stale status so the caller can respond and on our next sample invocation we will unmonitor them */
+		/* set children not found to stale status so the caller can respond and on our next sample invocation we will unmonitor them */
+		if (tmp->generation != vmon->generation)
 			found = tmp->is_stale = 1;
-		}
 	}
 
 	/* XXX TODO: does it makes sense for shit to happen here? */
@@ -482,19 +480,18 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 	if (!(*store)) { /* implicit ctor on first sample */
 		*store = calloc(1, sizeof(vmon_proc_follow_threads_t));
 
-		(*store)->task_dir = opendirf(vmon, vmon->proc_dir, "%i/task", proc->pid); 
+		(*store)->task_dir = opendirf(vmon, vmon->proc_dir, "%i/task", proc->pid);
 	} else if ((*store)->task_dir) {
 		seekdir((*store)->task_dir, 0);
-	} 
+	}
 
 	if (!(*store)->task_dir)
 		return SAMPLE_ERROR;
 
 	/* unmonitor stale threads on entry, this concludes the two-phase removal of a thread (just like follow_children) */
 	list_for_each_entry_safe(tmp, _tmp, &proc->threads, threads) {
-		if (tmp->is_stale) {
+		if (tmp->is_stale)
 			vmon_proc_unmonitor(vmon, tmp, NULL, NULL);
-		}
 	}
 
 	start = &proc->threads;
@@ -521,17 +518,14 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 			}
 		}
 
-		if (found || (tmp = vmon_proc_monitor(vmon, proc, tid, (proc->wants | VMON_INTERNAL_PROC_IS_THREAD), NULL, NULL))) {
-			/* position the thread in the threads list, and update the start */
+		if (found || (tmp = vmon_proc_monitor(vmon, proc, tid, (proc->wants | VMON_INTERNAL_PROC_IS_THREAD), NULL, NULL)))
 			start = &tmp->threads;
-		} /* else { vmon_proc_monitor failed just move on } */
 	}
 
 	list_for_each_entry_safe(tmp, _tmp, &proc->threads, threads) {
-		if (tmp->generation != vmon->generation) {
-			/* set children not found to stale status so the caller can respond and on our next sample invocation we will unmonitor them */
+		/* set children not found to stale status so the caller can respond and on our next sample invocation we will unmonitor them */
+		if (tmp->generation != vmon->generation)
 			tmp->is_stale = 1;
-		}
 	}
 
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
@@ -671,7 +665,7 @@ static sample_ret_t proc_sample_files(vmon_t *vmon, vmon_proc_t *proc, vmon_proc
 	} else if ((*store)->fd_dir) {
 		/* we have a directory handle, and we're reentering the function with the directory positioned at the end */
 		seekdir((*store)->fd_dir, 0);
-	} 
+	}
 
 	if (!(*store)->fd_dir)
 		/* we have no directory handle on reentry */
@@ -1395,9 +1389,8 @@ static int sample_siblings_pass2(vmon_t *vmon, list_head_t *siblings)
 
 		sample_siblings_pass2(vmon, &proc->children);	/* recurse into children, we invoke callbacks as encountered on nodes from the leaves up */
 
-		list_for_each_entry(cb, &proc->sample_callbacks, callbacks) {
+		list_for_each_entry(cb, &proc->sample_callbacks, callbacks)
 			cb->func(vmon, vmon->sample_cb_arg, proc, cb->arg);
-		}
 
 		if (!proc->parent && proc->is_new)		/* top-level processes aren't managed by a follower/sampler, so we need to clear their is_new flag, this approach is slightly deviant from the managed case,
 								 * as the managed case will actually allow the process to retain its is_new flag across a vmon_sample() cycle, where we're clearing it @ exit.  It makes
