@@ -381,11 +381,6 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 		if (tmp->is_stale) {
 			vmon_proc_unmonitor(vmon, tmp, NULL, NULL);
 		}
-#ifdef _MOVE_STALE_TO_FRONT
-		 else {
-			break;
-		}
-#endif
 	}
 
 	/* if we have a parent, and our parent has become stale, ensure this, the child, becomes stale as well */
@@ -428,9 +423,6 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 					if (found || (tmp = vmon_proc_monitor(vmon, proc, child_pid, proc->wants, NULL, NULL))) {
 						/* position the process in the siblings list, and update the start */
 						/* move to front breaks vwm, we rely on the stale processes maintaining their position! maybe make it an option to vmon_init() since it can be a useful optimization. */
-#ifdef _MOVE_STALE_TO_FRONT
-						list_move_tail(&tmp->siblings, start);
-#endif
 						start = &tmp->siblings;
 					} /* else { vmon_proc_monitor failed just move on } */
 
@@ -447,12 +439,6 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 			/* set children not found to stale status so the caller can respond and on our next sample invocation we will unmonitor them */
 			found = tmp->is_stale = 1;
 		}
-#ifdef _MOVE_STALE_TO_FRONT
-	/* this depends on the moving of stale entries to the start of the list optimization which breaks vwm, disabled for now */
-		  else {
-			break;
-		}
-#endif
 	}
 
 	/* XXX TODO: does it makes sense for shit to happen here? */
@@ -509,11 +495,6 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 		if (tmp->is_stale) {
 			vmon_proc_unmonitor(vmon, tmp, NULL, NULL);
 		}
-#ifdef _MOVE_STALE_TO_FRONT
-		 else {
-			break;
-		}
-#endif
 	}
 
 	start = &proc->threads;
@@ -542,9 +523,6 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 
 		if (found || (tmp = vmon_proc_monitor(vmon, proc, tid, (proc->wants | VMON_INTERNAL_PROC_IS_THREAD), NULL, NULL))) {
 			/* position the thread in the threads list, and update the start */
-#ifdef _MOVE_STALE_TO_FRONT
-			list_move_tail(&tmp->threads, start);
-#endif
 			start = &tmp->threads;
 		} /* else { vmon_proc_monitor failed just move on } */
 	}
@@ -554,11 +532,6 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 			/* set children not found to stale status so the caller can respond and on our next sample invocation we will unmonitor them */
 			tmp->is_stale = 1;
 		}
-#ifdef _MOVE_STALE_TO_FRONT
-		 else {
-			break;
-		}
-#endif
 	}
 
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
