@@ -412,6 +412,9 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 					/* separator, terminates a PID, search for it in the childrens list */
 					found = 0;
 					list_for_each(cur, start) {
+						if (cur == &proc->children) /* take care to skip the head node */
+							continue;
+
 						if (list_entry(cur, vmon_proc_t, siblings)->pid == child_pid) {
 							/* found the child already monitored, update its generation number and stop searching */
 							tmp = list_entry(cur, vmon_proc_t, siblings);
@@ -1515,7 +1518,7 @@ int vmon_sample(vmon_t *vmon)
 	if (vmon->sample_cb)
 		vmon->sample_cb(vmon, vmon->sample_cb_arg);
 
-	/* then the per-process samplers */	
+	/* then the per-process samplers */
 	if ((vmon->flags & VMON_FLAG_PROC_ARRAY)) {
 		int	j;
 		/* TODO: determine if this really makes sense, if we always maintain a heirarchy even in array mode, then we
