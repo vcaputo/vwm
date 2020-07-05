@@ -1,4 +1,4 @@
-AC_INIT([vwm], [3.0], [vcaputo@gnugeneration.com])
+AC_INIT([vwm], [3.0], [vcaputo@pengaru.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_CONFIG_MACRO_DIRS([m4])
 AC_PROG_CC
