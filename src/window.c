@@ -256,7 +256,7 @@ void vwm_win_focus(vwm_t *vwm, vwm_window_t *vwin)
 
 
 /* focus the next window on a virtual desktop relative to the supplied window, in the specified context, respecting screen boundaries according to fence. */
-vwm_window_t * vwm_win_focus_next(vwm_t *vwm, vwm_window_t *vwin, vwm_fence_t fence)
+vwm_window_t * vwm_win_focus_next(vwm_t *vwm, vwm_window_t *vwin, vwm_direction_t direction, vwm_fence_t fence)
 {
 	const vwm_screen_t	*scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwin->xwindow), *next_scr = NULL;
 	vwm_window_t		*next;
@@ -264,23 +264,51 @@ vwm_window_t * vwm_win_focus_next(vwm_t *vwm, vwm_window_t *vwin, vwm_fence_t fe
 
 _retry:
 	visited_mask = 0;
-	list_for_each_entry(next, &vwin->windows_mru, windows_mru) {
-		/* searching for the next mapped window in this context, using vwin->windows as the head */
-		if (&next->windows_mru == &vwm->windows_mru)
-			continue;	/* XXX: skip the containerless head, we're leveraging the circular list implementation */
 
-		if ((vwin->shelved && next->shelved) ||
-		    ((!vwin->shelved && !next->shelved && next->desktop == vwin->desktop) &&
-		     (fence == VWM_FENCE_IGNORE ||
-		      ((fence == VWM_FENCE_RESPECT || fence == VWM_FENCE_TRY_RESPECT) && vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow) == scr) ||
-		      (fence == VWM_FENCE_VIOLATE && vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow) != scr) ||
-		      (fence == VWM_FENCE_MASKED_VIOLATE && (next_scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow)) != scr &&
-		       !((1UL << next_scr->screen_number) & vwm->fence_mask))
-		   )))
-			break;
+	switch (direction) {
+	case VWM_DIRECTION_FORWARD:
+		list_for_each_entry(next, &vwin->windows_mru, windows_mru) {
+			/* searching for the next mapped window in this context, using vwin->windows as the head */
+			if (&next->windows_mru == &vwm->windows_mru)
+				continue;	/* XXX: skip the containerless head, we're leveraging the circular list implementation */
 
-		if (fence == VWM_FENCE_MASKED_VIOLATE && next_scr && next_scr != scr)
-			visited_mask |= (1UL << next_scr->screen_number);
+			if ( ((next->desktop == vwin->desktop) &&
+			     (fence == VWM_FENCE_IGNORE ||
+			      ((fence == VWM_FENCE_RESPECT || fence == VWM_FENCE_TRY_RESPECT) && vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow) == scr) ||
+			      (fence == VWM_FENCE_VIOLATE && vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow) != scr) ||
+			      (fence == VWM_FENCE_MASKED_VIOLATE && (next_scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow)) != scr &&
+			       !((1UL << next_scr->screen_number) & vwm->fence_mask))
+			   )))
+				break;
+
+			if (fence == VWM_FENCE_MASKED_VIOLATE && next_scr && next_scr != scr)
+				visited_mask |= (1UL << next_scr->screen_number);
+		}
+		break;
+
+	case VWM_DIRECTION_REVERSE:
+		list_for_each_entry_prev(next, &vwin->windows_mru, windows_mru) {
+			/* searching for the next mapped window in this context, using vwin->windows as the head */
+			if (&next->windows_mru == &vwm->windows_mru)
+				continue;	/* XXX: skip the containerless head, we're leveraging the circular list implementation */
+
+		/* TODO: move most of this into a function shared by both direction cases */
+			if ( ((next->desktop == vwin->desktop) &&
+			     (fence == VWM_FENCE_IGNORE ||
+			      ((fence == VWM_FENCE_RESPECT || fence == VWM_FENCE_TRY_RESPECT) && vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow) == scr) ||
+			      (fence == VWM_FENCE_VIOLATE && vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow) != scr) ||
+			      (fence == VWM_FENCE_MASKED_VIOLATE && (next_scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, next->xwindow)) != scr &&
+			       !((1UL << next_scr->screen_number) & vwm->fence_mask))
+			   )))
+				break;
+
+			if (fence == VWM_FENCE_MASKED_VIOLATE && next_scr && next_scr != scr)
+				visited_mask |= (1UL << next_scr->screen_number);
+		}
+		break;
+
+	default:
+		assert(0);
 	}
 
 	if (fence == VWM_FENCE_TRY_RESPECT && next == vwin) {
@@ -331,7 +359,7 @@ void vwm_win_shelve(vwm_t *vwm, vwm_window_t *vwin)
 
 	/* shelving focused window, focus the next window */
 	if (vwin == vwin->desktop->focused_window)
-		vwm_win_mru(vwm, vwm_win_focus_next(vwm, vwin, VWM_FENCE_RESPECT));
+		vwm_win_mru(vwm, vwm_win_focus_next(vwm, vwin, VWM_DIRECTION_FORWARD, VWM_FENCE_RESPECT));
 
 	if (vwin == vwin->desktop->focused_window)
 		/* TODO: we can probably put this into vwm_win_focus_next() and have it always handled there... */
@@ -354,7 +382,7 @@ void vwm_win_unfocus(vwm_t *vwm, vwm_window_t *vwin)
 	/* TODO: there's probably some icky behaviors for focused windows unmapping/destroying in unfocused contexts, we probably jump contexts suddenly. */
 	if (vwin == vwm->focused_shelf) {
 		VWM_TRACE("unfocusing focused shelf");
-		vwm_win_focus_next(vwm, vwin, VWM_FENCE_IGNORE);
+		vwm_win_focus_next(vwm, vwin, VWM_DIRECTION_FORWARD, VWM_FENCE_IGNORE);
 
 		if (vwin == vwm->focused_shelf) {
 			VWM_TRACE("shelf empty, leaving");
@@ -367,7 +395,7 @@ void vwm_win_unfocus(vwm_t *vwm, vwm_window_t *vwin)
 	/* if we're the focused window cycle the focus to the next window on the desktop if possible */
 	if (vwin->desktop->focused_window == vwin) {
 		VWM_TRACE("unfocusing focused window");
-		vwm_win_focus_next(vwm, vwin, VWM_FENCE_TRY_RESPECT);
+		vwm_win_focus_next(vwm, vwin, VWM_DIRECTION_FORWARD, VWM_FENCE_TRY_RESPECT);
 	}
 
 	if (vwin->desktop->focused_window == vwin) {

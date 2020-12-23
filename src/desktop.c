@@ -17,6 +17,7 @@
  */
 	/* virtual desktops */
 
+#include <assert.h>
 #include <X11/Xlib.h>
 #include <stdlib.h>
 #include <string.h>
@@ -80,39 +81,58 @@ int vwm_desktop_focus(vwm_t *vwm, vwm_desktop_t *desktop)
 	return 1;
 }
 
-/* return next MRU desktop relative to the supplied desktop */
-vwm_desktop_t * vwm_desktop_next_mru(vwm_t *vwm, vwm_desktop_t *desktop)
+
+/* return next MRU desktop relative to the supplied desktop, wraps-around */
+vwm_desktop_t * vwm_desktop_next_mru(vwm_t *vwm, vwm_desktop_t *desktop, vwm_direction_t direction)
 {
-	list_head_t	*next;
+	vwm_desktop_t	*next = desktop;
 
 	/* this dance is necessary because the list head @ vwm->desktops_mru has no vwm_desktop_t container,
 	 * and we're exploiting the circular nature of the doubly linked lists, so we need to take care to skip
 	 * past the container-less head.
 	 */
-	if (desktop->desktops_mru.next == &vwm->desktops_mru) {
-		next = desktop->desktops_mru.next->next;
-	} else {
-		next = desktop->desktops_mru.next;
+	switch (direction) {
+	case VWM_DIRECTION_FORWARD:
+		if (next->desktops_mru.next == &vwm->desktops_mru) {
+			next = list_entry(next->desktops_mru.next->next, vwm_desktop_t, desktops_mru);
+		} else {
+			next = list_entry(next->desktops_mru.next, vwm_desktop_t, desktops_mru);
+		}
+		break;
+
+	case VWM_DIRECTION_REVERSE:
+		if (next->desktops_mru.prev == &vwm->desktops_mru) {
+			next = list_entry(next->desktops_mru.prev->prev, vwm_desktop_t, desktops_mru);
+		} else {
+			next = list_entry(next->desktops_mru.prev, vwm_desktop_t, desktops_mru);
+		}
+		break;
+
+	default:
+		assert(0);
 	}
 
-	return list_entry(next, vwm_desktop_t, desktops_mru);
+	return next;
 }
+
 
 /* return next desktop spatially relative to the supplied desktop, no wrap-around */
-vwm_desktop_t * vwm_desktop_next(vwm_t *vwm, vwm_desktop_t *desktop)
+vwm_desktop_t * vwm_desktop_next(vwm_t *vwm, vwm_desktop_t *desktop, vwm_direction_t direction)
 {
-	if (desktop->desktops.next != &vwm->desktops)
-		desktop = list_entry(desktop->desktops.next, vwm_desktop_t, desktops);
+	switch (direction) {
+	case VWM_DIRECTION_FORWARD:
+		if (desktop->desktops.next != &vwm->desktops)
+			return list_entry(desktop->desktops.next, vwm_desktop_t, desktops);
+		break;
 
-	return desktop;
-}
+	case VWM_DIRECTION_REVERSE:
+		if (desktop->desktops.prev != &vwm->desktops)
+			return list_entry(desktop->desktops.prev, vwm_desktop_t, desktops);
+		break;
 
-
-/* return previous desktop spatially relative to the supplied desktop, no wrap-around */
-vwm_desktop_t * vwm_desktop_prev(vwm_t *vwm, vwm_desktop_t *desktop)
-{
-	if (desktop->desktops.prev != &vwm->desktops)
-		desktop = list_entry(desktop->desktops.prev, vwm_desktop_t, desktops);
+	default:
+		assert(0);
+	}
 
 	return desktop;
 }

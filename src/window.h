@@ -4,6 +4,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
+#include "direction.h"
 #include "list.h"
 #include "screen.h"
 
@@ -71,7 +72,7 @@ typedef enum _vwm_fence_t {
 	VWM_FENCE_MASKED_VIOLATE	/* leave the screen for any other not masked */
 } vwm_fence_t;
 
-vwm_window_t * vwm_win_focus_next(vwm_t *vwm, vwm_window_t *vwin, vwm_fence_t fence);
+vwm_window_t * vwm_win_focus_next(vwm_t *vwm, vwm_window_t *vwin, vwm_direction_t direction, vwm_fence_t fence);
 void vwm_win_shelve(vwm_t *vwm, vwm_window_t *vwin);
 void vwm_win_unfocus(vwm_t *vwm, vwm_window_t *vwin);
 vwm_xwindow_t * vwm_win_unmanage(vwm_t *vwm, vwm_window_t *vwin);

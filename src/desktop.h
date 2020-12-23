@@ -1,6 +1,7 @@
 #ifndef _DESKTOP_H
 #define _DESKTOP_H
 
+#include "direction.h"
 #include "list.h"
 #include "window.h"
 
@@ -18,8 +19,7 @@ void vwm_desktop_mru(vwm_t *vwm, vwm_desktop_t *desktop);
 int vwm_desktop_focus(vwm_t *vwm, vwm_desktop_t *desktop);
 vwm_desktop_t * vwm_desktop_create(vwm_t *vwm, char *name);
 void vwm_desktop_destroy(vwm_t *vwm, vwm_desktop_t *desktop);
-vwm_desktop_t * vwm_desktop_next_mru(vwm_t *vwm, vwm_desktop_t *desktop);
-vwm_desktop_t * vwm_desktop_next(vwm_t *vwm, vwm_desktop_t *desktop);
-vwm_desktop_t * vwm_desktop_prev(vwm_t *vwm, vwm_desktop_t *desktop);
+vwm_desktop_t * vwm_desktop_next_mru(vwm_t *vwm, vwm_desktop_t *desktop, vwm_direction_t direction);
+vwm_desktop_t * vwm_desktop_next(vwm_t *vwm, vwm_desktop_t *desktop, vwm_direction_t direction);
 
 #endif

@@ -29,7 +29,8 @@
 #include "window.h"
 #include "xwindow.h"
 
-static int	key_is_grabbed;	/* flag for tracking keyboard grab state */
+static int		key_is_grabbed;	/* flag for tracking keyboard grab state */
+static vwm_direction_t	direction = VWM_DIRECTION_FORWARD;	/* flag for reversing directional actions */
 
 /* Poll the keyboard state to see if _any_ keys are pressed */
 static int keys_pressed(vwm_t *vwm)
@@ -77,6 +78,11 @@ void vwm_key_released(vwm_t *vwm, Window win, XKeyReleasedEvent *keyrelease)
 			if (vwm->focused_context == VWM_CONTEXT_DESKTOP && vwm->focused_desktop)
 				vwm_desktop_mru(vwm, vwm->focused_desktop);
 
+			break;
+
+		case XK_r:
+			VWM_TRACE("XK_r released with direction=%i", direction);
+			direction = VWM_DIRECTION_FORWARD;
 			break;
 
 		default:
@@ -133,6 +139,11 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			VWM_TRACE("aborting with origin %p", vwm->focused_origin);
 			break;
 
+		case XK_r: /* reverse directional actions */
+			VWM_TRACE("XK_r pressed with direction=%i", direction);
+			direction = VWM_DIRECTION_REVERSE;
+			break;
+
 		case XK_grave: /* toggle shelf visibility */
 			vwm_context_focus(vwm, VWM_CONTEXT_OTHER);
 			break;
@@ -143,15 +154,17 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			/* focus the next window, note this doesn't affect MRU yet, that happens on Mod1 release */
 			if (vwin) {
 				if (keypress->state & ShiftMask) {
-					vwm_win_focus_next(vwm, vwin, VWM_FENCE_MASKED_VIOLATE);
+					vwm_win_focus_next(vwm, vwin, direction, VWM_FENCE_MASKED_VIOLATE);
 				} else {
-					vwm_win_focus_next(vwm, vwin, VWM_FENCE_RESPECT);
+					vwm_win_focus_next(vwm, vwin, direction, VWM_FENCE_RESPECT);
 				}
 			}
 			break;
 
 		case XK_space: { /* cycle focused desktop utilizing MRU */
-			vwm_desktop_t	*next_desktop = vwm_desktop_next_mru(vwm, vwm->focused_desktop);
+			vwm_desktop_t	*next_desktop;
+
+			next_desktop = vwm_desktop_next_mru(vwm, vwm->focused_desktop, direction);
 
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
@@ -205,7 +218,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			if (keypress->state & ShiftMask) {
 				if (vwin) {
 					/* migrate the focused window with the desktop focus to the previous desktop */
-					vwm_win_migrate(vwm, vwin, vwm_desktop_prev(vwm, vwin->desktop));
+					vwm_win_migrate(vwm, vwin, vwm_desktop_next(vwm, vwin->desktop, VWM_DIRECTION_REVERSE));
 				}
 			} else {
 				if (vwm->focused_context == VWM_CONTEXT_SHELF) {
@@ -213,7 +226,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 					vwm_context_focus(vwm, VWM_CONTEXT_DESKTOP);
 				} else {
 					/* focus the previous desktop */
-					vwm_desktop_focus(vwm, vwm_desktop_prev(vwm, vwm->focused_desktop));
+					vwm_desktop_focus(vwm, vwm_desktop_next(vwm, vwm->focused_desktop, VWM_DIRECTION_REVERSE));
 				}
 			}
 			break;
@@ -224,7 +237,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			if (keypress->state & ShiftMask) {
 				if (vwin) {
 					/* migrate the focused window with the desktop focus to the next desktop */
-					vwm_win_migrate(vwm, vwin, vwm_desktop_next(vwm, vwin->desktop));
+					vwm_win_migrate(vwm, vwin, vwm_desktop_next(vwm, vwin->desktop, VWM_DIRECTION_FORWARD));
 				}
 			} else {
 				if (vwm->focused_context == VWM_CONTEXT_SHELF) {
@@ -232,7 +245,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 					vwm_context_focus(vwm, VWM_CONTEXT_DESKTOP);
 				} else {
 					/* focus the next desktop */
-					vwm_desktop_focus(vwm, vwm_desktop_next(vwm, vwm->focused_desktop));
+					vwm_desktop_focus(vwm, vwm_desktop_next(vwm, vwm->focused_desktop, VWM_DIRECTION_FORWARD));
 				}
 			}
 			break;
