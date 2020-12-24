@@ -204,10 +204,10 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			if (keypress->state & ShiftMask) {
 				if (vwin) {
 					/* migrate the focused window to a newly created virtual desktop, focusing the new desktop simultaneously */
-					vwm_win_migrate(vwm, vwin, vwm_desktop_create(vwm, NULL));
+					vwm_win_migrate(vwm, vwin, vwm_desktop_create(vwm));
 				}
 			} else {
-				vwm_desktop_focus(vwm, vwm_desktop_create(vwm, NULL));
+				vwm_desktop_focus(vwm, vwm_desktop_create(vwm));
 				vwm_desktop_mru(vwm, vwm->focused_desktop);
 			}
 			break;

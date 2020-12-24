@@ -138,7 +138,7 @@ vwm_desktop_t * vwm_desktop_next(vwm_t *vwm, vwm_desktop_t *desktop, vwm_directi
 }
 
 /* create a virtual desktop */
-vwm_desktop_t * vwm_desktop_create(vwm_t *vwm, char *name)
+vwm_desktop_t * vwm_desktop_create(vwm_t *vwm)
 {
 	vwm_desktop_t	*desktop;
 
@@ -147,8 +147,6 @@ vwm_desktop_t * vwm_desktop_create(vwm_t *vwm, char *name)
 		VWM_PERROR("Failed to allocate desktop");
 		goto _fail;
 	}
-
-	desktop->name = name == NULL ? name : strdup(name);
 
 	list_add_tail(&desktop->desktops, &vwm->desktops);
 	list_add_tail(&desktop->desktops_mru, &vwm->desktops_mru);

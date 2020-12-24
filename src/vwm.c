@@ -134,7 +134,7 @@ static vwm_t * vwm_startup(void)
 	XSetInputFocus(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), RevertToPointerRoot, CurrentTime);
 
 	/* create initial virtual desktop */
-	vwm_desktop_focus(vwm, vwm_desktop_create(vwm, NULL));
+	vwm_desktop_focus(vwm, vwm_desktop_create(vwm));
 	vwm_desktop_mru(vwm, vwm->focused_desktop);
 
 	/* manage all preexisting windows */

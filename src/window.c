@@ -572,7 +572,7 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 	/* if the desktop has no focused window yet, automatically focus the newly managed one, provided we're on the desktop context */
 	if (!vwm->focused_desktop->focused_window && vwm->focused_context == VWM_CONTEXT_DESKTOP) {
-		VWM_TRACE("Mapped new window \"%s\" is alone on desktop \"%s\", focusing", xwin->name, vwm->focused_desktop->name);
+		VWM_TRACE("Mapped new window \"%s\" is alone on desktop, focusing", xwin->name);
 		vwm_win_focus(vwm, vwin);
 	}
 
