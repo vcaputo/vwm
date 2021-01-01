@@ -14,7 +14,7 @@ typedef struct _vwm_desktop_t {
 	vwm_window_t	*focused_window;	/* the focused window on this virtual desktop */
 } vwm_desktop_t;
 
-void vwm_desktop_mru(vwm_t *vwm, vwm_desktop_t *desktop);
+vwm_desktop_t * vwm_desktop_mru(vwm_t *vwm, vwm_desktop_t *desktop);
 int vwm_desktop_focus(vwm_t *vwm, vwm_desktop_t *desktop);
 vwm_desktop_t * vwm_desktop_create(vwm_t *vwm);
 void vwm_desktop_destroy(vwm_t *vwm, vwm_desktop_t *desktop);

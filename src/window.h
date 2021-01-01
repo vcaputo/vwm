@@ -41,7 +41,7 @@ typedef struct _vwm_window_t {
 
 void vwm_win_unmap(vwm_t *vwm, vwm_window_t *vwin);
 void vwm_win_map(vwm_t *vwm, vwm_window_t *vwin);
-void vwm_win_mru(vwm_t *vwm, vwm_window_t *vwin);
+vwm_window_t * vwm_win_mru(vwm_t *vwm, vwm_window_t *vwin);
 vwm_window_t * vwm_win_lookup(vwm_t *vwm, Window win);
 vwm_window_t * vwm_win_get_focused(vwm_t *vwm);
 void vwm_win_set_focused(vwm_t *vwm, vwm_window_t *vwin);

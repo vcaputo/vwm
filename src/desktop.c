@@ -29,10 +29,12 @@
 #include "xwindow.h"
 
 /* make the specified desktop the most recently used one */
-void vwm_desktop_mru(vwm_t *vwm, vwm_desktop_t *desktop)
+vwm_desktop_t * vwm_desktop_mru(vwm_t *vwm, vwm_desktop_t *desktop)
 {
 	VWM_TRACE("MRU desktop: %p", desktop);
 	list_move(&desktop->desktops_mru, &vwm->desktops_mru);
+
+	return desktop;
 }
 
 

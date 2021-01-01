@@ -58,9 +58,11 @@ void vwm_win_map(vwm_t *vwm, vwm_window_t *vwin)
 
 
 /* make the specified window the most recently used one */
-void vwm_win_mru(vwm_t *vwm, vwm_window_t *vwin)
+vwm_window_t * vwm_win_mru(vwm_t *vwm, vwm_window_t *vwin)
 {
 	list_move(&vwin->windows_mru, &vwm->windows_mru);
+
+	return vwin;
 }
 
 
