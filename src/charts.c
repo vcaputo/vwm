@@ -829,6 +829,15 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 }
 
 
+/* convert chart sampling interval back into an integral hertz value, basically
+ * open-coded ceilf(1.f / charts->sampling_interval) to avoid needing -lm.
+ */
+static unsigned interval_as_hz(vwm_charts_t *charts)
+{
+	return (1.f / charts->sampling_interval + .5f);
+}
+
+
 /* recursive draw function entrypoint, draws the IOWait/Idle/HZ row, then enters draw_chart_rest() */
 static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int *depth, int *row)
 {
@@ -843,7 +852,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 
 	/* only draw the \/\/\ and HZ if necessary */
 	if (chart->redraw_needed || charts->prev_sampling_interval != charts->sampling_interval) {
-		str_len = snpf(str, sizeof(str), "\\/\\/\\    %2iHz ", (int)(charts->sampling_interval == INFINITY ? 0 : 1 / charts->sampling_interval));
+		str_len = snpf(str, sizeof(str), "\\/\\/\\    %2uHz ", interval_as_hz(charts));
 		XRenderFillRectangle(xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
 			0, 0,						/* dst x, y */
 			chart->visible_width, CHART_ROW_HEIGHT);	/* dst w, h */
