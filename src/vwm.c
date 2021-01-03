@@ -70,6 +70,8 @@ static vwm_t * vwm_startup(void)
 		goto _err;
 	}
 
+	INIT_LIST_HEAD(&vwm->contexts);
+	INIT_LIST_HEAD(&vwm->contexts_mru);
 	INIT_LIST_HEAD(&vwm->desktops);
 	INIT_LIST_HEAD(&vwm->desktops_mru);
 	INIT_LIST_HEAD(&vwm->windows_mru);
@@ -125,6 +127,11 @@ static vwm_t * vwm_startup(void)
 #include "colors.def"
 #undef color
 
+#define color(_num, _str) \
+	XAllocNamedColor(VWM_XDISPLAY(vwm), VWM_XCMAP(vwm), _str, &vwm->context_colors[_num], &vwm->context_colors[_num]);
+#include "context_colors.def"
+#undef color
+
 	XSelectInput(VWM_XDISPLAY(vwm), VWM_XROOT(vwm),
 		     FocusChangeMask | PropertyChangeMask | SubstructureNotifyMask | SubstructureRedirectMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask);
 	XGrabKey(VWM_XDISPLAY(vwm), AnyKey, WM_GRAB_MODIFIER, VWM_XROOT(vwm), False, GrabModeAsync, GrabModeAsync);
@@ -133,8 +140,9 @@ static vwm_t * vwm_startup(void)
 
 	XSetInputFocus(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), RevertToPointerRoot, CurrentTime);
 
-	/* create initial virtual desktop */
-	vwm_desktop_focus(vwm, vwm_desktop_create(vwm));
+	/* create initial contexts and desktop */
+	vwm_desktop_create(vwm, NULL); /* shelf */
+	vwm_desktop_focus(vwm, vwm_desktop_create(vwm, NULL)); /* general */
 	vwm_desktop_mru(vwm, vwm->focused_desktop);
 
 	/* manage all preexisting windows */

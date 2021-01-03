@@ -35,7 +35,6 @@ typedef struct _vwm_window_t {
 	unsigned int		autoconfigured:3;	/* autoconfigured window states (none/quarter/half/full/all) */
 	unsigned int		mapping:1;		/* is the window being mapped? (by vwm) */
 	unsigned int		unmapping:1;		/* is the window being unmapped? (by vwm) */
-	unsigned int		shelved:1;		/* is the window shelved? */
 } vwm_window_t;
 
 
@@ -78,6 +77,7 @@ void vwm_win_unfocus(vwm_t *vwm, vwm_window_t *vwin);
 vwm_xwindow_t * vwm_win_unmanage(vwm_t *vwm, vwm_window_t *vwin);
 vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin);
 void vwm_win_migrate(vwm_t *vwm, vwm_window_t *vwin, vwm_desktop_t *desktop);
+void vwm_win_send(vwm_t *vwm, vwm_window_t *vwin, vwm_desktop_t *desktop);
 
 
 #endif

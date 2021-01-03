@@ -1,72 +1,164 @@
                                     \/\/\
 
-Built-ins:
+Modifiers:
 
-  Mod1-RClick         Focus the clicked window, but suppress raising
+  Mod1-r-             Modifies some desktop/context/window switching
+                      operations to be reversed.  By itself is effectively
+                      a noop.
+
+                      Unlike the other modifiers, I haven't bothered
+                      explicitly documenting -r's applicability below.
+                      It's basically: Tab, Space, and `/Grave.
+
+  Mod1-Shift-         Modifies many operations into "Migrates".  A migrate
+                      is a focused desktop/context changing operation which
+                      brings the currently focused window along.  By itself
+                      is effectively a noop.
+
+  Mod1-s-             Modifies window "Migrate" operations into "Send", by
+                      itself is effectively a noop. (Was "shelve" window in
+                      previous versions)
+
+  Mod1-Shift-s-       Modifies some operations into a "Migrate"-like
+                      "Send".  Where a plain "Send" tends to create a new
+                      empty desktop for receiving the sent window, when
+                      combined with Shift, an existing focused desktop at
+                      the destination will be used to receive the sent
+                      window, which is how migrates work, but unlike
+                      migrate, no actual switching occurs.
+
+                      These also haven't been explicitly documented below,
+                      currently it's basically: `/Grave, and 0-9.
+
+
+Built-in operations:
+
+  Mod1-RClick         Focus the clicked window, but suppress raising.
 
   Mod1-RClick-drag    Focus the clicked window, suppress raising, resizing
-		      the window from its nearest corner until drag
-                      completes
+                      the window from its nearest corner until drag
+                      completes.
 
-  Mod1-LClick         Focus and raise the clicked window
+  Mod1-LClick         Focus and raise the clicked window.
 
   Mod1-LClick-drag    Focus and raise the clicked window, moving the window
-                      until the drag completes
+                      until the drag completes.
 
-* Mod1-l              Switch to virtual desktop to the right (if exists)
+* Mod1-l              Switch to virtual desktop to the right (if exists).
 
-* Mod1-h              Switch to virtual desktop to the left (if exists)
+* Mod1-h              Switch to virtual desktop to the left (if exists).
 
   Mod1-j              Lower focused window, if the focused window is in
-		      "allscreen" mode it will simply be fullscreened first
-                      without lowering
+                      "allscreen" mode it will simply be fullscreened first
+                      without lowering.
 
   Mod1-k [-k [-k]     Raise focused window [a second k raises and
           [-k] [-k]]  fullscreens the window [a third k raises and
-		      "allscreens" without a visible border [a fourth k
-		      raises and fullscreens across all heads [a fifth k
-                      raises and "allscreens" across all heads]]]
+                      "allscreens" without a visible border [a fourth k
+                      raises and fullscreens across all heads [a fifth k
+                      raises and "allscreens" across all heads]]].
 
-  Mod1-Shift-k        Shelve focused window and switch to the shelf context
+* Mod1-Shift-k        Migrate the focused window to the next/upper context
+                      (if exists), keeping the window focused.
 
-  Mod1-Shift-j        Migrate the focused window from the shelf to the last
-		      focused virtual desktop, switch to that virtual
-                      desktop, and focus the migrated window
+* Mod1-Shift-j        Migrate the focused window to the previous/lower
+                      context (if exists), keeping the window focused.
 
 * Mod1-Shift-l        Migrate the focused window to the virtual desktop
-		      to the right (if exists), keeping the window focused
+                      to the right (if exists), keeping the window focused.
 
 * Mod1-Shift-h        Migrate the focused window to the virtual desktop
-		      to the left (if exists), keeping the window focused
+                      to the left (if exists), keeping the window focused.
 
-  Mod1-v              Create a new virtual desktop and switch to it
+* Mod1-s-k            Send the focused window to the next/upper context's
+                      focused desktop (if exists), keeping the window
+                      focused in the destination, but without switching to
+                      the destination.
 
-  Mod1-Shift-v        Create a new virtual desktop, move the focused window
-                      to it, and switch to it
+* Mod1-s-j            Send the focused window to the previous/lower
+                      context's focused desktop (if exists), keeping the
+                      window focused in the destination, but without
+                      switching to the destination.
 
-* Mod1-Space          Switch to the most recently used virtual desktop
-		      (like Mod1-Tab but for virtual desktops)
+* Mod1-s-l            Send the focused window to the virtual desktop
+                      to the right within the same context (if exists),
+                      keeping the window focused in the destination, but
+                      without switching to the destination.
 
-* Mod1-Shift-Space    Switch to the most recently used virtual desktop,
-		      bringing the focused window with
+* Mod1-s-h            Migrate the focused window to the virtual desktop
+                      to the left within the same context (if exists),
+                      keeping the window focused in the destination, but
+                      without switching to the destination.
 
-  Mod1-`              Alternate between shelf (if populated) and virtual
-                      desktop contexts
+  Mod1-v              Create a new empty virtual desktop within the current
+                      context and switch to it.
 
-  Mod1-s              Shelve the focused window without switching to the
-                      shelf, adopting the newly shelved window as the
-                      focused window within the shelf
+  Mod1-Shift-v        Create a new virtual desktop within the current
+                      context and switch to it, bringing the currently
+                      focused window along (if present).
+
+  Mod1-s-v            Create a new virtual desktop within the current
+                      context, send the focused window to it, but don't
+                      switch to the new virtual desktop.
+
+  Mod1-c              Create a new empty virtual desktop within the next
+                      unused context, implicitly creating a new context,
+                      and switch to it.
+
+  Mod1-Shift-c        Create a new empty virtual desktop within the next
+                      unused context, implicitly creating a new context,
+                      and switch to it, bringing the currently focused
+                      window along (if present).
+
+  Mod1-s-c            Create a new empty virtual desktop within the next
+                      unused context, implicitly creating a new context,
+                      send the focused window to it, but don't switch to
+                      the new virtual desktop/context.
+
+  Mod1-0...9          Switch to the numbered context's focused desktop,
+                      implicitly creating it if currently unused.
+
+  Mod1-Shift-0..9     Switch to the numbered context's focused desktop,
+                      implicitly creating it if currently unused, bringing
+                      the focused window along (if present).
+
+  Mod1-s-0..9         Send the focused window (if present) to a newly
+                      created desktop within the numbered context.
+
+* Mod1-Space          Switch to the next most recently used virtual desktop
+                      within the current context (like Mod1-Tab but for
+                      virtual desktops).
+
+* Mod1-Shift-Space    Switch to the next most recently used virtual desktop
+                      within the current context, bringing the focused
+                      window along.
+
+  Mod1-s-Space        Send the focused window to the next most recently
+                      used desktop within the current context, keeping it
+                      focused there, but without actually switching
+                      desktops.
+
+  Mod1-`              Switch to the next most recently used context's
+                      focused virtual desktop.
+
+  Mod1-Shift-`        Switch to the most recently used context's focused
+                      virtual desktop, bringing the focused window along.
+
+  Mod1-s-`            Send the currently focused window to a newly created
+                      desktop within the next most recently used context,
+                      without actually switching to it.
 
 * Mod1-Tab            Focus and raise the next window in the current
-                      context (shelf or virtual desktop), the focused
-                      window is not 'committed' as the MRU window until
-                      Mod1 is released, so you may peruse intermediate
-                      windows without affecting the order until releasing
-                      Mod1.  In multihead configurations the next window
-                      selection is confined to the current screen.
+                      virtual desktop, the focused window is not
+                      'committed' as the MRU window until Mod1 is released,
+                      so you may peruse intermediate windows without
+                      affecting the MRU order until releasing Mod1.  In
+                      multihead configurations the next window selection is
+                      further confined to within the current screen+desktop.
 
   Mod1-Shift-Tab      Identical to Mod1-Tab except switches to the MRU
-		      window on another screen in a multihead configuration
+                      window on another screen in a multihead
+                      configuration.
 
   Mod1-d              Request the client destroy the focused window, or
                       destroy the current virtual desktop when no windows
@@ -122,8 +214,8 @@ Built-ins:
       If a simultaneous second Mod1 is pressed at any point during a *'d
       command, the window (and its desktop) focused when the *'d command
       began will immediately be refocused - but not raised.  This is
-      intentional to simplify the arranging of obscured focused windows.  If
-      you find yourself restored to a desktop full of windows where your
+      intentional to simplify the arranging of obscured focused windows.
+      If you find yourself restored to a desktop full of windows where your
       focused window is totally obscured/invisible, simply press Mod1-k to
       raise it if desired.
 
@@ -142,85 +234,127 @@ Default launchers (configure by editing launchers.def and rebuild):
 
 General:
 
-  Newly created windows are raised but not focused unless they are the first
-  window on an otherwise empty virtual desktop, then they are focused as well.
-  When new windows appear on a populated virtual desktop, they are inserted
-  immediately after the currently focused window in the windows list, so a
-  Mod1-Tab will immediately focus new windows.  Windows are kept in a MRU (Most
-  Recently Used) order, keeping it efficient to alternate between an evolving
-  set of active windows.
+  Newly created windows are raised but not focused unless they are the
+  first window on an otherwise empty virtual desktop, then they are focused
+  as well.
 
-  The shelf is a sort of omnipresent and limited virtual desktop always
-  available via Mod1-`, it only shows a single window at a time, Mod1-Tab
-  cycles through the shelved windows.  I use it as a place to stow xterms
-  running backround processes I would like to retain the ability to observe the
-  output of or interact with occasionally.  Programs like transmission-gtk,
-  cmus, wpa_supplicant under xterm, sometimes even iceweasel sessions find
-  themselves in my shelf on a regular basis.
+  When new windows appear on a non-empty virtual desktop, they are inserted
+  immediately after the currently focused window in the windows list, so a
+  Mod1-Tab will immediately focus new windows.  Windows are kept in a MRU
+  (Most Recently Used) order, keeping it efficient to alternate between an
+  evolving set of active windows.  Mod1-r-Tab, using r as a modifier, may
+  be used to reverse the switching direction, handy for undoing an
+  accidental overshoot.
+
+  Like windows, virtual desktops are also kept on an MRU-ordered list.
+  These are cycled through via Mod1-Space, created with Mod1-v, and
+  destroyed with Mod1-d when empty.  As with windows, Mod1-r-Space may be
+  used to reverse the switching direction.
+
+  Virtual desktops are grouped by contexts.  Contexts are also kept on
+  MRU-ordered lists, which are cycled through via Mod1-`, created with
+  Mod1-c, and switched to by number with Mod1-0 through 9, which implicitly
+  creates the switched-to context if needed.
+
+  Prior versions of vwm included a "shelf" feature, this has been removed
+  in favor of the more generalized contexts.  In the past Mod1-s would
+  "shelve" a window, and Mod1-` would switch between the shelf and focused
+  virtual desktop.  Now Mod1-s is a modifier for sending windows elsewhere,
+  with one of the destinations being other contexts.
+
+  The shelf was used as a sort of junk drawer for things like xterms
+  running background processes without losing easy access to their
+  interactivity/output, while not polluting the active virtual desktops.
+
+  When vwm starts, it creates two contexts, numbers 0 and 1.  1 is what's
+  focused on startup, with 0 intended to serve as the shelf equivalent.
+  Now users may send windows to the shelf/junk drawer equivalent by
+  pressing Mod1-s-0, or Mod1-Shift-s-0, the former creating a new virtual
+  desktop for the sent window in context 0, the latter targeting the
+  existing focused desktop in context 0.  Omitting the -s- from the former
+  switches to the focused desktop in contetxt 0, from the latter migrates
+  the focused window to the focused desktop in context 0.
 
 
 Multihead/Xinerama:
 
-  In multihead configurations new windows are placed on the screen containing
-  the pointer if that screen is empty.  Should the pointer be on a non-empty
-  screen, then new windows are placed on the screen containing the currently
-  focused window.
+  In multihead configurations, new windows are placed on the screen
+  containing the pointer, if that screen is empty.  Should the pointer be
+  on a non-empty screen, then new windows are placed on the screen
+  containing the currently focused window.
 
   New windows will automatically be focused if the screen they were placed on
   is empty, even if their virtual desktop is not, which is a divergence from
   the single-headed behavior where only lone windows on virtual desktops are
   automatically focused.
 
+  Things like Mod1-[, Mod1-], and mod1-k-k respect screen boundaries of the
+  window's majority containing screen, and mod1-k-k-k mod1-k-k-k-k can be
+  used to violate those boundaries for creating fullscreen/allscreen
+  windows spanning multiple displays.
+  
+  Multihead support is currently very limited.  There's currently no
+  builtin for things like migrating windows to different screens, which
+  would be useful, especially for the mod1-[, mod1-], mod1-k-k style
+  autoconfigured windows, since they could automatically reconfigure
+  themselves migrating to different screen dimensions.  The best way to
+  move windows to different screens is to Mod1-LClick-drag until the window
+  is at least mostly within the destination screen.  At that point all the
+  autoconfigure window builtins utilize the most-overlapped screen as the
+  container.
+
 
 Composite/Monitoring:
 
-  One reason vwm was created was to provide a simplified platform for the
-  research and development of a window manager with integrated omnipresent
-  first-class local process monitoring.  Early attempts were made to modify an
-  existing window manager (WindowMaker) which produced unsatisfactory though
-  inspiring results.  The window managers vwm[12] were created shortly after to
-  flesh out the interaction model and solidify an perfectly usable and easily
-  modified window manager foundation, while libvmon was created in parallel to
-  facilitate the efficient process monitoring required for such a task.
+  One reason vwm was created was to provide a simplified platform for
+  research and development of a window manager having integrated local
+  process CPU utilization monitoring.  Early attempts were made to modify
+  an existing window manager (WindowMaker) which produced unsatisfactory
+  though inspiring results.  The window managers vwm[12] were created
+  shortly after to flesh out the interaction model and solidify a tolerably
+  usable and easily modified window manager foundation, while libvmon was
+  created in parallel to facilitate the lightweight, high-frequency process
+  monitoring required for such a task.
 
-  After a number of iterations it was found that the Composite extension (along
-  with the accompanying Damage and Render extensions) would give the best
-  results on a modern Xorg linux system.  Compositing hurts the rendering
-  performance of X applications significantly however, so a hybrid model has
-  been employed.
+  After a number of iterations it was found that the Composite extension
+  (along with the accompanying Damage and Render extensions) would give the
+  best results on a modern Xorg linux system.  Compositing hurts the
+  rendering performance of X applications significantly however, so a
+  hybrid model has been employed.
 
-  Monitoring overlays visibility is toggled using Mod1-Semicolon, the sample
-  rate is increased using Mod1-Right, and decreased using Mod1-Left.
+  Monitoring overlays visibility is toggled using Mod1-Semicolon, the
+  sample rate is increased using Mod1-Right, and decreased using Mod1-Left.
 
-  When the monitoring is not visible, vwm3 continues to leave X in immediate
-  rendering mode with no additional overhead in the rendering pipeline, just
-  like vwm2.  The only additional overhead is the cost of regularly sampling
-  process statistics and maintaining the state of window overlays (which does
-  involve some X rendering of graphs and text, but does not introduce overhead
-  to the drawing of client windows).
+  When the monitoring is not visible, vwm3 continues to leave X in
+  immediate rendering mode with no additional overhead in the rendering
+  pipeline, just like vwm2.  The only additional overhead is the cost of
+  regularly sampling process statistics and maintaining the state of window
+  overlays (which does involve some X rendering of graphs and text, but
+  does not introduce overhead to the drawing of client windows).
 
   When monitoring overlays are made visible vwm3 temporarily becomes a
-  compositing manager, redirecting the rendering of all windows to offscreen
-  memory and assuming the responsibility of drawing all damaged contents to the
-  root window on their behalf.  This is what gives vwm3 the opportunity to draw
-  alpha-blended contextual monitoring data over all of the windows, but it does
-  come with a cost.
+  compositing manager, redirecting the rendering of all windows to
+  offscreen memory and assuming the responsibility of drawing all damaged
+  contents to the root window on their behalf.  This is what gives vwm3 the
+  opportunity to draw alpha-blended contextual monitoring data over all of
+  the windows, but it does come with a cost.
 
-  Most modern GNU/Linux desktop environments are full-time composited, meaning
-  all X clients are redirected at all times.  This makes their draws more
-  costly and latent due to all the additional copies being performed.
-  Depending on how things have been implemented, in the interests of supporting
-  things like transparent windows it also generally results in overlapping
-  window regions being drawn repeatedly for every overlapping window from the
-  bottom-up rather than just the top one.
+  Most modern GNU/Linux desktop environments are full-time composited,
+  meaning all X clients are redirected at all times.  This makes their
+  draws more costly and latent due to all the additional copies being
+  performed.  Depending on how things have been implemented, in the
+  interests of supporting things like transparent windows it also generally
+  results in overlapping window regions being drawn repeatedly for every
+  overlapping window from the bottom-up rather than just the top one.
 
-  In vwm3 transparent windows are not supported, and shape windows (xeyes) are
-  made rectangular in composited mode.  This is so overlapping regions are only
-  drawn once for the top windows having damage per burst of screen updates.
+  In vwm3 transparent windows are not supported, and shape windows (xeyes)
+  are made rectangular in composited mode.  This is so overlapping regions
+  are only drawn once for the top windows having damage per burst of screen
+  updates.
 
-  Immediate rendering mode is restored upon disabling the monitoring overlays,
-  restoring the drawing performance to vwm[12] levels where vwm3 is completely
-  out of the drawing loop.
+  Immediate rendering mode is restored upon disabling the monitoring
+  overlays, restoring the drawing performance to vwm[12] levels where vwm3
+  is completely out of the drawing loop.
 
   Here are some relevant things worth noting:
 
@@ -231,157 +365,167 @@ Composite/Monitoring:
     the explicitly monitored client precesses.
 
   - tmux orphans its backend process immediately at startup, discarding its
-    parent->child relationship, so you don't get any monitoring of the commands
-    running in your local tmux session.  Use GNU screen instead.
+    parent->child relationship, so you don't get any monitoring of the
+    commands running in your local tmux session.  Use GNU screen instead.
 
-  - GNU screen orphans its backend on detach, so on reattach you've lost the
-    parent->child relationship and find yourself in the same situation tmux
-    puts you in immediately.  I've developed an adopt() system call patch for
-    the linux kernel to enable adopting orphans in this situation, but it
-    hasn't been accepted.  With this patch and a one line change to GNU screen
-    the parent->child relationship is restored on reattach.
+  - GNU screen orphans its backend on detach, so on reattach you've lost
+    the parent->child relationship and find yourself in the same situation
+    tmux puts you in immediately.  I've developed an adopt() system call
+    patch for the linux kernel to enable adopting orphans in this
+    situation, but it hasn't been accepted.  With this patch and a one line
+    change to GNU screen the parent->child relationship is restored on
+    reattach.
 
-    You may find patches for adding the adopt() system call to Linux and its
-    integration into GNU screen in the patches/ subdirectory.
+    You may find patches for adding the adopt() system call to Linux and
+    its integration into GNU screen in the patches/ subdirectory.
 
   - The top row of the overlays shows:
 
      Total CPU Idle % (cyan):
-      The height of every cyan vertical line reflects the %age of ticks since
-      the previous sample which were spent in the idle task.
+      The height of every cyan vertical line reflects the %age of ticks
+      since the previous sample which were spent in the idle task.
     
      Total CPU IOWait % (red):
-      The height of every red vertical line reflects the %age of ticks since
-      the previous sample which were lost to IO wait.  Many people don't
-      understand this correctly.  This reflects opportunities to execute
-      something other than the idle task which were lost because _all_
-      runnable tasks at the time were blocked in IO.
+      The height of every red vertical line reflects the %age of ticks
+      since the previous sample which were lost to IO wait.  Many people
+      don't understand this correctly.  This reflects opportunities to
+      execute something other than the idle task which were lost because
+      _all_ runnable tasks at the time were blocked in IO.
 
       An absence of IOWait does not mean nothing is blocked on IO.  It just
-      means there weren't opportunities to execute something which were lost due
-      to waiting on IO.
+      means there weren't opportunities to execute something which were
+      lost due to waiting on IO.
 
-      For example, lets say you have a dual core machine, and you launch two
-      "yes > /dev/null &" commands.  These two yes commands are essentially busy
-      loops writing "yes" to /dev/null, they will always be runnable, and you
-      will see a top row in the overlay devoid of any cyan _or_red_ while they
-      execute.
+      For example, lets say you have a dual core machine, and you launch
+      two "yes > /dev/null &" commands.  These two yes commands are
+      essentially busy loops writing "yes" to /dev/null, they will always
+      be runnable, and you will see a top row in the overlay devoid of any
+      cyan _or_red_ while they execute.
 
       While they execute run something like:
       "sudo echo 2 > /proc/sys/vm/drop_caches && du /"
 
-      Still no IOWait in the top row.  We know that du is blocking on IO, the
-      caches are empty, but because there is always something runnable on the
-      two cores thanks to the two yes commands, we'll never see IOWait.  The
-      other runnable processes mask the IOWait from our visibility.
+      Still no IOWait in the top row.  We know that du is blocking on IO,
+      the caches are empty, but because there is always something runnable
+      on the two cores thanks to the two yes commands, we'll never see
+      IOWait.  The other runnable processes mask the IOWait from our
+      visibility.
 
       Now kill the two yes commands and rerun the du command, watch the top
-      row.  Some red should appear, the red indicates that there was CPU time
-      available for running something, and the _only_ things available for that
-      time was blocked in IO.  Had there something else runnable, we wouldn't
-      see the time lost to IOWait.
+      row.  Some red should appear, the red indicates that there was CPU
+      time available for running something, and the _only_ things available
+      for that time was blocked in IO.  Had there something else runnable,
+      we wouldn't see the time lost to IOWait.
 
       When you see IOWait time, it's just saying nothing executed for that
-      time, not for lack of any runnable tasks, just that all runnable tasks
-      were blocked.  It's still of value, but easily obscured on a system with
-      any cpu-bound tasks constantly running.
+      time, not for lack of any runnable tasks, just that all runnable
+      tasks were blocked.  It's still of value, but easily obscured on a
+      system with any cpu-bound tasks constantly running.
 
   - The per-task (processes or threads) rows of the overlays show:
 
      User CPU % (cyan):
-      The height of every cyan vertical line reflects the %age of ticks since
-      the previous sample which were spent executing this task in the user
-      context.
+      The height of every cyan vertical line reflects the %age of ticks
+      since the previous sample which were spent executing this task in the
+      user context.
 
      System CPU % (red):
-      The height of every red vertical line reflects the %age of ticks since
-      the previous sample which were spent executing this task in kernel/system
-      context.
+      The height of every red vertical line reflects the %age of ticks
+      since the previous sample which were spent executing this task in
+      kernel/system context.
 
-     Task monitoring beginning and ending is indicated with solid and checkered
-     vertical bars, respectively.  These generally coincide with the task clone
-     and exit, but not always, especially the cloning.
+     Task monitoring beginning and ending is indicated with solid and
+     checkered vertical bars, respectively.  These generally coincide with
+     the task clone and exit, but not always, especially the cloning.
 
-  - You can pause sampling by lowering its rate (Mod1-Left) to 0Hz.  Just be
-    aware that this also pauses the updating of the overlay contents, so window
-    resizes won't be adapted to in the overlay until increasing the sample rate
-    (Mod1-Right).  Pausing is useful if you've seen something interesting and
-    would like to screenshot, study, or discuss.  BTW, to take a screenshot
-    when composited you have to capture the root window.  If you capture the
-    client window, you won't get the overlays, you'll just get the redirected
-    window contents.  Compositing mode composites everything into the root
-    window, when you're interacting with the composited vwm3, you're looking at
-    the root window the entire time.
+  - You can pause sampling by lowering its rate (Mod1-Left) to 0Hz.  Just
+    be aware that this also pauses the updating of the overlay contents, so
+    window resizes won't be adapted to in the overlay until increasing the
+    sample rate (Mod1-Right).  Pausing is useful if you've seen something
+    interesting and would like to screenshot, study, or discuss.  BTW, to
+    take a screenshot when composited you have to capture the root window.
+    If you capture the client window, you won't get the overlays, you'll
+    just get the redirected window contents.  Compositing mode composites
+    everything into the root window, when you're interacting with the
+    composited vwm3, you're looking at the root window the entire time.
 
-  - The sample rate will automatically be lowered by vwm3 when it detects that
-    it's having trouble maintaining the current one.  If you have many windows
-    or have a slow or heavily loaded processor/GPU they can become bottlenecks,
-    especially at higher sample rates.  Rather than continuing to bog down your
-    X server (Xorg is not good at fairly scheduling clients under GPU
-    contention), vwm3 will simply back off the sample rate as if you had hit
-    Mod1-Left, to try ameliorate rather than exacerbate the situation.
+  - The sample rate will automatically be lowered by vwm3 when it detects
+    that it's having trouble maintaining the current one.  If you have many
+    windows or have a slow or heavily loaded processor/GPU they can become
+    bottlenecks, especially at higher sample rates.  Rather than continuing
+    to bog down your X server (Xorg is not good at fairly scheduling
+    clients under GPU contention), vwm3 will simply back off the sample
+    rate as if you had hit Mod1-Left, to try ameliorate rather than
+    exacerbate the situation.
 
   - The monitoring is implemented using sampling, not tracing.  Below the
     current process heirarchy for every window there is an exited tasks
-    snowflakes section filling the remaining space.  Do not mistake this for
-    something lossless like bash history or strace output, it's lossy since
-    it's produced from sampled data.  In part to try avoid interpretation of
-    these as a reliable process history I refer to them as snowflakes in the
-    code, since they fall downwards and sideways.
+    snowflakes section filling the remaining space.  Do not mistake this
+    for something lossless like bash history or strace output, it's lossy
+    since it's produced from sampled data.  In part to try avoid
+    interpretation of these as a reliable process history I refer to them
+    as snowflakes in the code, since they fall downwards and sideways.
 
     With sufficiently high sample rates the output starts to take on the
-    appearance of tracing, and while it may happen to capture every process in
-    slower executions, most automata will execute entire commands in the time
-    between samples.  So try keep this in mind before thinking something's
-    broken because you don't see something you expected in the snowflakes.
+    appearance of tracing, and while it may happen to capture every process
+    in slower executions, most automata will execute entire commands in the
+    time between samples.  So try keep this in mind before thinking
+    something's broken because you don't see something you expected in the
+    snowflakes.
 
     Some artifacts you might notice due to this which are not bugs are:
 
      - "#missed it!"  being shown as the command name, this happens when
-       libvmon caught the process but the process exited before libvmon caught
-       a sample of the name.
+       libvmon caught the process but the process exited before libvmon
+       caught a sample of the name.
 
      - A parent's command name in the child when a different command was
        executed.  In UNIX systems processes fork before execing the new
        command, in that window of time between the fork and exec, the child
-       process is a clone of the parent, command and argv included.  Sometimes
-       the sample catches at just the right moment to see this in action.
+       process is a clone of the parent, command and argv included.
+       Sometimes the sample catches at just the right moment to see this in
+       action.
 
      - Varying outputs in seeming identical actions.  Things like simply
-       launching xterm may produce no snowflakes at all in the new xterm, or a
-       few like "bash" "dircolors -b" and "utempter add :0", especially if you
-       have the sample rate turned up and cause some load on the system to slow
-       the xterm and interactive bash startup scripts down.
+       launching xterm may produce no snowflakes at all in the new xterm,
+       or a few like "bash" "dircolors -b" and "utempter add :0",
+       especially if you have the sample rate turned up and cause some load
+       on the system to slow the xterm and interactive bash startup scripts
+       down.
     
-  - In the interests of being efficient, nothing is being logged historically.
-    The snowflakes area is all you get, which is limited to the free pixel
-    space below the instantaneous process heirarchy within the window.
+  - In the interests of being efficient, nothing is being logged
+    historically.  The snowflakes area is all you get, which is limited to
+    the free pixel space below the instantaneous process heirarchy within
+    the window.
 
-    Everything which falls off the edges of the screen is lost forever, with
-    the exception of windows which have been made smaller than they were.
+    Everything which falls off the edges of the screen is lost forever,
+    with the exception of windows which have been made smaller than they
+    were.
 
-    You cannot scroll down or to the right to see older snowflakes or graphs.
+    You cannot scroll down or to the right to see older snowflakes or
+    graphs.
 
     You cannot search the snowflakes.
 
-    The native text and numeric representations of the sampled data is not kept
-    any longer than the current sample, just long enough to update the
+    The native text and numeric representations of the sampled data is not
+    kept any longer than the current sample, just long enough to update the
     overlays.  From that point on the information exists only as visualized
-    pixels in the overlay layers with no additional indexing or relationships
-    being maintained with the currently monitored state.
+    pixels in the overlay layers with no additional indexing or
+    relationships being maintained with the currently monitored state.
 
   - You can wipe the snowflakes of the focused window with Mod1-Apostrophe
 
-  - The client PID is found via the _NET_WM_PID X property.  This must be set
-    by the client, and not all clients cooperate (xpdf is one I've noticed).
+  - The client PID is found via the _NET_WM_PID X property.  This must be
+    set by the client, and not all clients cooperate (xpdf is one I've
+    noticed).
 
-    This is annoying especially considering the vast majority of X clients run
-    on modern systems are local clients connected via UNIX domain sockets.
-    These sockets support ancillary messages including SCM_CREDENTIALS, which
-    contains the pid of the connected process.  Some investigation into the
-    Xorg sources found it already queries this information and has it on hand,
-    but doesn't bother setting the _NET_WM_PID property even though it's well-
-    positioned to do so.
+    This is annoying especially considering the vast majority of X clients
+    run on modern systems are local clients connected via UNIX domain
+    sockets.  These sockets support ancillary messages including
+    SCM_CREDENTIALS, which contains the pid of the connected process.  Some
+    investigation into the Xorg sources found it already queries this
+    information and has it on hand, but doesn't bother setting the
+    _NET_WM_PID property even though it's well- positioned to do so.
 
     I've developed and submitted upstream a patch for Xorg which sets
     _NET_WM_PID on local connections, it complements vwm3 nicely.
@@ -389,11 +533,11 @@ Composite/Monitoring:
     You can find the patch in the patches directory.
 
   - There are around 5 files kept open in /proc for every task monitored by
-    vwm.  This applies to children processes and threads alike, so on a busy
-    system it's not unrealistic to exceed 1024, a common default open files
-    ulimit for GNU/Linux distributions.  You can generally change this limit
-    for your user via configuration in /etc/security/limits.conf or
-    /etc/security/limits.d/.
+    vwm.  This applies to children processes and threads alike, so on a
+    busy system it's not unrealistic to exceed 1024, a common default open
+    files ulimit for GNU/Linux distributions.  You can generally change
+    this limit for your user via configuration in /etc/security/limits.conf
+    or /etc/security/limits.d/.
 
 
 TODO finish and polish this readme...

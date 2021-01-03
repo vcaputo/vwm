@@ -31,6 +31,7 @@
 
 static int		key_is_grabbed;	/* flag for tracking keyboard grab state */
 static vwm_direction_t	direction = VWM_DIRECTION_FORWARD;	/* flag for reversing directional actions */
+static int		send_it; /* flag for "sending" a migration operation without following it */
 
 /* Poll the keyboard state to see if _any_ keys are pressed */
 static int keys_pressed(vwm_t *vwm)
@@ -75,14 +76,18 @@ void vwm_key_released(vwm_t *vwm, Window win, XKeyReleasedEvent *keyrelease)
 				vwm_win_mru(vwm, vwin);
 
 			/* make the focused desktop the most recently used */
-			if (vwm->focused_context == VWM_CONTEXT_DESKTOP && vwm->focused_desktop)
-				vwm_desktop_mru(vwm, vwm->focused_desktop);
+			vwm_desktop_mru(vwm, vwm->focused_desktop);
 
 			break;
 
 		case XK_r:
 			VWM_TRACE("XK_r released with direction=%i", direction);
 			direction = VWM_DIRECTION_FORWARD;
+			break;
+
+		case XK_s:
+			VWM_TRACE("XK_s released with send_it=%i", send_it);
+			send_it = 0;
 			break;
 
 		default:
@@ -144,9 +149,32 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			direction = VWM_DIRECTION_REVERSE;
 			break;
 
-		case XK_grave: /* toggle shelf visibility */
-			vwm_context_focus(vwm, VWM_CONTEXT_OTHER);
+		case XK_s: /* "send" migrational actions */
+			VWM_TRACE("XK_s pressed with send_it=%i", send_it);
+			send_it = 1;
 			break;
+
+		case XK_grave: { /* cycle focused desktop by context */
+			vwm_context_t	*next_context;
+
+			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
+			next_context = vwm_context_next_mru(vwm, vwm->focused_desktop->context, direction);
+
+			if (send_it && (keypress->state & ShiftMask)) { /* "send" the focused window to the MRU context's MRU desktop */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, next_context->focused_desktop));
+			} else if (send_it) { /* "send" the focused window to a new desktop created on the MRU context */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_desktop_create(vwm, next_context)));
+			} else if (keypress->state & ShiftMask) {
+				/* migrate the focused window with the desktop focus to the MRU context's MRU desktop */
+				if (vwin)
+					vwm_win_migrate(vwm, vwin, next_context->focused_desktop);
+			} else {
+				vwm_desktop_focus(vwm, next_context->focused_desktop);
+			}
+			break;
+		}
 
 		case XK_Tab: /* cycle focused window */
 			do_grab = 1; /* update MRU window on commit (Mod1 release) */
@@ -154,9 +182,36 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			/* focus the next window, note this doesn't affect MRU yet, that happens on Mod1 release */
 			if (vwin) {
 				if (keypress->state & ShiftMask) {
-					vwm_win_focus_next(vwm, vwin, direction, VWM_FENCE_MASKED_VIOLATE);
+					/* TODO: in keeping with the Shift==migrate behavior, perhaps
+					 * for Tab it should really do a in-desktop migration of sorts
+					 * where the focused window swaps places with the next window?
+					 */
+					 VWM_TRACE("in-desktop migrate not implemented yet");
 				} else {
 					vwm_win_focus_next(vwm, vwin, direction, VWM_FENCE_RESPECT);
+				}
+			}
+			break;
+
+		case XK_backslash:
+			do_grab = 1;
+
+			if (vwin) {
+				if (keypress->state & ShiftMask) {
+					/* TODO: migrate window to another screen within this desktop,
+					 * like VWM_FENCE_MASKED_VIOLATE would focus the next window on
+					 * the next screen, but instead of focusing the next window on
+					 * the next display, move the focused one to that next desktop.
+					 *
+					 * since screens are handled within vwm_win_focus_next() via
+					 * the fence abstraction, but fences aren't exposed outside of
+					 * their, it's non-trivial to implement here.  I may want to
+					 * break that out into a more public interface to make things
+					 * more composable at the screen level.
+					 */
+					 VWM_TRACE("migrate window to screen not implemented yet");
+				} else {
+					vwm_win_focus_next(vwm, vwin, direction, VWM_FENCE_MASKED_VIOLATE);
 				}
 			}
 			break;
@@ -164,12 +219,16 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 		case XK_space: { /* cycle focused desktop utilizing MRU */
 			vwm_desktop_t	*next_desktop;
 
+			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 			next_desktop = vwm_desktop_next_mru(vwm, vwm->focused_desktop, direction);
 
-			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
-
-			if (keypress->state & ShiftMask) {
-				/* migrate the focused window with the desktop focus to the most recently used desktop */
+			if (send_it && (keypress->state & ShiftMask)) { /* "send" the focused window to the MRU desktop */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, next_desktop));
+			} else if (send_it) { /* "send" the focused window to a new desktop in the current context, kind of an alias of send_it+XK_v */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_desktop_create(vwm, vwin->desktop->context)));
+			} else if (keypress->state & ShiftMask) { /* migrate the focused window with the desktop focus to the most recently used desktop */
 				if (vwin)
 					vwm_win_migrate(vwm, vwin, next_desktop);
 			} else {
@@ -185,7 +244,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 				} else { /* kindly destroy the focused window */
 					vwm_xwin_message(vwm, vwin->xwindow, vwm->wm_protocols_atom, vwm->wm_delete_atom);
 				}
-			} else if (vwm->focused_context == VWM_CONTEXT_DESKTOP) {
+			} else {
 				/* destroy the focused desktop when destroy occurs without any windows */
 				vwm_desktop_destroy(vwm, vwm->focused_desktop);
 			}
@@ -201,80 +260,111 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 		case XK_v: /* instantiate (and focus) a new (potentially empty, unless migrating) virtual desktop */
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
-			if (keypress->state & ShiftMask) {
-				if (vwin) {
-					/* migrate the focused window to a newly created virtual desktop, focusing the new desktop simultaneously */
-					vwm_win_migrate(vwm, vwin, vwm_desktop_create(vwm));
-				}
+			if (send_it) { /* "send" the focused window to a newly created virtual desktop, */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_desktop_create(vwm, vwin->desktop->context)));
+			} else if (keypress->state & ShiftMask) { /* migrate the focused window to a newly created virtual desktop, focusing the new desktop simultaneously */
+				if (vwin)
+					vwm_win_migrate(vwm, vwin, vwm_desktop_create(vwm, vwin->desktop->context));
 			} else {
-				vwm_desktop_focus(vwm, vwm_desktop_create(vwm));
-				vwm_desktop_mru(vwm, vwm->focused_desktop);
+				vwm_desktop_focus(vwm, vwm_desktop_create(vwm, vwm->focused_desktop->context));
 			}
 			break;
 
-		case XK_h: /* previous virtual desktop, if we're in the shelf context this will simply switch to desktop context */
+		case XK_c: /* instantiate (and focus) a new (potentialy empty, unless migrating) virtual desktop in a new context */
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
-			if (keypress->state & ShiftMask) {
-				if (vwin) {
-					/* migrate the focused window with the desktop focus to the previous desktop */
+			if (send_it) { /* "send" the focused window to a newly created virtual desktop in a new context */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_desktop_create(vwm, NULL)));
+			} else if (keypress->state & ShiftMask) { /* migrate the focused window to a newly created virtual desktop in a new context, focusing the new desktop simultaneously */
+
+				if (vwin)
+					vwm_win_migrate(vwm, vwin, vwm_desktop_create(vwm, NULL));
+			} else {
+				vwm_desktop_focus(vwm, vwm_desktop_create(vwm, NULL));
+			}
+			break;
+
+		case XK_0:
+		case XK_1:
+		case XK_2:
+		case XK_3:
+		case XK_4:
+		case XK_5:
+		case XK_6:
+		case XK_7:
+		case XK_8:
+		case XK_9:
+			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
+
+			if (send_it && (keypress->state & ShiftMask)) { /* "send" the focused window to the specified context */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_context_by_color(vwm, sym - XK_0)->focused_desktop));
+			} else if (send_it) { /* "send" the focused window to a new desktop created on the specified context */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_desktop_create(vwm, vwm_context_by_color(vwm, sym - XK_0))));
+			} else if (keypress->state & ShiftMask) { /* migrate the focused window to the specified context */
+				if (vwin)
+					vwm_win_migrate(vwm, vwin, vwm_context_by_color(vwm, sym - XK_0)->focused_desktop);
+			} else {
+				vwm_desktop_focus(vwm, vwm_context_by_color(vwm, sym - XK_0)->focused_desktop);
+			}
+			break;
+
+		case XK_h: /* previous virtual desktop spatially */
+			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
+
+			if (send_it) { /* "send" the focused window to the previous desktop */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_desktop_next(vwm, vwin->desktop, VWM_DIRECTION_REVERSE)));
+			} else if (keypress->state & ShiftMask) { /* migrate the focused window with the desktop focus to the previous desktop */
+				if (vwin)
 					vwm_win_migrate(vwm, vwin, vwm_desktop_next(vwm, vwin->desktop, VWM_DIRECTION_REVERSE));
-				}
-			} else {
-				if (vwm->focused_context == VWM_CONTEXT_SHELF) {
-					/* focus the focused desktop instead of the shelf */
-					vwm_context_focus(vwm, VWM_CONTEXT_DESKTOP);
-				} else {
-					/* focus the previous desktop */
-					vwm_desktop_focus(vwm, vwm_desktop_next(vwm, vwm->focused_desktop, VWM_DIRECTION_REVERSE));
-				}
+			} else { /* focus the previous desktop */
+				vwm_desktop_focus(vwm, vwm_desktop_next(vwm, vwm->focused_desktop, VWM_DIRECTION_REVERSE));
 			}
 			break;
 
-		case XK_l: /* next virtual desktop, if we're in the shelf context this will simply switch to desktop context */
+		case XK_l: /* next virtual desktop spatially */
 			do_grab = 1; /* update MRU desktop on commit (Mod1 release) */
 
-			if (keypress->state & ShiftMask) {
-				if (vwin) {
-					/* migrate the focused window with the desktop focus to the next desktop */
+			if (send_it) { /* "send" the focused window to the next desktop */
+				if (vwin)
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_desktop_next(vwm, vwin->desktop, VWM_DIRECTION_FORWARD)));
+			} else if (keypress->state & ShiftMask) { /* migrate the focused window with the desktop focus to the next desktop */
+				if (vwin)
 					vwm_win_migrate(vwm, vwin, vwm_desktop_next(vwm, vwin->desktop, VWM_DIRECTION_FORWARD));
-				}
-			} else {
-				if (vwm->focused_context == VWM_CONTEXT_SHELF) {
-					/* focus the focused desktop instead of the shelf */
-					vwm_context_focus(vwm, VWM_CONTEXT_DESKTOP);
-				} else {
-					/* focus the next desktop */
-					vwm_desktop_focus(vwm, vwm_desktop_next(vwm, vwm->focused_desktop, VWM_DIRECTION_FORWARD));
-				}
+			} else { /* focus the next desktop */
+				vwm_desktop_focus(vwm, vwm_desktop_next(vwm, vwm->focused_desktop, VWM_DIRECTION_FORWARD));
 			}
 			break;
 
-		case XK_k: /* raise or shelve the focused window */
+		case XK_k: /* raise or context-migrate the focused window up */
 			if (vwin) {
-				if (keypress->state & ShiftMask) { /* shelf the window and focus the shelf */
-					if (vwm->focused_context != VWM_CONTEXT_SHELF) {
-						/* shelve the focused window while focusing the shelf */
-						vwm_win_shelve(vwm, vwin);
-						vwm_context_focus(vwm, VWM_CONTEXT_SHELF);
-					}
-				} else {
-					do_grab = 1;
+				do_grab = 1;
 
+				/* TODO: maybe bare send_it should create a new desktop in the next context,
+				 * with Shift+send_it being the migrate-like send */
+				if (send_it) { /* "send" the focused window to the next context */
+					vwm_context_t	*next_context = vwm_context_next(vwm, vwin->desktop->context, VWM_DIRECTION_FORWARD);
+
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, next_context->focused_desktop));
+				} else if (keypress->state & ShiftMask) { /* migrate the window and focus the new context */
+					vwm_context_t	*next_context = vwm_context_next(vwm, vwin->desktop->context, VWM_DIRECTION_FORWARD);
+
+					vwm_win_migrate(vwm, vwin, next_context->focused_desktop);
+				} else {
 					XRaiseWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id);
 
-					if (repeat_cnt == 1) {
-						/* double: reraise & fullscreen */
+					if (repeat_cnt == 1) { /* double: reraise & fullscreen */
 						vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
-					} else if (repeat_cnt == 2) {
-						 /* triple: reraise & fullscreen w/borders obscured by screen perimiter */
+					} else if (repeat_cnt == 2) { /* triple: reraise & fullscreen w/borders obscured by screen perimiter */
 						vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_ALL);
 					} else if (vwm->xinerama_screens_cnt > 1) {
-						if (repeat_cnt == 3) {
-							 /* triple: reraise & fullscreen across all screens */
+						if (repeat_cnt == 3) { /* triple: reraise & fullscreen across all screens */
 							vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_TOTAL, VWM_WIN_AUTOCONF_FULL);
-						} else if (repeat_cnt == 4) {
-							 /* quadruple: reraise & fullscreen w/borders obscured by screen perimiter */
+						} else if (repeat_cnt == 4) { /* quadruple: reraise & fullscreen w/borders obscured by screen perimiter */
 							vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_TOTAL, VWM_WIN_AUTOCONF_ALL);
 						}
 					}
@@ -283,13 +373,20 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			}
 			break;
 
-		case XK_j: /* lower or unshelve the focused window */
+		case XK_j: /* lower or context-migrate the focused window down */
 			if (vwin) {
-				if (keypress->state & ShiftMask) { /* unshelf the window to the focused desktop, and focus the desktop */
-					if (vwm->focused_context == VWM_CONTEXT_SHELF) {
-						/* unshelve the focused window, focus the desktop it went to */
-						vwm_win_migrate(vwm, vwin, vwm->focused_desktop);
-					}
+				do_grab = 1;
+
+				/* TODO: maybe bare send_it should create a new desktop in the previous context,
+				 * with Shift+send_it being the migrate-like send */
+				if (send_it) { /* "send" the focused window to the previous context */
+					vwm_context_t	*prev_context = vwm_context_next(vwm, vwin->desktop->context, VWM_DIRECTION_REVERSE);
+
+					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, prev_context->focused_desktop));
+				} else if (keypress->state & ShiftMask) { /* migrate the window and focus the new context */
+					vwm_context_t	*prev_context = vwm_context_next(vwm, vwin->desktop->context, VWM_DIRECTION_REVERSE);
+
+					vwm_win_migrate(vwm, vwin, prev_context->focused_desktop);
 				} else {
 					if (vwin->autoconfigured == VWM_WIN_AUTOCONF_ALL) {
 						vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
@@ -309,12 +406,6 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 					vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN, VWM_WIN_AUTOCONF_FULL);
 				}
 			}
-			break;
-
-		case XK_s: /* shelve focused window */
-			if (vwin && !vwin->shelved)
-				vwm_win_shelve(vwm, vwin);
-
 			break;
 
 		case XK_bracketleft:	/* reconfigure the focused window to occupy the left or top half of the screen or left quarters on repeat */

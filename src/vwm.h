@@ -32,6 +32,15 @@
 typedef struct _vwm_window_t vwm_window_t;
 typedef struct _vwm_desktop_t vwm_desktop_t;
 
+/* this contortion is currently just to get VWM_CONTEXT_COLOR_MAX defined */
+typedef enum _vwm_context_color_t {
+#define color(_num, _str) \
+	VWM_CONTEXT_COLOR_ ## _num,
+#include "context_colors.def"
+#undef color
+	VWM_CONTEXT_COLOR_MAX
+} vwm_context_color_t;
+
 typedef struct _vwm_t {
 	vwm_xserver_t		*xserver;		/* global xserver instance */
 	vwm_charts_t		*charts;		/* golbal charts instance */
@@ -45,24 +54,26 @@ typedef struct _vwm_t {
 	int			xinerama_screens_cnt;
 
 	int			done;			/* global flag to cause vwm to quit */
+	list_head_t		contexts;		/* global list of all contexts in spatial created-in order */
+	list_head_t		contexts_mru;		/* global list of all contexts kept in MRU order */
 	list_head_t		desktops;		/* global list of all (virtual) desktops in spatial created-in order */
 	list_head_t		desktops_mru;		/* global list of all (virtual) desktops in MRU order */
 	list_head_t		windows_mru;		/* global list of all managed windows kept in MRU order */
 	list_head_t		xwindows;		/* global list of all xwindows kept in the X server stacking order */
+
 	vwm_window_t		*console;		/* the console window */
 	vwm_window_t		*focused_origin;	/* the originating window in a grabbed operation/transaction */
-	vwm_desktop_t		*focused_desktop;	/* currently focused (virtual) desktop */
-	vwm_window_t		*focused_shelf;		/* currently focused shelved window */
-	vwm_context_t		focused_context;	/* currently focused context */
+	vwm_desktop_t		*focused_desktop;	/* currently focused desktop */
 	int			priority;		/* scheduling priority of the vwm process, launcher nices relative to this */
 	unsigned long		fence_mask;		/* global mask state for vwm_win_focus_next(... VWM_FENCE_MASKED_VIOLATE),
-						 * if you use vwm on enough screens to overflow this, pics or it didn't happen. */
+							 * if you use vwm on enough screens to overflow this, pics or it didn't happen. */
 	struct colors {
 #define color(_sym, _str) \
 		XColor			_sym ## _color;
 		#include "colors.def"
 #undef color
 	} colors;
+	XColor			context_colors[VWM_CONTEXT_COLOR_MAX];
 } vwm_t;
 
 #endif

@@ -80,20 +80,10 @@ vwm_window_t * vwm_win_lookup(vwm_t *vwm, Window win)
 }
 
 
-/* return the currently focused window (considers current context...), may return NULL */
+/* return the currently focused window, may return NULL */
 vwm_window_t * vwm_win_get_focused(vwm_t *vwm)
 {
-	switch (vwm->focused_context) {
-		case VWM_CONTEXT_SHELF:
-			return vwm->focused_shelf;
-
-		case VWM_CONTEXT_DESKTOP:
-			return vwm->focused_desktop->focused_window;
-
-		default:
-			VWM_BUG("Unsupported context");
-			assert(0);
-	}
+	return vwm->focused_desktop->focused_window;
 }
 
 
@@ -103,22 +93,15 @@ vwm_window_t * vwm_win_get_focused(vwm_t *vwm)
 void vwm_win_set_focused(vwm_t *vwm, vwm_window_t *vwin)
 {
 	/* update the border color accordingly */
-	if (vwin->shelved) {
-		/* set the border of the newly focused window to the shelved color */
-		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwin == vwm->console ? vwm->colors.shelved_console_border_color.pixel : vwm->colors.shelved_window_border_color.pixel);
-		/* fullscreen windows in the shelf when focused, since we don't intend to overlap there */
-		vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_POINTER, VWM_WIN_AUTOCONF_FULL);	/* XXX TODO: for now the shelf follows the pointer, it's simple. */
-	} else {
-		if (vwin->desktop->focused_window)
-			/* set the border of the previously focused window on the same desktop to the unfocused color */
-			XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->desktop->focused_window->xwindow->id, vwm->colors.unfocused_window_border_color.pixel);
+	if (vwin->desktop->focused_window)
+		/* set the border of the previously focused window on the same desktop to the unfocused color */
+		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->desktop->focused_window->xwindow->id, vwm->colors.unfocused_window_border_color.pixel);
 
-		/* set the border of the newly focused window to the focused color */
-		XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwm->colors.focused_window_border_color.pixel);
+	/* set the border of the newly focused window to the focused color */
+	XSetWindowBorder(VWM_XDISPLAY(vwm), vwin->xwindow->id, vwm->context_colors[vwin->desktop->context->color].pixel);
 
-		/* persist this on a per-desktop basis so it can be restored on desktop switches */
-		vwin->desktop->focused_window = vwin;
-	}
+	/* persist this on a per-desktop basis so it can be restored on desktop switches */
+	vwin->desktop->focused_window = vwin;
 }
 
 
@@ -131,7 +114,7 @@ void vwm_win_autoconf_magic(vwm_t *vwm, vwm_window_t *vwin, const vwm_screen_t *
 	if (!scr)
 		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_RECT, x, y, width, height);
 
-	if (!vwin->shelved && scr &&
+	if (scr &&
 	    width == scr->width &&
 	    height == scr->height) {
 		VWM_TRACE_WIN(vwin->xwindow->id, "auto-allscreened window");
@@ -329,21 +312,9 @@ _retry:
 		VWM_TRACE("VWM_FENCE_MASKED_VIOLATE fence_mask now: 0x%lx\n", vwm->fence_mask);
 	}
 
-	if (vwin->shelved) {
-		if (next != vwm->focused_shelf) {
-			if (vwm->focused_context == VWM_CONTEXT_SHELF) {
-				vwm_win_unmap(vwm, vwm->focused_shelf);
-				XFlush(VWM_XDISPLAY(vwm));
-				vwm_win_map(vwm, next);
-			}
-			vwm->focused_shelf = next;
-			vwm_win_focus(vwm, next);
-		}
-	} else {
-		if (next != next->desktop->focused_window) {
-			vwm_win_focus(vwm, next);
-			XRaiseWindow(VWM_XDISPLAY(vwm), next->xwindow->id);
-		}
+	if (next != next->desktop->focused_window) {
+		vwm_win_focus(vwm, next);
+		XRaiseWindow(VWM_XDISPLAY(vwm), next->xwindow->id);
 	}
 
 	VWM_TRACE("vwin=%p xwin=%p name=\"%s\"", next, next->xwindow, next->xwindow->name);
@@ -352,48 +323,62 @@ _retry:
 }
 
 
-/* shelves a window, if the window is focused we focus the next one (if possible) */
+/* "shelves" a window, if the window is focused we focus the next one (if exists) */
+/* originally there was a special shelf context having different semantics of a fullscreen
+ * window at a time, this evolved into generic contexts containing virtual
+ * desktops, and now shelving is just the process of sending a window to the bottom/first
+ * context into a newly created desktop there, in an unattended fashion (like an unattended migrate,
+ * to an assumed bottom destination context created for this purpose at startup, and into its own
+ * desktop there).
+ */
 void vwm_win_shelve(vwm_t *vwm, vwm_window_t *vwin)
 {
-	/* already shelved, NOOP */
-	if (vwin->shelved)
+	vwm_context_t	*shelf = list_entry(vwm->contexts.next, vwm_context_t, contexts);
+	vwm_desktop_t	*desktop;
+
+	/* already in the first, AKA "shelf" context, NOOP */
+	if (&vwin->desktop->context->contexts == vwm->contexts.next)
 		return;
 
 	/* shelving focused window, focus the next window */
 	if (vwin == vwin->desktop->focused_window)
 		vwm_win_mru(vwm, vwm_win_focus_next(vwm, vwin, VWM_DIRECTION_FORWARD, VWM_FENCE_RESPECT));
 
+	/* vwin appears to be alone */
 	if (vwin == vwin->desktop->focused_window)
-		/* TODO: we can probably put this into vwm_win_focus_next() and have it always handled there... */
 		vwin->desktop->focused_window = NULL;
 
-	vwin->shelved = 1;
+	/* TODO: ^^^ there should probably be a helper for withdrawing a window
+	 * from a desktop which handles the above focus next -> lone window
+	 * nonsense, and hands back an orphan window to do whatever with.
+	 */
+
+	/* shelved windows always get an empty desktop in the shelf context,
+	 * look for an empty one and only create a new one if there is none
+	 * to use.
+	 */
+	vwin->desktop = NULL;
+	list_for_each_entry(desktop, &vwm->desktops_mru, desktops_mru) {
+		if (desktop->context == shelf && !desktop->focused_window) {
+			vwin->desktop = desktop;
+			break;
+		}
+	}
+
+	if (!vwin->desktop)
+		vwin->desktop = vwm_desktop_create(vwm, shelf);
+
+	/* always leave the newly shelved window's desktop focused */
+	vwin->desktop->context->focused_desktop = vwin->desktop;
+	vwm_win_set_focused(vwm, vwin);
 	vwm_win_mru(vwm, vwin);
-
-	/* newly shelved windows always become the focused shelf */
-	vwm->focused_shelf = vwin;
-
 	vwm_win_unmap(vwm, vwin);
 }
 
 
-/* helper for (idempotently) unfocusing a window, deals with context switching etc... */
+/* helper for (idempotently) unfocusing a window */
 void vwm_win_unfocus(vwm_t *vwm, vwm_window_t *vwin)
 {
-	/* if we're the focused shelved window, cycle the focus to the next shelved window if possible, if there's no more shelf, switch to the desktop */
-	/* TODO: there's probably some icky behaviors for focused windows unmapping/destroying in unfocused contexts, we probably jump contexts suddenly. */
-	if (vwin == vwm->focused_shelf) {
-		VWM_TRACE("unfocusing focused shelf");
-		vwm_win_focus_next(vwm, vwin, VWM_DIRECTION_FORWARD, VWM_FENCE_IGNORE);
-
-		if (vwin == vwm->focused_shelf) {
-			VWM_TRACE("shelf empty, leaving");
-			/* no other shelved windows, exit the shelf context */
-			vwm_context_focus(vwm, VWM_CONTEXT_DESKTOP);
-			vwm->focused_shelf = NULL;
-		}
-	}
-
 	/* if we're the focused window cycle the focus to the next window on the desktop if possible */
 	if (vwin->desktop->focused_window == vwin) {
 		VWM_TRACE("unfocusing focused window");
@@ -401,7 +386,7 @@ void vwm_win_unfocus(vwm_t *vwm, vwm_window_t *vwin)
 	}
 
 	if (vwin->desktop->focused_window == vwin) {
-		VWM_TRACE("desktop empty");
+		VWM_TRACE("unfocused last window on desktop");
 		vwin->desktop->focused_window = NULL;
 	}
 }
@@ -468,25 +453,22 @@ static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
 	/* TODO: this is a good place to hook in a window placement algo */
 
 	/* on client-requested mapping we place the window */
-	if (!vwin->shelved) {
-		/* we place the window on the screen containing the the pointer only if that screen is empty,
-		 * otherwise we place windows on the screen containing the currently focused window */
-		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_POINTER);
-		if (vwm_screen_is_empty(vwm, scr, vwin->xwindow)) {
-			/* focus the new window if it isn't already focused when it's going to an empty screen */
-			VWM_TRACE("window \"%s\" is alone on screen \"%i\", focusing", vwin->xwindow->name, scr->screen_number);
-			vwm_win_focus(vwm, vwin);
-		} else {
-			scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_desktop->focused_window->xwindow);
-		}
-
-		changes.x = scr->x_org;
-		changes.y = scr->y_org;
-	} else if (vwm->focused_context == VWM_CONTEXT_SHELF) {
-		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_shelf->xwindow);
-		changes.x = scr->x_org;
-		changes.y = scr->y_org;
+	/* we place the window on the screen containing the the pointer only if that screen is empty,
+	 * otherwise we place windows on the screen containing the currently focused window */
+	scr = vwm_screen_find(vwm, VWM_SCREEN_REL_POINTER);
+	if (vwm_screen_is_empty(vwm, scr, vwin->xwindow)) {
+		/* focus the new window if it isn't already focused when it's going to an empty screen */
+		VWM_TRACE("window \"%s\" is alone on screen \"%i\", focusing", vwin->xwindow->name, scr->screen_number);
+		vwm_win_focus(vwm, vwin);
+	} else {
+		/* FIXME TODO: there's some situation where we get here but focused_desktop->focused_window == NULL,
+		 * which shouldn't be possible; for there to be a non-empty screen, the focused_desktop must have a focused_window.
+		 */
+		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_desktop->focused_window->xwindow);
 	}
+
+	changes.x = scr->x_org;
+	changes.y = scr->y_org;
 
 	/* XXX TODO: does this belong here? */
 	XGetWMNormalHints(VWM_XDISPLAY(vwm), xwin->id, vwin->hints, &vwin->hints_supplied);
@@ -541,7 +523,6 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 
 	vwin->desktop = vwm->focused_desktop;
 	vwin->autoconfigured = VWM_WIN_AUTOCONF_NONE;
-	vwin->shelved = (vwm->focused_context == VWM_CONTEXT_SHELF);	/* if we're in the shelf when the window is created, the window is shelved */
 	vwin->client = xwin->attrs;					/* remember whatever the current attributes are */
 
 	VWM_TRACE("hints: flags=%lx x=%i y=%i w=%i h=%i minw=%i minh=%i maxw=%i maxh=%i winc=%i hinc=%i basew=%i baseh=%i grav=%x",
@@ -572,9 +553,9 @@ vwm_window_t * vwm_win_manage_xwin(vwm_t *vwm, vwm_xwindow_t *xwin)
 	/* always raise newly managed windows so we know about them. */
 	XRaiseWindow(VWM_XDISPLAY(vwm), xwin->id);
 
-	/* if the desktop has no focused window yet, automatically focus the newly managed one, provided we're on the desktop context */
-	if (!vwm->focused_desktop->focused_window && vwm->focused_context == VWM_CONTEXT_DESKTOP) {
-		VWM_TRACE("Mapped new window \"%s\" is alone on desktop, focusing", xwin->name);
+	/* if the desktop has no focused window yet, automatically focus the newly managed one */
+	if (!vwm->focused_desktop->focused_window) {
+		VWM_TRACE("Mapped new window \"%s\" is alone on desktop \"%s\", focusing", xwin->name, vwm->focused_desktop->name);
 		vwm_win_focus(vwm, vwin);
 	}
 
@@ -595,12 +576,34 @@ _fail:
 void vwm_win_migrate(vwm_t *vwm, vwm_window_t *vwin, vwm_desktop_t *desktop)
 {
 	vwm_win_unfocus(vwm, vwin);			/* go through the motions of unfocusing the window if it is focused */
-	vwin->shelved = 0;			/* ensure not shelved */
-	vwin->desktop = desktop;		/* assign the new desktop */
+	vwin->desktop = desktop;			/* assign the new desktop */
 	vwm_desktop_focus(vwm, desktop);		/* currently we always focus the new desktop in a migrate */
 
 	vwm_win_focus(vwm, vwin);			/* focus the window so borders get updated */
 	vwm_win_mru(vwm, vwin); /* TODO: is this right? shouldn't the Mod1 release be what's responsible for this? I migrate so infrequently it probably doesn't matter */
 
-	XRaiseWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id); /* ensure the window is raised */
+	XRaiseWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id); /* ensure the window is @ top of stack */
+}
+
+
+/* "send" a window to another desktop, no desktop/context switching occurs. */
+void vwm_win_send(vwm_t *vwm, vwm_window_t *vwin, vwm_desktop_t *desktop)
+{
+	if (desktop == vwin->desktop)
+		return;
+
+	vwm_win_unfocus(vwm, vwin);
+	vwm_win_unmap(vwm, vwin);
+	vwin->desktop = desktop;
+
+	/* XXX: only focus the destination desktop when not the focused context, as
+	 * it creates an awkward disconnect for the focused context's focused desktop
+	 * to become updated to something else while looking at it without actually
+	 * realizing that focus change like a migrate does.
+	 */
+	if (vwm->focused_desktop->context != desktop->context)
+		desktop->context->focused_desktop = desktop;
+
+	vwm_win_set_focused(vwm, vwin);
+	XRaiseWindow(VWM_XDISPLAY(vwm), vwin->xwindow->id); /* ensure the window is @ top of stack */
 }

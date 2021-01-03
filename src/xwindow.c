@@ -62,31 +62,15 @@ vwm_xwindow_t * vwm_xwin_lookup(vwm_t *vwm, Window win)
 }
 
 
-/* determine if a window is mapped (vwm-mapped) according to the current context */
+/* determine if a window is mapped (vwm-mapped) according to the focused context */
 int vwm_xwin_is_mapped(vwm_t *vwm, vwm_xwindow_t *xwin)
 {
 	vwm_window_t	*vwin = xwin->managed;
-	int		ret = 0;
 
 	if (!xwin->client_mapped || !vwin)
 		return xwin->client_mapped;
 
-	switch (vwm->focused_context) {
-		case VWM_CONTEXT_SHELF:
-			if (vwm->focused_shelf == vwin)
-				ret = 1;
-			break;
-
-		case VWM_CONTEXT_DESKTOP:
-			if (vwm->focused_desktop == vwin->desktop && !vwin->shelved)
-				ret = 1;
-			break;
-
-		default:
-			VWM_BUG("Unsupported context");
-	}
-
-	return ret;
+	return (vwm->focused_desktop == vwin->desktop);
 }
 
 
