@@ -37,6 +37,8 @@ typedef struct vmon_t {
 	vwm_xserver_t	*xserver;
 	vwm_charts_t	*charts;
 	vwm_chart_t	*chart;
+	Atom		wm_protocols_atom;
+	Atom		wm_delete_atom;
 	Window		window;
 	int		width, height;
 	Picture		picture;
@@ -309,6 +311,9 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 		goto _err_free;
 	}
 
+	vmon->wm_delete_atom = XInternAtom(vmon->xserver->display, "WM_DELETE_WINDOW", False);
+	vmon->wm_protocols_atom = XInternAtom(vmon->xserver->display, "WM_PROTOCOLS", False);
+
 	vmon->charts = vwm_charts_create(vmon->xserver);
 	if (!vmon->charts) {
 		VWM_ERROR("unable to create charts instance");
@@ -387,9 +392,21 @@ static void vmon_process_event(vmon_t *vmon)
 			vwm_chart_compose(vmon->charts, vmon->chart, NULL);
 			vwm_chart_render(vmon->charts, vmon->chart, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
 			break;
+
 		case Expose:
 			vwm_chart_render(vmon->charts, vmon->chart, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
 			break;
+
+		case ClientMessage:
+			if (ev.xclient.message_type != vmon->wm_protocols_atom)
+				break;
+
+			if (ev.xclient.data.l[0] != vmon->wm_delete_atom)
+				break;
+
+			vmon->done = 1;
+			break;
+
 		default:
 			VWM_TRACE("unhandled event: %x\n", ev.type);
 	}
