@@ -8,7 +8,7 @@ AM_SILENT_RULES([yes])
 AX_APPEND_COMPILE_FLAGS([-Wall])
 
 PKG_CHECK_MODULES(VWM, x11 xext xinerama xrandr xcomposite xfixes xdamage xrender)
-PKG_CHECK_MODULES(VMON, x11 xext xfixes xrender)
+PKG_CHECK_MODULES(VMON, x11 xext xfixes xrender libpng)
 
 AC_CONFIG_FILES([
  Makefile
