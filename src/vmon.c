@@ -19,11 +19,14 @@
 #include <X11/Xlib.h>
 #include <assert.h>
 #include <limits.h>
+#include <png.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/prctl.h>
 #include <time.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -47,7 +50,9 @@ typedef struct vmon_t {
 	int		done;
 	int		linger;
 	time_t		start_time;
+	int		snapshot;
 	char		*output_dir;
+	unsigned	n_snapshots;
 } vmon_t;
 
 
@@ -186,6 +191,7 @@ static void print_help(void)
 		" -y  --height      Window height\n"
 		" -z  --hertz       Sample rate in hertz\n"
 		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
+		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD\n"
 		"-----------------------------------------------------------------------------"
 	);
 }
@@ -248,6 +254,9 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 				return 0;
 
 			last = ++argv;
+                } else if (is_flag(*argv, "-s", "--snapshot")) {
+			vmon->snapshot = 1;
+			last = argv;
 		} else if (is_flag(*argv, "-f", "--fullscreen")) {
 			if (!set_fullscreen(vmon)) {
 				VWM_ERROR("unable to set fullscreen dimensions");
@@ -425,6 +434,116 @@ static void vmon_resize(vmon_t *vmon, int width, int height)
 }
 
 
+static int vmon_snapshot_as_png(vmon_t *vmon, FILE *output)
+{
+	XImage		*chart_as_ximage;
+	png_bytepp	row_pointers;
+	png_infop	info_ctx;
+	png_structp	png_ctx;
+
+	assert(vmon);
+	assert(output);
+
+	vwm_chart_render_as_ximage(vmon->charts, vmon->chart, NULL, &chart_as_ximage);
+
+	row_pointers = malloc(sizeof(void *) * chart_as_ximage->height);
+	if (!row_pointers) {
+		XDestroyImage(chart_as_ximage);
+
+		return -ENOMEM;
+	}
+
+	for (unsigned i = 0; i < chart_as_ximage->height; i++)
+		row_pointers[i] = &((png_byte *)chart_as_ximage->data)[i * chart_as_ximage->bytes_per_line];
+
+	png_ctx = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (!png_ctx) {
+		free(row_pointers);
+		XDestroyImage(chart_as_ximage);
+
+		return -ENOMEM;
+	}
+
+	info_ctx = png_create_info_struct(png_ctx);
+	if (!info_ctx) {
+		png_destroy_write_struct(&png_ctx, NULL);
+		XDestroyImage(chart_as_ximage);
+		free(row_pointers);
+
+		return -ENOMEM;
+	}
+
+	png_init_io(png_ctx, output);
+
+	if (setjmp(png_jmpbuf(png_ctx)) != 0) {
+		png_destroy_write_struct(&png_ctx, &info_ctx);
+		XDestroyImage(chart_as_ximage);
+		free(row_pointers);
+
+		return -ENOMEM;
+	}
+
+	/* XXX: I'm sure this is making flawed assumptions about the color format
+	 * and type etc, but this makes it work for me and that's Good Enough for now.
+	 * One can easily turn runtime mapping of X color formats, endianness, and packing
+	 * details to whatever a file format like PNG can express into a tar-filled rabbithole
+	 * of fruitless wankery.
+	 */
+	png_set_bgr(png_ctx);
+	png_set_IHDR(png_ctx, info_ctx,
+		chart_as_ximage->width,
+		chart_as_ximage->height,
+		8,
+		PNG_COLOR_TYPE_RGBA,
+		PNG_INTERLACE_NONE,
+		PNG_COMPRESSION_TYPE_BASE,
+		PNG_FILTER_TYPE_BASE);
+
+        png_write_info(png_ctx, info_ctx);
+        png_write_image(png_ctx, row_pointers);
+        png_write_end(png_ctx, NULL);
+
+	XDestroyImage(chart_as_ximage);
+	free(row_pointers);
+
+	return 0;
+}
+
+
+static int vmon_snapshot(vmon_t *vmon)
+{
+	struct tm	*start_time;
+	char		start_str[32];
+	char		path[4096];
+	FILE		*output;
+	int		r;
+
+	assert(vmon);
+
+	if (mkdir(vmon->output_dir, 0755) == -1 && errno != EEXIST)
+		return -errno;
+
+	start_time = localtime(&vmon->start_time);
+	strftime(start_str, sizeof(start_str), "%m.%d.%y-%T", start_time);
+	snprintf(path, sizeof(path), "%s/%s-%u.png", vmon->output_dir, start_str, vmon->n_snapshots++);
+
+	output = fopen(path, "w+");
+	if (!output)
+		return -errno;
+
+	r = vmon_snapshot_as_png(vmon, output);
+	if (r < 0) {
+		fclose(output);
+		return r;
+	}
+
+	fsync(fileno(output));
+	fclose(output);
+
+	return 0;
+}
+
+
 /* handle the next X event, may block */
 static void vmon_process_event(vmon_t *vmon)
 {
@@ -488,6 +607,9 @@ int main(int argc, char * const argv[])
 
 		if (got_sigchld) {
 			int	status;
+
+			if (vmon_snapshot(vmon) < 0)
+				VWM_ERROR("error saving snapshot");
 
 			got_sigchld = 0;
 			wait(&status);
