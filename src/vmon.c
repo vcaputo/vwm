@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/prctl.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -45,6 +46,7 @@ typedef struct vmon_t {
 	int		pid;
 	int		done;
 	int		linger;
+	time_t		start_time;
 } vmon_t;
 
 
@@ -302,6 +304,7 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 		goto _err;
 	}
 
+	vmon->start_time = time(NULL);
 	vmon->width = WIDTH_DEFAULT;
 	vmon->height = HEIGHT_DEFAULT;
 
