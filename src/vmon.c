@@ -52,6 +52,7 @@ typedef struct vmon_t {
 	time_t		start_time;
 	int		snapshot;
 	char		*output_dir;
+	char		*name;
 	unsigned	n_snapshots;
 } vmon_t;
 
@@ -185,6 +186,7 @@ static void print_help(void)
 		" --                Sentinel, subsequent arguments form command to execute\n"
 		" -f  --fullscreen  Fullscreen window\n"
 		" -h  --help        Show this help\n"
+		" -n  --name        Name of chart, shows in window title and output filenames\n"
 		" -l  --linger      Don't exit when top-level process exits\n"
 		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
 		" -x  --width       Window width\n"
@@ -251,6 +253,11 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 			last = ++argv;
 		} else if (is_flag(*argv, "-o", "--output-dir")) {
 			if (!parse_flag_str(argv, end, argv + 1, 1, &vmon->output_dir))
+				return 0;
+
+			last = ++argv;
+		} else if (is_flag(*argv, "-n", "--name")) {
+			if (!parse_flag_str(argv, end, argv + 1, 1, &vmon->name))
 				return 0;
 
 			last = ++argv;
@@ -389,6 +396,8 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 	}
 
 	vmon->window = XCreateSimpleWindow(vmon->xserver->display, XSERVER_XROOT(vmon->xserver), 0, 0, vmon->width, vmon->height, 1, 0, 0);
+	if (vmon->name)
+		XStoreName(vmon->xserver->display, vmon->window, vmon->name);
 	XGetWindowAttributes(vmon->xserver->display, vmon->window, &wattr);
 	vmon->picture = XRenderCreatePicture(vmon->xserver->display, vmon->window, XRenderFindVisualFormat(vmon->xserver->display, wattr.visual), 0, &pattr);
 
@@ -515,17 +524,43 @@ static int vmon_snapshot(vmon_t *vmon)
 	struct tm	*start_time;
 	char		start_str[32];
 	char		path[4096];
+	char		name[17] = {};
 	FILE		*output;
 	int		r;
 
 	assert(vmon);
+
+	if (vmon->name) {
+		for (int i = 0; i < sizeof(name) - 1 && vmon->name[i]; i++) {
+			char	c = vmon->name[i];
+			switch (c) {
+			/* replace characters relevant to path interpolation */
+			case '/':
+				c = '\\';
+				break;
+
+			case '.':
+				/* no leading dot, and no ".." */
+				if (i == 0 || (i == 1 && !vmon->name[2]))
+					c = '_';
+				break;
+			default:
+			}
+			name[i] = c;
+		}
+	}
 
 	if (mkdir(vmon->output_dir, 0755) == -1 && errno != EEXIST)
 		return -errno;
 
 	start_time = localtime(&vmon->start_time);
 	strftime(start_str, sizeof(start_str), "%m.%d.%y-%T", start_time);
-	snprintf(path, sizeof(path), "%s/%s-%u.png", vmon->output_dir, start_str, vmon->n_snapshots++);
+	snprintf(path, sizeof(path), "%s/%s%s%s-%u.png",
+		vmon->output_dir,
+		name,
+		vmon->name ? "-" : "",
+		start_str,
+		vmon->n_snapshots++);
 
 	output = fopen(path, "w+");
 	if (!output)
