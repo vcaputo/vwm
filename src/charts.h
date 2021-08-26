@@ -16,7 +16,7 @@ void vwm_charts_rate_decrease(vwm_charts_t *charts);
 void vwm_charts_rate_set(vwm_charts_t *charts, unsigned hertz);
 int vwm_charts_update(vwm_charts_t *charts, int *desired_delay);
 
-vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int height);
+vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int height, const char *name);
 void vwm_chart_destroy(vwm_charts_t *charts, vwm_chart_t *chart);
 void vwm_chart_reset_snowflakes(vwm_charts_t *charts, vwm_chart_t *chart);
 int vwm_chart_set_visible_size(vwm_charts_t *charts, vwm_chart_t *chart, int width, int height);

@@ -389,7 +389,7 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 		goto _err_charts;
 	}
 
-	vmon->chart = vwm_chart_create(vmon->charts, vmon->pid, vmon->width, vmon->height);
+	vmon->chart = vwm_chart_create(vmon->charts, vmon->pid, vmon->width, vmon->height, vmon->name);
 	if (!vmon->chart) {
 		VWM_ERROR("unable to create chart");
 		goto _err_charts;

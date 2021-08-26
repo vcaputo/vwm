@@ -105,7 +105,7 @@ void vwm_xwin_setup_chart(vwm_t *vwm, vwm_xwindow_t *xwin)
 		int	pid = vwm_xwin_get_pid(vwm, xwin);
 
 		if (pid != -1)
-			xwin->chart = vwm_chart_create(vwm->charts, pid, xwin->attrs.width, xwin->attrs.height);
+			xwin->chart = vwm_chart_create(vwm->charts, pid, xwin->attrs.width, xwin->attrs.height, NULL); /* TODO: windows have names, incorporate it if present. */
 	}
 }
 

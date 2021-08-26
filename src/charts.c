@@ -91,6 +91,7 @@ typedef struct _vwm_chart_t {
 	int		snowflakes_cnt;		/* count of snowflaked rows (reset to zero to truncate snowflakes display) */
 	int		gen_last_composed;	/* the last composed vmon generation */
 	int		redraw_needed;		/* if a redraw is required (like when the window is resized...) */
+	char		*name;			/* name if provided, included in chart by the \/\/\ */
 } vwm_chart_t;
 
 /* space we need for every process being monitored */
@@ -852,7 +853,10 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 
 	/* only draw the \/\/\ and HZ if necessary */
 	if (chart->redraw_needed || charts->prev_sampling_interval != charts->sampling_interval) {
-		str_len = snpf(str, sizeof(str), "\\/\\/\\    %2uHz ", interval_as_hz(charts));
+		str_len = snpf(str, sizeof(str), "\\/\\/\\%s%s @ %2uHz ",
+			chart->name ? " # " : "",
+			chart->name ? chart->name : "",
+			interval_as_hz(charts));
 		XRenderFillRectangle(xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
 			0, 0,						/* dst x, y */
 			chart->visible_width, CHART_ROW_HEIGHT);	/* dst w, h */
@@ -1036,7 +1040,7 @@ int vwm_chart_set_visible_size(vwm_charts_t *charts, vwm_chart_t *chart, int wid
 
 
 /* create an chart and start monitoring for the supplied pid */
-vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int height)
+vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int height, const char *name)
 {
 	vwm_chart_t	*chart;
 
@@ -1044,6 +1048,14 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	if (!chart) {
 		VWM_PERROR("Unable to allocate vwm_chart_t");
 		goto _err;
+	}
+
+	if (name) {
+		chart->name = strdup(name);
+		if (!chart->name) {
+			VWM_PERROR("Unable to allocate name");
+			goto _err_free;
+		}
 	}
 
 	/* add the client process to the monitoring heirarchy */
@@ -1070,6 +1082,7 @@ _err_unmonitor:
 	vmon_proc_unmonitor(&charts->vmon, chart->monitor, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
 
 _err_free:
+	free(chart->name);
 	free(chart);
 _err:
 	return NULL;
