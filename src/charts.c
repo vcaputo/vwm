@@ -1198,8 +1198,8 @@ void vwm_chart_render_as_pixmap(vwm_charts_t *charts, vwm_chart_t *chart, const 
 	if (!bg_color)
 		bg_color = &blackness;
 
-	dest = create_picture_fill(charts, chart->width, chart->height, 32, 0, NULL, bg_color, res_pixmap);
-	vwm_chart_render(charts, chart, PictOpOver, dest, 0, 0, chart->width, chart->height);
+	dest = create_picture_fill(charts, chart->width, vwm_chart_composed_height(charts, chart), 32, 0, NULL, bg_color, res_pixmap);
+	vwm_chart_render(charts, chart, PictOpOver, dest, 0, 0, chart->width, vwm_chart_composed_height(charts, chart));
 	XRenderFreePicture(charts->xserver->display, dest);
 }
 
@@ -1218,7 +1218,7 @@ void vwm_chart_render_as_ximage(vwm_charts_t *charts, vwm_chart_t *chart, const 
 				0,
 				0,
 				chart->width,
-				chart->height,
+				vwm_chart_composed_height(charts, chart),
 				AllPlanes,
 				ZPixmap);
 
