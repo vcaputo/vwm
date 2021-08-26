@@ -524,7 +524,7 @@ static int vmon_snapshot(vmon_t *vmon)
 	struct tm	*start_time;
 	char		start_str[32];
 	char		path[4096];
-	char		name[17] = {};
+	char		name[200] = {};
 	FILE		*output;
 	int		r;
 
