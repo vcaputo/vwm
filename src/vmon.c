@@ -47,6 +47,7 @@ typedef struct vmon_t {
 	int		done;
 	int		linger;
 	time_t		start_time;
+	char		*output_dir;
 } vmon_t;
 
 
@@ -115,6 +116,39 @@ static int parse_flag_int(char * const *flag, char * const *end, char * const *o
 }
 
 
+/* parse string out of opt, stores parsed opt in newly allocated *res on success */
+static int parse_flag_str(char * const *flag, char * const *end, char * const *opt, int min_len, char **res)
+{
+	char	*tmp;
+
+	assert(flag);
+	assert(end);
+	assert(opt);
+	assert(res);
+
+	if (flag == end || (!min_len || **opt == '\0')) {
+		VWM_ERROR("flag \"%s\" expects an argument", *flag);
+		return 0;
+	}
+
+	if (strlen(*opt) < min_len) {
+		VWM_ERROR("flag \"%s\" argument must be longer than %i, got \"%s\"", *flag, min_len, *opt);
+		return 0;
+	}
+
+	tmp = strdup(*opt);
+	if (!tmp) {
+		VWM_ERROR("unable to duplicate argument \"%s\"", *opt);
+		return 0;
+	}
+
+	free(*res);
+	*res = tmp;
+
+	return 1;
+}
+
+
 /* set vmon->{width,height} to fullscreen dimensions */
 static int set_fullscreen(vmon_t *vmon)
 {
@@ -151,6 +185,7 @@ static void print_help(void)
 		" -x  --width       Window width\n"
 		" -y  --height      Window height\n"
 		" -z  --hertz       Sample rate in hertz\n"
+		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
 		"-----------------------------------------------------------------------------"
 	);
 }
@@ -205,6 +240,11 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 			last = ++argv;
 		} else if (is_flag(*argv, "-y", "--height")) {
 			if (!parse_flag_int(argv, end, argv + 1, HEIGHT_MIN, INT_MAX, &vmon->height))
+				return 0;
+
+			last = ++argv;
+		} else if (is_flag(*argv, "-o", "--output-dir")) {
+			if (!parse_flag_str(argv, end, argv + 1, 1, &vmon->output_dir))
 				return 0;
 
 			last = ++argv;
@@ -307,6 +347,11 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 	vmon->start_time = time(NULL);
 	vmon->width = WIDTH_DEFAULT;
 	vmon->height = HEIGHT_DEFAULT;
+	vmon->output_dir = strdup(".");
+	if (!vmon->output_dir) {
+		VWM_ERROR("unable to alloc output dir");
+		goto _err_free;
+	}
 
 	vmon->xserver = vwm_xserver_open();
 	if (!vmon->xserver) {
