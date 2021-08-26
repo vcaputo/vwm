@@ -214,7 +214,7 @@ static Picture create_picture(vwm_charts_t *charts, unsigned width, unsigned hei
 
 
 /* convenience helper for creating a filled picture, supply res_pixmap to keep a reference to the pixmap drawable. */
-static Picture create_picture_fill(vwm_charts_t *charts, unsigned width, unsigned height, unsigned depth, unsigned long attrs_mask, XRenderPictureAttributes *attrs, XRenderColor *color, Pixmap *res_pixmap)
+static Picture create_picture_fill(vwm_charts_t *charts, unsigned width, unsigned height, unsigned depth, unsigned long attrs_mask, XRenderPictureAttributes *attrs, const XRenderColor *color, Pixmap *res_pixmap)
 {
 	vwm_xserver_t	*xserver = charts->xserver;
 	Picture		picture;
@@ -1169,6 +1169,47 @@ void vwm_chart_render(vwm_charts_t *charts, vwm_chart_t *chart, int op, Picture 
 			 x,										/* dst x */
 			 y,										/* dst y */
 			 width, MIN(vwm_chart_composed_height(charts, chart), height) /* FIXME */);	/* w, h */
+}
+
+
+/* render the chart into a newly allocated pixmap, intended for snapshotting purposes */
+void vwm_chart_render_as_pixmap(vwm_charts_t *charts, vwm_chart_t *chart, const XRenderColor *bg_color, Pixmap *res_pixmap)
+{
+	static const XRenderColor	blackness = { 0x0000, 0x0000, 0x0000, 0xFFFF};
+	Picture			 	dest;
+
+	assert(charts);
+	assert(chart);
+	assert(res_pixmap);
+
+	if (!bg_color)
+		bg_color = &blackness;
+
+	dest = create_picture_fill(charts, chart->width, chart->height, 32, 0, NULL, bg_color, res_pixmap);
+	vwm_chart_render(charts, chart, PictOpOver, dest, 0, 0, chart->width, chart->height);
+	XRenderFreePicture(charts->xserver->display, dest);
+}
+
+
+void vwm_chart_render_as_ximage(vwm_charts_t *charts, vwm_chart_t *chart, const XRenderColor *bg_color, XImage **res_ximage)
+{
+	Pixmap	dest_pixmap;
+
+	assert(charts);
+	assert(chart);
+	assert(res_ximage);
+
+	vwm_chart_render_as_pixmap(charts, chart, bg_color, &dest_pixmap);
+	*res_ximage = XGetImage(charts->xserver->display,
+				dest_pixmap,
+				0,
+				0,
+				chart->width,
+				chart->height,
+				AllPlanes,
+				ZPixmap);
+
+	XFreePixmap(charts->xserver->display, dest_pixmap);
 }
 
 

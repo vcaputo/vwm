@@ -22,5 +22,7 @@ void vwm_chart_reset_snowflakes(vwm_charts_t *charts, vwm_chart_t *chart);
 int vwm_chart_set_visible_size(vwm_charts_t *charts, vwm_chart_t *chart, int width, int height);
 void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart, XserverRegion *res_damaged_region);
 void vwm_chart_render(vwm_charts_t *charts, vwm_chart_t *chart, int op, Picture dest, int x, int y, int width, int height);
+void vwm_chart_render_as_pixmap(vwm_charts_t *charts, vwm_chart_t *chart, const XRenderColor *bg_color, Pixmap *res_pixmap);
+void vwm_chart_render_as_ximage(vwm_charts_t *charts, vwm_chart_t *chart, const XRenderColor *bg_color, XImage **res_ximage);
 
 #endif
