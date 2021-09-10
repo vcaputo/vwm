@@ -28,6 +28,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
+#include <time.h>
 #include <inttypes.h>
 #include <dirent.h>
 #include <errno.h>
@@ -864,9 +865,11 @@ typedef enum _vmon_sys_stat_fsm_t {
 /* system-wide stat sampling, things like CPU usages, stuff in /proc/stat */
 static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 {
-	int			i, len, total = 0;
-	int			changes = 0;
-	vmon_sys_stat_fsm_t	state = VMON_PARSER_STATE_SYS_STAT_CPU_PREFIX;	/* this could be defined as the "VMON_PARSER_INITIAL_STATE" */
+	int				i, len, total = 0;
+	int				changes = 0;
+	vmon_sys_stat_fsm_t		state = VMON_PARSER_STATE_SYS_STAT_CPU_PREFIX;	/* this could be defined as the "VMON_PARSER_INITIAL_STATE" */
+	struct timespec			ts;
+	typeof((*store)->boottime)	boottime;
 #define VMON_PREPARE_PARSER
 #include "defs/sys_stat.def"
 
@@ -878,6 +881,20 @@ static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 	if (!(*store)) { /* ctor */
 		(*store) = calloc(1, sizeof(vmon_sys_stat_t));
 		(*store)->stat_fd = openat(dirfd(vmon->proc_dir), "stat", O_RDONLY);
+	}
+
+#ifndef NSEC_PER_SEC
+#define NSEC_PER_SEC	1000000000
+#endif
+
+	/* VMON_SYS_STAT_BOOTTIME */
+	clock_gettime(CLOCK_BOOTTIME, &ts);
+	boottime = ts.tv_sec * vmon->ticks_per_sec;
+	boottime += ts.tv_nsec * vmon->ticks_per_sec / NSEC_PER_SEC;
+	if ((*store)->boottime != boottime) {
+		(*store)->boottime = boottime;
+		BITSET((*store)->changed, VMON_SYS_STAT_BOOTTIME);
+		changes++;
 	}
 
 	while ((len = try_pread((*store)->stat_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
@@ -983,6 +1000,7 @@ int vmon_init(vmon_t *vmon, vmon_flags_t flags, vmon_sys_wants_t sys_wants, vmon
 	vmon->flags = flags;
 	vmon->sys_wants = sys_wants;
 	vmon->proc_wants = proc_wants;
+	vmon->ticks_per_sec = sysconf(_SC_CLK_TCK);
 
 	/* here we populate the sys and proc function tables */
 #define vmon_want(_sym, _name, _func) \

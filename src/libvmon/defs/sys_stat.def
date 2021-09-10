@@ -1,6 +1,10 @@
 #include "_begin.def"
 
 		/* 		member name,	symbolic constant,	human label,	human description (think UI/help) */
+
+	/* clock_gettime(CLOCK_BOOTTIME) */
+vmon_datum_ulonglong(		boottime,	SYS_STAT_BOOTTIME,	"BootTime",	"Time since boot (ticks)")
+
 	/* /proc/stat */
 
 /* a cpu row, this is shown once for the total prefixed with "cpu  ", then again for every cpu prefixed with "cpuN ", newlines terminate rows */

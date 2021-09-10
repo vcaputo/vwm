@@ -276,6 +276,7 @@ typedef struct _vmon_t {
 	vmon_flags_t		flags;				/* instance flags */
 	vmon_sys_wants_t	sys_wants;			/* system-wide wants mask */
 	vmon_proc_wants_t	proc_wants;			/* inherited per-process wants mask */
+	long			ticks_per_sec;			/* sysconf(_SC_CLK_TCK) */
 
 								/* function tables for mapping of wants bits to functions (sys-wide and per-process) */
 	int			(*sys_funcs[VMON_STORE_SYS_NR])(struct _vmon_t *, void **);
