@@ -45,6 +45,7 @@
 #define CHART_MAX_ARGC		64					/* this is a huge amount */
 #define CHART_VMON_PROC_WANTS	(VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS)
 #define CHART_VMON_SYS_WANTS	(VMON_WANT_SYS_STAT)
+#define CHART_MAX_COLUMNS	16
 
 /* the global charts state, supplied to vwm_chart_create() which keeps a reference for future use. */
 typedef struct _vwm_charts_t {
@@ -72,26 +73,64 @@ typedef struct _vwm_charts_t {
 						finish_fill;
 } vwm_charts_t;
 
+typedef enum _vwm_column_type_t {
+	VWM_COLUMN_VWM,
+	VWM_COLUMN_PROC_USER,
+	VWM_COLUMN_PROC_SYS,
+	VWM_COLUMN_PROC_WALL,
+	VWM_COLUMN_PROC_TREE,
+	VWM_COLUMN_PROC_ARGV,
+	VWM_COLUMN_PROC_PID,
+	VWM_COLUMN_PROC_WCHAN,
+	VWM_COLUMN_PROC_STATE,
+	VWM_COLUMN_CNT
+} vwm_column_type_t;
+
+/* which side to pack the column onto */
+typedef enum _vwm_side_t {
+	VWM_SIDE_LEFT,
+	VWM_SIDE_RIGHT,
+	VWM_SIDE_CNT
+} vwm_side_t;
+
+/* how to horizontally justify contents within a given column's area */
+typedef enum _vwm_justify_t {
+	VWM_JUSTIFY_LEFT,
+	VWM_JUSTIFY_RIGHT,
+	VWM_JUSTIFY_CENTER,
+	VWM_JUSTIFY_CNT
+} vwm_justify_t;
+
+typedef struct _vwm_column_t {
+	/* TODO: make the columns configurable and add more description/toggled state here */
+	unsigned		enabled:1;
+	vwm_column_type_t	type;
+	vwm_side_t		side;
+	int			width;
+} vwm_column_t;
+
 /* everything needed by the per-window chart's context */
 typedef struct _vwm_chart_t {
-	vmon_proc_t	*monitor;		/* vmon process monitor handle */
-	Pixmap		text_pixmap;		/* pixmap for charted text (kept around for XDrawText usage) */
-	Picture		text_picture;		/* picture representation of text_pixmap */
-	Picture		shadow_picture;		/* text shadow layer */
-	Picture		grapha_picture;		/* graph A layer */
-	Picture		graphb_picture;		/* graph B layer */
-	Picture		tmp_picture;		/* 1 row worth of temporary picture space */
-	Picture		picture;		/* chart picture derived from the pixmap, for render compositing */
-	int		width;			/* current width of the chart */
-	int		height;			/* current height of the chart */
-	int		visible_width;		/* currently visible width of the chart */
-	int		visible_height;		/* currently visible height of the chart */
-	int		phase;			/* current position within the (horizontally scrolling) graphs */
-	int		heirarchy_end;		/* row where the process heirarchy currently ends */
-	int		snowflakes_cnt;		/* count of snowflaked rows (reset to zero to truncate snowflakes display) */
-	int		gen_last_composed;	/* the last composed vmon generation */
-	int		redraw_needed;		/* if a redraw is required (like when the window is resized...) */
-	char		*name;			/* name if provided, included in chart by the \/\/\ */
+	vmon_proc_t	*monitor;				/* vmon process monitor handle */
+	Pixmap		text_pixmap;				/* pixmap for charted text (kept around for XDrawText usage) */
+	Picture		text_picture;				/* picture representation of text_pixmap */
+	Picture		shadow_picture;				/* text shadow layer */
+	Picture		grapha_picture;				/* graph A layer */
+	Picture		graphb_picture;				/* graph B layer */
+	Picture		tmp_picture;				/* 1 row worth of temporary picture space */
+	Picture		picture;				/* chart picture derived from the pixmap, for render compositing */
+	int		width;					/* current width of the chart */
+	int		height;					/* current height of the chart */
+	int		visible_width;				/* currently visible width of the chart */
+	int		visible_height;				/* currently visible height of the chart */
+	int		phase;					/* current position within the (horizontally scrolling) graphs */
+	int		heirarchy_end;				/* row where the process heirarchy currently ends */
+	int		snowflakes_cnt;				/* count of snowflaked rows (reset to zero to truncate snowflakes display) */
+	int		gen_last_composed;			/* the last composed vmon generation */
+	int		redraw_needed;				/* if a redraw is required (like when the window is resized...) */
+	char		*name;					/* name if provided, included in chart by the \/\/\ */
+	vwm_column_t	columns[CHART_MAX_COLUMNS];		/* columns in the chart TODO, for now just stowing the real/user/sys width here */
+	vwm_column_t	snowflake_columns[CHART_MAX_COLUMNS];	/* columns in the snowflaked rows */
 } vwm_chart_t;
 
 /* space we need for every process being monitored */
@@ -413,7 +452,7 @@ static void shadow_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 
 
 /* simple helper to map the vmon per-proc argv array into an XTextItem array, deals with threads vs. processes and the possibility of the comm field not getting read in before the process exited... */
-static void argv2xtext(vmon_proc_t *proc, XTextItem *items, int max_items, int *nr_items)
+static void argv2xtext(const vmon_proc_t *proc, XTextItem *items, int max_items, int *nr_items)
 {
 	int	i;
 	int	nr = 0;
@@ -540,7 +579,7 @@ static void mark_finish(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 
 
 /* helper for drawing a proc's argv @ specified x offset and row on the chart */
-static void print_argv(vwm_charts_t *charts, vwm_chart_t *chart, int x, int row, vmon_proc_t *proc)
+static void print_argv(const vwm_charts_t *charts, const vwm_chart_t *chart, int x, int row, const vmon_proc_t *proc, int *res_width)
 {
 	vwm_xserver_t	*xserver = charts->xserver;
 	XTextItem	items[CHART_MAX_ARGC];
@@ -550,6 +589,18 @@ static void print_argv(vwm_charts_t *charts, vwm_chart_t *chart, int x, int row,
 	XDrawText(xserver->display, chart->text_pixmap, charts->text_gc,
 		  x, (row + 1) * CHART_ROW_HEIGHT - 3,		/* dst x, y */
 		  items, nr_items);
+
+	/* if the caller wants to know the width, compute it, it's dumb that XDrawText doesn't
+	 * return the dimensions of what was drawn, fucking xlib.
+	 */
+	if (res_width) {
+		int	width = 0;
+
+		for (int i = 0; i < nr_items; i++)
+			width += XTextWidth(charts->chart_font, items[i].chars, items[i].nchars) + items[i].delta;
+
+		*res_width = width;
+	}
 }
 
 
@@ -570,62 +621,23 @@ static inline int proc_has_subsequent_siblings(vmon_t *vmon, vmon_proc_t *proc)
 }
 
 
-/* draws proc in a row of the process heirarchy */
-static void draw_heirarchy_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int depth, int row, int heirarchy_changed)
+/* convert chart sampling interval back into an integral hertz value, basically
+ * open-coded ceilf(1.f / charts->sampling_interval) to avoid needing -lm.
+ */
+static unsigned interval_as_hz(vwm_charts_t *charts)
 {
-	vwm_xserver_t		*xserver = charts->xserver;
-	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
-	vmon_proc_t		*child;
-	char			str[256];
-	int			str_len, str_width;
+	return (1.f / charts->sampling_interval + .5f);
+}
 
-/* process heirarchy text and accompanying per-process details like wchan/pid/state... */
 
-	/* skip if obviously unnecessary (this can be further improved, but this makes a big difference as-is) */
-	if (!chart->redraw_needed &&
-	    !heirarchy_changed &&
-	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_WCHAN) &&
-	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_PID) &&
-	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_STATE) &&
-	    !BITTEST(proc_stat->changed, VMON_PROC_STAT_ARGV))
-		return;
-
-	/* TODO: make the columns interactively configurable @ runtime */
-	if (!proc->is_new)
-	/* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
-		XRenderFillRectangle(xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
-			0, row * CHART_ROW_HEIGHT,		/* dst x, y */
-			chart->width, CHART_ROW_HEIGHT);	/* dst w, h */
-
-	/* put the process' wchan, state, and PID columns @ the far right */
-	if (proc->is_thread || list_empty(&proc->threads)) {	/* only threads or non-threaded processes include the wchan and state */
-		str_len = snpf(str, sizeof(str), "   %.*s %5i %c ",
-				proc_stat->wchan.len,
-				proc_stat->wchan.len == 1 && proc_stat->wchan.array[0] == '0' ? "-" : proc_stat->wchan.array,
-				proc->pid,
-				proc_stat->state);
-	} else { /* we're a process having threads, suppress the wchan and state, as they will be displayed for the thread of same pid */
-		str_len = snpf(str, sizeof(str), "  %5i   ", proc->pid);
-	}
-
-	str_width = XTextWidth(charts->chart_font, str, str_len);
-
-	/* the process' comm label indented according to depth, followed with their respective argv's */
-	print_argv(charts, chart, depth * (CHART_ROW_HEIGHT / 2), row, proc);
-
-	/* ensure the area for the rest of the stuff is cleared, we don't put much text into thread rows so skip it for those. */
-	if (!proc->is_thread)
-		XRenderFillRectangle(xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
-				     chart->visible_width - str_width, row * CHART_ROW_HEIGHT,			/* dst x,y */
-				     chart->width - (chart->visible_width - str_width), CHART_ROW_HEIGHT);	/* dst w,h */
-
-	XDrawString(xserver->display, chart->text_pixmap, charts->text_gc,
-		    chart->visible_width - str_width, (row + 1) * CHART_ROW_HEIGHT - 3,		/* dst x, y */
-		    str, str_len);
+/* draw a process' row slice of a process tree */
+static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int depth, int row, const vmon_proc_t *proc, int *res_width)
+{
+	vwm_xserver_t	*xserver = charts->xserver;
 
 	/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
 	if (proc != chart->monitor) {
-		vmon_proc_t		*ancestor, *sibling, *last_sibling = NULL;
+		vmon_proc_t		*child, *ancestor, *sibling, *last_sibling = NULL;
 		int			needs_tee = 0;
 		int			bar_x = 0, bar_y = (row + 1) * CHART_ROW_HEIGHT;
 		int			sub;
@@ -641,8 +653,8 @@ static void draw_heirarchy_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_pr
 			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
 			if (proc_has_subsequent_siblings(&charts->vmon, ancestor))
 				XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
-					  bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
-					  bar_x, bar_y);			/* dst x2, y2 (vertical line) */
+					  x + bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
+					  x + bar_x, bar_y);			/* dst x2, y2 (vertical line) */
 		}
 
 		/* determine if _any_ of our siblings have children requiring us to draw a tee immediately before our comm string.
@@ -689,30 +701,291 @@ static void draw_heirarchy_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_pr
 				/* if we're the last sibling, corner the tee by shortening the vbar */
 				if (proc == last_sibling) {
 					XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
-						  bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
-						  bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
+						  x + bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
+						  x + bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
 				} else {
 					XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
-						  bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
-						  bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
+						  x + bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
+						  x + bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
 				}
 
 				XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
-					  bar_x, bar_y - 4,				/* dst x1, y1 */
-					  bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
+					  x + bar_x, bar_y - 4,				/* dst x1, y1 */
+					  x + bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
 
 				/* terminate the outer sibling loop upon drawing the tee... */
 				break;
 			}
 		}
+
+		/* this currently just returns a max-case width like we drew a tee, even if we didn't draw anything */
+		if (res_width)
+			*res_width = (depth - 1) * (CHART_ROW_HEIGHT / 2) + 6;
+	}
+}
+
+
+/* draw a proc row according to the columns configured in columns,
+ * row==0 is treated specially as the heading row
+ */
+static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t *columns, int depth, int row, const vmon_proc_t *proc)
+{
+	vmon_sys_stat_t		*sys_stat = charts->vmon.stores[VMON_STORE_SYS_STAT];
+	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
+	vwm_xserver_t		*xserver = charts->xserver;
+	char			str[256];
+
+	for (int i = 0, left = 0, right = 0; i < CHART_MAX_COLUMNS; i++) {
+		vwm_column_t	*c = &columns[i];
+		vwm_justify_t	str_justify = VWM_JUSTIFY_CENTER;
+		int		str_len = 0;
+
+		if (!c->enabled)
+			continue;
+
+		switch (c->type) {
+		case VWM_COLUMN_VWM:
+			if (!row) /* "\/\/\ # name @ XXHz" is only relevant to the heading */
+				str_len = snpf(str, sizeof(str), "\\/\\/\\%s%s @ %2uHz ",
+					chart->name ? " # " : "",
+					chart->name ? chart->name : "",
+					interval_as_hz(charts));
+
+			str_justify = VWM_JUSTIFY_RIGHT;
+			break;
+
+		case VWM_COLUMN_PROC_USER: /* User CPU time */
+			if (!row)
+				str_len = snpf(str, sizeof(str), "User");
+			else
+				str_len = snpf(str, sizeof(str), "%.2fs",
+						(float)proc_stat->utime / (float)charts->vmon.ticks_per_sec);
+
+			str_justify = VWM_JUSTIFY_RIGHT;
+			break;
+
+		case VWM_COLUMN_PROC_SYS: /* Sys CPU time */
+			if (!row)
+				str_len = snpf(str, sizeof(str), "Sys");
+			else
+				str_len = snpf(str, sizeof(str), "%.2fs",
+						(float)proc_stat->stime / (float)charts->vmon.ticks_per_sec);
+
+			str_justify = VWM_JUSTIFY_RIGHT;
+			break;
+
+		case VWM_COLUMN_PROC_WALL: /* User Sys Wall times */
+			if (!row)
+				str_len = snpf(str, sizeof(str), "Wall");
+			else
+				str_len = snpf(str, sizeof(str), "%.2fs",
+						(float)(sys_stat->boottime - proc_stat->start) / (float)charts->vmon.ticks_per_sec);
+
+			str_justify = VWM_JUSTIFY_RIGHT;
+			break;
+
+		case VWM_COLUMN_PROC_TREE: { /* print a row of the process heirarchy tree */
+			int	width = 0;
+
+			if (!row)	/* tree markup needs no heading */
+				break;
+
+			assert(c->side == VWM_SIDE_LEFT); /* XXX: technically SIDE_RIGHT could work, but doesn't currently */
+
+			draw_tree_row(charts, chart, left, depth, row, proc, &width);
+			left += width;
+			break;
+		}
+
+		case VWM_COLUMN_PROC_ARGV: { /* print the process' argv */
+			if (!row) {
+				str_len = snpf(str, sizeof(str), "ArgV/~ThreadName");
+				str_justify = VWM_JUSTIFY_LEFT;
+			} else {
+				int	width;
+
+				print_argv(charts, chart, left /* FIXME: consider c->side */, row, proc, &width);
+				if (width > c->width) {
+					c->width = width;
+					chart->redraw_needed++;
+				}
+			}
+			break;
+		}
+
+		case VWM_COLUMN_PROC_PID: /* print the process' PID */
+			if (!row)
+				str_len = snpf(str, sizeof(str), "PID");
+			else
+				str_len = snpf(str, sizeof(str), "%5i", proc->pid);
+
+			str_justify = VWM_JUSTIFY_RIGHT;
+			break;
+
+		case VWM_COLUMN_PROC_WCHAN: /* print the process' wchan */
+			if (!row)
+				str_len = snpf(str, sizeof(str), "WChan");
+			else {
+
+				/* don't show wchan for processes with threads, since their main thread will show it. */
+				if (!proc->is_thread && !list_empty(&proc->threads))
+					break;
+
+				str_len = snpf(str, sizeof(str), "%.*s",
+						proc_stat->wchan.len,
+						proc_stat->wchan.len == 1 && proc_stat->wchan.array[0] == '0' ? "-" : proc_stat->wchan.array);
+			}
+
+			str_justify = VWM_JUSTIFY_RIGHT;
+			break;
+
+		case VWM_COLUMN_PROC_STATE: /* print the process' state */
+			if (!row)
+				str_len = snpf(str, sizeof(str), "State");
+			else {
+				/* don't show process state for processes with threads, since their main thread will show it. */
+				if (!proc->is_thread && !list_empty(&proc->threads))
+					break;
+
+				str_len = snpf(str, sizeof(str), "%c", proc_stat->state);
+			}
+
+			str_justify = VWM_JUSTIFY_CENTER;
+			break;
+
+		default:
+			assert(0);
+		}
+
+		/* for plain string draws, str_len is left non-zero and they all get handled equally here */
+		if (str_len) {
+			int	str_width, xpos;
+
+			str_width = XTextWidth(charts->chart_font, str, str_len);
+			if (str_width > c->width) {
+				c->width = str_width;
+				chart->redraw_needed++;
+			}
+
+			/* get xpos to the left edge of the column WRT c->width and c->side */
+			switch (c->side) {
+			case VWM_SIDE_LEFT:
+				xpos = left;
+				break;
+
+			case VWM_SIDE_RIGHT:
+				xpos = chart->visible_width - (right + c->width);
+				break;
+
+			default:
+				assert(0);
+			}
+
+			/* adjust xpos according to str_justify and c->width */
+			switch (str_justify) {
+			case VWM_JUSTIFY_LEFT:
+				/* xpos already @ left */
+				break;
+
+			case VWM_JUSTIFY_RIGHT:
+				xpos += c->width - str_width;
+				break;
+
+			case VWM_JUSTIFY_CENTER:
+				xpos += (c->width - str_width) / 2;
+				break;
+
+			default:
+				assert(0);
+			}
+
+			XDrawString(xserver->display, chart->text_pixmap, charts->text_gc,
+				    xpos,  (row + 1) * CHART_ROW_HEIGHT - 3,
+				    str, str_len);
+
+		}
+
+		left += (c->side == VWM_SIDE_LEFT) * (c->width + CHART_ROW_HEIGHT / 2);
+		right += (c->side == VWM_SIDE_RIGHT) * (c->width + CHART_ROW_HEIGHT / 2);
+	}
+}
+
+
+/* return if any of the enabled columns in columns has changed its contents */
+static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart, vwm_column_t *columns, const vmon_proc_t *proc)
+{
+	vmon_sys_stat_t		*sys_stat = charts->vmon.stores[VMON_STORE_SYS_STAT];
+	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
+
+	for (int i = 0; i < CHART_MAX_COLUMNS; i++) {
+		const vwm_column_t	*c = &columns[i];
+
+		if (!c->enabled)
+			continue;
+
+		switch (c->type) {
+		case VWM_COLUMN_VWM:
+			/* XXX: meh, maybe we should detect Hz changes here? */
+			break;
+		case VWM_COLUMN_PROC_USER:
+			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_UTIME))
+				return 1;
+			break;
+		case VWM_COLUMN_PROC_SYS:
+			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_STIME))
+				return 1;
+			break;
+		case VWM_COLUMN_PROC_WALL:
+			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_START) ||
+			    BITTEST(sys_stat->changed, VMON_SYS_STAT_BOOTTIME))
+				return 1;
+			break;
+		case VWM_COLUMN_PROC_TREE:
+			break;
+		case VWM_COLUMN_PROC_ARGV:
+			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_ARGV))
+				return 1;
+			break;
+		case VWM_COLUMN_PROC_PID:
+			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_PID))
+				return 1;
+			break;
+		case VWM_COLUMN_PROC_WCHAN:
+			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_WCHAN))
+				return 1;
+			break;
+		case VWM_COLUMN_PROC_STATE:
+			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_STATE))
+				return 1;
+			break;
+		default:
+			assert(0);
+		}
 	}
 
+	return 0;
+}
+
+
+/* draws proc in a row of the process heirarchy */
+static void draw_overlay_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int depth, int row)
+{
+	/* skip if obviously unnecessary (this can be further improved, but this makes a big difference as-is) */
+	if (!chart->redraw_needed && !columns_changed(charts, chart, chart->columns, proc))
+		return;
+
+	if (!proc->is_new) /* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
+		XRenderFillRectangle(charts->xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
+			0, row * CHART_ROW_HEIGHT,		/* dst x, y */
+			chart->width, CHART_ROW_HEIGHT);	/* dst w, h */
+
+	draw_columns(charts, chart, chart->columns, depth, row, proc);
 	shadow_row(charts, chart, row);
 }
 
 
 /* recursive draw function for "rest" of chart: the per-process rows (heirarchy, argv, state, wchan, pid...) */
-static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int *depth, int *row, int heirarchy_changed)
+static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int *depth, int *row)
 {
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
 	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
@@ -741,13 +1014,13 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 
 		(*depth)++;
 		list_for_each_entry_prev(child, &proc->children, siblings) {
-			draw_chart_rest(charts, chart, child, depth, row, heirarchy_changed);
+			draw_chart_rest(charts, chart, child, depth, row);
 			(*row)--;
 		}
 
 		if (!proc->is_thread) {
 			list_for_each_entry_prev(child, &proc->threads, threads) {
-				draw_chart_rest(charts, chart, child, depth, row, heirarchy_changed);
+				draw_chart_rest(charts, chart, child, depth, row);
 				(*row)--;
 			}
 		}
@@ -768,7 +1041,8 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 		chart->snowflakes_cnt++;
 
 		/* stamp the name (and whatever else we include) into chart.text_picture */
-		print_argv(charts, chart, 5, chart->heirarchy_end, proc);
+		// print_argv(charts, chart, 5, chart->heirarchy_end, proc, NULL);
+		draw_columns(charts, chart, chart->snowflake_columns, 0, chart->heirarchy_end, proc);
 		shadow_row(charts, chart, chart->heirarchy_end);
 
 		chart->heirarchy_end--;
@@ -812,8 +1086,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 	}
 
 	draw_bars(charts, chart, *row, stime_delta, charts->total_delta, utime_delta, charts->total_delta);
-
-	draw_heirarchy_row(charts, chart, proc, *depth, *row, heirarchy_changed);
+	draw_overlay_row(charts, chart, proc, *depth, *row);
 
 	(*row)++;
 
@@ -821,64 +1094,55 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 	(*depth)++;
 	if (!proc->is_thread) {	/* XXX: the threads member serves as the list head only when not a thread */
 		list_for_each_entry(child, &proc->threads, threads) {
-			draw_chart_rest(charts, chart, child, depth, row, heirarchy_changed);
+			draw_chart_rest(charts, chart, child, depth, row);
 		}
 	}
 
 	list_for_each_entry(child, &proc->children, siblings) {
-		draw_chart_rest(charts, chart, child, depth, row, heirarchy_changed);
+		draw_chart_rest(charts, chart, child, depth, row);
 	}
 	(*depth)--;
-}
-
-
-/* convert chart sampling interval back into an integral hertz value, basically
- * open-coded ceilf(1.f / charts->sampling_interval) to avoid needing -lm.
- */
-static unsigned interval_as_hz(vwm_charts_t *charts)
-{
-	return (1.f / charts->sampling_interval + .5f);
 }
 
 
 /* recursive draw function entrypoint, draws the IOWait/Idle/HZ row, then enters draw_chart_rest() */
 static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int *depth, int *row)
 {
-	vwm_xserver_t		*xserver = charts->xserver;
-	int			heirarchy_changed = 0;
-	int			str_len, str_width;
-	char			str[256];
+	vwm_xserver_t	*xserver = charts->xserver;
+	int		prev_redraw_needed;
 
 /* CPU utilization graphs */
 	/* IOWait and Idle % @ row 0 */
-	draw_bars(charts, chart, *row, charts->iowait_delta, charts->total_delta, charts->idle_delta, charts->total_delta);
+	draw_bars(charts, chart, 0, charts->iowait_delta, charts->total_delta, charts->idle_delta, charts->total_delta);
 
 	/* only draw the \/\/\ and HZ if necessary */
 	if (chart->redraw_needed || charts->prev_sampling_interval != charts->sampling_interval) {
-		str_len = snpf(str, sizeof(str), "\\/\\/\\%s%s @ %2uHz ",
-			chart->name ? " # " : "",
-			chart->name ? chart->name : "",
-			interval_as_hz(charts));
 		XRenderFillRectangle(xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
 			0, 0,						/* dst x, y */
 			chart->visible_width, CHART_ROW_HEIGHT);	/* dst w, h */
-		str_width = XTextWidth(charts->chart_font, str, str_len);
-		XDrawString(xserver->display, chart->text_pixmap, charts->text_gc,
-			    chart->visible_width - str_width, CHART_ROW_HEIGHT - 3,		/* dst x, y */
-			    str, str_len);
+		draw_columns(charts, chart, chart->columns, 0, 0, proc);
 		shadow_row(charts, chart, 0);
 	}
 	(*row)++;
 
 	if (!chart->redraw_needed)
-		heirarchy_changed = proc_heirarchy_changed(proc);
+		chart->redraw_needed = proc_heirarchy_changed(proc);
 
-
-	draw_chart_rest(charts, chart, proc, depth, row, heirarchy_changed);
-
-	chart->redraw_needed = 0;
-
-	return;
+	prev_redraw_needed = chart->redraw_needed;
+	draw_chart_rest(charts, chart, proc, depth, row);
+	if (chart->redraw_needed > prev_redraw_needed) {
+		/* Drawing bumped redraw_needed (like a layout change from widths changing),
+		 * so don't reset the counter to zero forcing the next redraw.  TODO: this does cause
+		 * a small delay between width-affecting values showing and column widths adjusting to them,
+		 * resulting in a sort of eventually-consistent behavior.
+		 * We could trigger a redraw here immediately by basically jumping back to the start of
+		 * this function, but there are problems doing that as-is due to the stateful/incremental
+		 * relationship between the charts and vmon's sample.  Rather than attacking that refactor
+		 * now, I'll leave it like this for now.
+		 */
+		chart->redraw_needed = 1;
+	} else
+		chart->redraw_needed = 0;
 }
 
 
@@ -1059,6 +1323,22 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 			goto _err_free;
 		}
 	}
+
+	/* TODO: make the columns interactively configurable @ runtime */
+	chart->columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
+	chart->columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
+	chart->columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
+	chart->columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_TREE, .side = VWM_SIDE_LEFT };
+	chart->columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
+	chart->columns[5] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_STATE, .side = VWM_SIDE_RIGHT };
+	chart->columns[6] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_RIGHT };
+	chart->columns[7] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WCHAN, .side = VWM_SIDE_RIGHT };
+	chart->columns[8] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM, .side = VWM_SIDE_RIGHT };
+
+	chart->snowflake_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
+	chart->snowflake_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
+	chart->snowflake_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
+	chart->snowflake_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
 
 	/* add the client process to the monitoring heirarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
