@@ -438,11 +438,13 @@ static void argv2xtext(vmon_proc_t *proc, XTextItem *items, int max_items, int *
 	items[nr].font = None;
 	nr++;
 
-	for (i = 1; nr < max_items && i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
-		items[nr].chars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i];
-		items[nr].nchars = strlen(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i]);	/* TODO: libvmon should inform us of the length */
-		items[nr].delta = 4;
-		items[nr].font = None;
+	if (!proc->is_thread) { /* suppress the argv for threads */
+		for (i = 1; nr < max_items && i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
+			items[nr].chars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i];
+			items[nr].nchars = strlen(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i]);	/* TODO: libvmon should inform us of the length */
+			items[nr].delta = 4;
+			items[nr].font = None;
+		}
 	}
 
 	(*nr_items) = nr;
