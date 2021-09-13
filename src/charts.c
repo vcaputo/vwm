@@ -738,10 +738,26 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 	for (int i = 0, left = 0, right = 0; i < CHART_MAX_COLUMNS; i++) {
 		vwm_column_t	*c = &columns[i];
 		vwm_justify_t	str_justify = VWM_JUSTIFY_CENTER;
-		int		str_len = 0;
+		int		str_len = 0, uniform = 1;
 
 		if (!c->enabled)
 			continue;
+
+		/* XXX FIXME: i don't constrain columns using a clip mask or restrained drawing, so they can scribble
+		 * on neighboring cells, this is especially problematic with long ARGVs like when compiling.
+		 * As a kludge to work around this for now, clear the column's area immediately before drawing it,
+		 * just in case something else scribbled into it.  This doesn't prevent subsequent scribbles, and if
+		 * a column's width became too large, the clearing itself can be destructive.  This works fine for
+		 * the currently configured columns, but long-term this will have to get fixed properly.
+		 */
+		if (c->side == VWM_SIDE_LEFT)
+			XRenderFillRectangle(charts->xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
+				left, row * CHART_ROW_HEIGHT,	/* dst x, y */
+				c->width + CHART_ROW_HEIGHT / 2, CHART_ROW_HEIGHT);	/* dst w, h */
+		else
+			XRenderFillRectangle(charts->xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
+				chart->visible_width - (c->width + CHART_ROW_HEIGHT / 2 + right), row * CHART_ROW_HEIGHT,	/* dst x, y */
+				c->width + CHART_ROW_HEIGHT / 2, CHART_ROW_HEIGHT);	/* dst w, h */
 
 		switch (c->type) {
 		case VWM_COLUMN_VWM:
@@ -751,6 +767,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 					chart->name ? chart->name : "",
 					interval_as_hz(charts));
 
+			uniform = 0; /* XXX this suppresses the c->width assignment so the column can be absent outside the heading */
 			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
 
@@ -862,7 +879,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			int	str_width, xpos;
 
 			str_width = XTextWidth(charts->chart_font, str, str_len);
-			if (str_width > c->width) {
+			if (uniform && str_width > c->width) {
 				c->width = str_width;
 				chart->redraw_needed++;
 			}
