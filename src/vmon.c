@@ -185,15 +185,15 @@ static void print_help(void)
 		" --                Sentinel, subsequent arguments form command to execute\n"
 		" -f  --fullscreen  Fullscreen window\n"
 		" -h  --help        Show this help\n"
-		" -n  --name        Name of chart, shows in window title and output filenames\n"
+		" -H  --height      Window height\n"
 		" -l  --linger      Don't exit when top-level process exits\n"
-		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
-		" -x  --width       Window width\n"
-		" -y  --height      Window height\n"
-		" -z  --hertz       Sample rate in hertz\n"
+		" -n  --name        Name of chart, shows in window title and output filenames\n"
 		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
+		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
 		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD\n"
 		" -v  --version     Print version\n"
+		" -W  --width       Window width\n"
+		" -z  --hertz       Sample rate in hertz\n"
 		"-----------------------------------------------------------------------------"
 	);
 }
@@ -246,12 +246,12 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 				return 0;
 
 			last = ++argv;
-		} else if (is_flag(*argv, "-x", "--width")) {
+		} else if (is_flag(*argv, "-W", "--width")) {
 			if (!parse_flag_int(argv, end, argv + 1, WIDTH_MIN, INT_MAX, &vmon->width))
 				return 0;
 
 			last = ++argv;
-		} else if (is_flag(*argv, "-y", "--height")) {
+		} else if (is_flag(*argv, "-H", "--height")) {
 			if (!parse_flag_int(argv, end, argv + 1, HEIGHT_MIN, INT_MAX, &vmon->height))
 				return 0;
 
