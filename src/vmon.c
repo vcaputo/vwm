@@ -63,7 +63,7 @@ typedef struct vmon_t {
 #define WIDTH_MIN	200
 #define HEIGHT_MIN	28
 
-static volatile int got_sigchld;
+static volatile int got_sigchld, got_sigusr1;
 
 /* return if arg == flag or altflag if provided */
 static int is_flag(const char *arg, const char *flag, const char *altflag)
@@ -222,6 +222,12 @@ static void print_copyright(void)
 static void handle_sigchld(int signum)
 {
 	got_sigchld = 1;
+}
+
+
+static void handle_sigusr1(int signum)
+{
+	got_sigusr1 = 1;
 }
 
 
@@ -397,6 +403,11 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 
 	if (!vmon_handle_argv(vmon, argc, argv)) {
 		VWM_ERROR("unable to handle arguments");
+		goto _err_charts;
+	}
+
+	if (signal(SIGUSR1, handle_sigusr1) == SIG_ERR) {
+		VWM_PERROR("unable to set SIGUSR1 handler");
 		goto _err_charts;
 	}
 
@@ -666,6 +677,13 @@ int main(int argc, char * const argv[])
 				if (!vmon->linger)
 					vmon->done = 1;
 			}
+		}
+
+		if (got_sigusr1) {
+			if (vmon_snapshot(vmon) < 0)
+				VWM_ERROR("error saving snapshot");
+
+			got_sigusr1 = 0;
 		}
 	}
 
