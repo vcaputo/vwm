@@ -1,7 +1,7 @@
 /*
  *                                  \/\/\
  *
- *  Copyright (C) 2012-2018  Vito Caputo - <vcaputo@pengaru.com>
+ *  Copyright (C) 2012-2021  Vito Caputo - <vcaputo@pengaru.com>
  *
  *  This program is free software: you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License version 3 as published
@@ -204,7 +204,7 @@ static void print_copyright(void)
 {
 	puts(
 		"\n"
-		"Copyright (C) 2012-2018 Vito Caputo <vcaputo@pengaru.com>\n"
+		"Copyright (C) 2012-2021 Vito Caputo <vcaputo@pengaru.com>\n"
 		"\n"
 		"This program comes with ABSOLUTELY NO WARRANTY.  This is free software, and\n"
 		"you are welcome to redistribute it under certain conditions.  For details\n"
