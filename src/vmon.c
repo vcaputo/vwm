@@ -175,7 +175,6 @@ static int set_fullscreen(vmon_t *vmon)
 }
 
 
-/* print commandline help */
 static void print_help(void)
 {
 	puts(
@@ -194,12 +193,18 @@ static void print_help(void)
 		" -z  --hertz       Sample rate in hertz\n"
 		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
 		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD\n"
+		" -v  --version     Print version\n"
 		"-----------------------------------------------------------------------------"
 	);
 }
 
 
-/* print copyright */
+static void print_version(void)
+{
+	puts("vmon " VERSION);
+}
+
+
 static void print_copyright(void)
 {
 	puts(
@@ -289,6 +294,9 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 			last = ++argv;
 		} else if (is_flag(*argv, "-h", "--help")) {
 			print_help();
+			exit(EXIT_SUCCESS);
+		} else if (is_flag(*argv, "-v", "--version")) {
+			print_version();
 			exit(EXIT_SUCCESS);
 		} else if ((*argv)[0] == '-') {
 			VWM_ERROR("Unrecognized argument: \"%s\", try --help\n", argv[0]);
