@@ -654,7 +654,7 @@ int main(int argc, char * const argv[])
 		if (got_sigchld) {
 			int	status;
 
-			if (vmon_snapshot(vmon) < 0)
+			if (vmon->snapshot && vmon_snapshot(vmon) < 0)
 				VWM_ERROR("error saving snapshot");
 
 			got_sigchld = 0;
