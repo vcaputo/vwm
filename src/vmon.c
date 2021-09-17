@@ -208,7 +208,7 @@ static void print_copyright(void)
 		"\n"
 		"This program comes with ABSOLUTELY NO WARRANTY.  This is free software, and\n"
 		"you are welcome to redistribute it under certain conditions.  For details\n"
-		"please see the LICENSE file included with this program."
+		"please see the LICENSE file included with this program.\n"
 	);
 }
 
@@ -290,6 +290,9 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 		} else if (is_flag(*argv, "-h", "--help")) {
 			print_help();
 			exit(EXIT_SUCCESS);
+		} else if ((*argv)[0] == '-') {
+			VWM_ERROR("Unrecognized argument: \"%s\", try --help\n", argv[0]);
+			exit(EXIT_FAILURE);
 		} else {
 			/* stop looking for more flags on first unrecognized thing, assume we're in command territory now */
 			break;
