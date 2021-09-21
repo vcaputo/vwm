@@ -637,18 +637,18 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 
 	/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
 	if (proc != chart->monitor) {
-		vmon_proc_t		*child, *ancestor, *sibling, *last_sibling = NULL;
-		int			needs_tee = 0;
-		int			bar_x = 0, bar_y = (row + 1) * CHART_ROW_HEIGHT;
-		int			sub;
+		vmon_proc_t	*child, *ancestor, *sibling, *last_sibling = NULL;
+		int		bar_x = 0, bar_y = (row + 1) * CHART_ROW_HEIGHT;
+		int		sub;
 
 		/* XXX: everything done in this code block only dirties _this_ process' row in the rendered chart output */
 
 		/* walk up the ancestors until reaching chart->monitor, any ancestors we encounter which have more siblings we draw a vertical bar for */
 		/* this draws the |'s in something like:  | |   |    | comm */
-		for (sub = 1, ancestor = proc->parent; ancestor && ancestor != chart->monitor; ancestor = ancestor->parent) {
-			sub++;
-			bar_x = (depth - sub) * (CHART_ROW_HEIGHT / 2) + 4;
+		for (sub = 1, ancestor = proc->parent; ancestor && ancestor != chart->monitor; ancestor = ancestor->parent, sub++) {
+			bar_x = ((depth - 1) - sub) * (CHART_ROW_HEIGHT / 2) + 4;
+
+			assert(depth > 0);
 
 			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
 			if (proc_has_subsequent_siblings(&charts->vmon, ancestor))
@@ -672,6 +672,8 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 
 		/* now look for siblings with non-stale children to determine if a tee is needed, ignoring the last sibling */
 		list_for_each_entry(sibling, &proc->parent->children, siblings) {
+			int	needs_tee = 0;
+
 			/* skip stale siblings, they aren't interesting as they're invisible, and the last sibling has no bearing on wether we tee or not. */
 			if (sibling->is_stale || sibling == last_sibling)
 				continue;
@@ -718,9 +720,8 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 			}
 		}
 
-		/* this currently just returns a max-case width like we drew a tee, even if we didn't draw anything */
 		if (res_width)
-			*res_width = (depth - 1) * (CHART_ROW_HEIGHT / 2) + 6;
+			*res_width = depth * (CHART_ROW_HEIGHT / 2);
 	}
 }
 
@@ -738,7 +739,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 	for (int i = 0, left = 0, right = 0; i < CHART_MAX_COLUMNS; i++) {
 		vwm_column_t	*c = &columns[i];
 		vwm_justify_t	str_justify = VWM_JUSTIFY_CENTER;
-		int		str_len = 0, uniform = 1;
+		int		str_len = 0, uniform = 1, advance = 1;
 
 		if (!c->enabled)
 			continue;
@@ -805,6 +806,8 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 
 		case VWM_COLUMN_PROC_TREE: { /* print a row of the process heirarchy tree */
 			int	width = 0;
+
+			advance = 0;	/* tree column manages its own advance; c->width is meaningless */
 
 			if (!row)	/* tree markup needs no heading */
 				break;
@@ -921,11 +924,12 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			XDrawString(xserver->display, chart->text_pixmap, charts->text_gc,
 				    xpos,  (row + 1) * CHART_ROW_HEIGHT - 3,
 				    str, str_len);
-
 		}
 
-		left += (c->side == VWM_SIDE_LEFT) * (c->width + CHART_ROW_HEIGHT / 2);
-		right += (c->side == VWM_SIDE_RIGHT) * (c->width + CHART_ROW_HEIGHT / 2);
+		if (advance) {
+			left += (c->side == VWM_SIDE_LEFT) * (c->width + CHART_ROW_HEIGHT / 2);
+			right += (c->side == VWM_SIDE_RIGHT) * (c->width + CHART_ROW_HEIGHT / 2);
+		}
 	}
 }
 
