@@ -795,7 +795,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 		case VWM_COLUMN_PROC_WALL: /* User Sys Wall times */
 			if (!row)
 				str_len = snpf(str, sizeof(str), "Wall");
-			else if (!proc_stat->start)
+			else if (!proc_stat->start || proc_stat->start > sys_stat->boottime)
 				str_len = snpf(str, sizeof(str), "??s");
 			else
 				str_len = snpf(str, sizeof(str), "%.2fs",
