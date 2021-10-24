@@ -1,7 +1,7 @@
 /*
  *                                  \/\/\
  *
- *  Copyright (C) 2012-2021  Vito Caputo - <vcaputo@pengaru.com>
+ *  Copyright (C) 2012-2022  Vito Caputo - <vcaputo@pengaru.com>
  *
  *  This program is free software: you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License version 3 as published
@@ -54,6 +54,8 @@ typedef struct vmon_t {
 	char		*output_dir;
 	char		*name;
 	unsigned	n_snapshots;
+	const char	* const *execv;
+	unsigned	n_execv;
 } vmon_t;
 
 
@@ -63,7 +65,7 @@ typedef struct vmon_t {
 #define WIDTH_MIN	200
 #define HEIGHT_MIN	28
 
-static volatile int got_sigchld, got_sigusr1;
+static volatile int got_sigchld, got_sigusr1, got_sigint, got_sigquit;
 
 /* return if arg == flag or altflag if provided */
 static int is_flag(const char *arg, const char *flag, const char *altflag)
@@ -79,7 +81,7 @@ static int is_flag(const char *arg, const char *flag, const char *altflag)
 
 
 /* parse integer out of opt, stores parsed opt in *res on success */
-static int parse_flag_int(char * const *flag, char * const *end, char * const *opt, int min, int max, int *res)
+static int parse_flag_int(const char * const *flag, const char * const *end, const char * const *opt, int min, int max, int *res)
 {
 	long int	num;
 	char		*endp;
@@ -123,7 +125,7 @@ static int parse_flag_int(char * const *flag, char * const *end, char * const *o
 
 
 /* parse string out of opt, stores parsed opt in newly allocated *res on success */
-static int parse_flag_str(char * const *flag, char * const *end, char * const *opt, int min_len, char **res)
+static int parse_flag_str(const char * const *flag, const char * const *end, const char * const *opt, int min_len, char **res)
 {
 	char	*tmp;
 
@@ -209,7 +211,7 @@ static void print_copyright(void)
 {
 	puts(
 		"\n"
-		"Copyright (C) 2012-2021 Vito Caputo <vcaputo@pengaru.com>\n"
+		"Copyright (C) 2012-2022 Vito Caputo <vcaputo@pengaru.com>\n"
 		"\n"
 		"This program comes with ABSOLUTELY NO WARRANTY.  This is free software, and\n"
 		"you are welcome to redistribute it under certain conditions.  For details\n"
@@ -231,10 +233,146 @@ static void handle_sigusr1(int signum)
 }
 
 
-/* parse and apply argv, implementing an strace-like cli, mutates vmon. */
-static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
+static void handle_sigint(int signum)
 {
-	char	*const*end = &argv[argc - 1], *const*last = argv;
+	got_sigint++;
+}
+
+
+static void handle_sigquit(int signum)
+{
+	got_sigquit++;
+}
+
+
+/* sanitize name so it's usable as a filename */
+static char * filenamify(const char *name)
+{
+	char	*filename;
+
+	assert(name);
+
+	filename = calloc(strlen(name) + 1, sizeof(*name));
+	if (!filename) {
+		VWM_PERROR("unable to allocate filename for name \"%s\"", name);
+		return NULL;
+	}
+
+	for (size_t i = 0; name[i]; i++) {
+		char	c = name[i];
+
+		switch (c) {
+		/* replace characters relevant to path interpolation */
+		case '/':
+			c = '\\';
+			break;
+
+		case '.':
+			/* no leading dot, and no ".." */
+			if (i == 0 || (i == 1 && !name[2]))
+				c = '_';
+			break;
+		}
+
+		filename[i] = c;
+	}
+
+	return filename;
+}
+
+
+/* return an interpolated copy of arg */
+static char * arg_interpolate(const vmon_t *vmon, const char *arg)
+{
+	FILE	*memfp;
+	char	*xarg = NULL;
+	size_t	xarglen;
+	int	fmt = 0;
+
+	assert(vmon);
+	assert(arg);
+
+	memfp = open_memstream(&xarg, &xarglen);
+	if (!memfp) {
+		VWM_PERROR("unable to create memstream");
+		return NULL;
+	}
+
+	for (size_t i = 0; arg[i]; i++) {
+		char	c = arg[i];
+
+		if (!fmt) {
+			if (c == '%')
+				fmt = 1;
+			else
+				fputc(c, memfp);
+
+			continue;
+		}
+
+		switch (c) {
+		case 'W':	/* vmon's X window id in hex */
+			fprintf(memfp, "%#x", (unsigned)vmon->window);
+			break;
+
+		case 'n':	/* --name verbatim */
+			if (!vmon->name) {
+				VWM_ERROR("%%n requires --name");
+				goto _err;
+			}
+
+			fprintf(memfp, "%s", vmon->name);
+			break;
+
+		case 'N': {	/* --name sanitized for filename use */
+			char	*filename;
+
+			if (!vmon->name) {
+				VWM_ERROR("%%N requires --name");
+				goto _err;
+			}
+
+			filename = filenamify(vmon->name);
+			if (!filename)
+				goto _err;
+
+			fprintf(memfp, "%s", filename);
+			free(filename);
+			break;
+		}
+
+		case 'O':	/* --output-dir */
+			fprintf(memfp, "%s", vmon->output_dir);
+			break;
+
+		case '%':	/* literal % */
+			fputc(c, memfp);
+			break;
+
+		default:
+			VWM_ERROR("Unrecognized specifier \'%c\'", c);
+			goto _err;
+		}
+
+		fmt = 0;
+	}
+
+	fclose(memfp);
+
+	return xarg;
+
+_err:
+	fclose(memfp);
+	free(xarg);
+
+	return NULL;
+}
+
+
+/* parse and apply argv, implementing an strace-like cli, mutates vmon. */
+static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
+{
+	const char * const *end = &argv[argc - 1], * const *last = argv;
 
 	assert(vmon);
 	assert(!vmon->pid);
@@ -272,7 +410,7 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 				return 0;
 
 			last = ++argv;
-                } else if (is_flag(*argv, "-s", "--snapshot")) {
+		} else if (is_flag(*argv, "-s", "--snapshot")) {
 			vmon->snapshot = 1;
 			last = argv;
 		} else if (is_flag(*argv, "-f", "--fullscreen")) {
@@ -315,53 +453,85 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, char * const argv[])
 
 	/* if more argv remains, treat as a command to run */
 	if (last != end) {
-		pid_t	pid;
-
-		if (vmon->pid) {
-			VWM_ERROR("combining --pid with a command to run is not yet supported (TODO)\n");
-			return 0;
-		}
-
 		last++;
-
-		if (signal(SIGCHLD, handle_sigchld) == SIG_ERR) {
-			VWM_PERROR("unable to set SIGCHLD handler");
-			return 0;
-		}
-
-		pid = fork();
-		if (pid == -1) {
-			VWM_PERROR("unable to fork");
-			return 0;
-		}
-
-		if (pid == 0) {
-			if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
-				VWM_PERROR("unable to prctl(PR_SET_PDEATHSIG, SIGKILL)");
-				exit(EXIT_FAILURE);
-			}
-
-			/* TODO: would be better to synchronize with the monitoring loop starting before the execvp() occurs,
-			 * very early program start can be an interesting thing to observe. */
-			if (execvp(*last, last) == -1) {
-				VWM_PERROR("unable to exec \"%s\"", *last);
-				exit(EXIT_FAILURE);
-			}
-		}
-
-		vmon->pid = pid;
+		vmon->n_execv = end - last + 1;
+		vmon->execv = last;
 	}
 
-	/* default to PID 1 when no PID or command was supplied */
-	if (!vmon->pid)
-		vmon->pid = 1;
+	return 1;
+}
+
+
+/* turn vmon->execv into a new process and execute what's described there after interpolation. */
+int vmon_execv(vmon_t *vmon)
+{
+	char	**xargv;
+	pid_t	pid;
+
+	assert(vmon);
+	assert(vmon->execv);
+	assert(vmon->n_execv);
+
+	xargv = calloc(vmon->n_execv + 1, sizeof(*xargv));
+	if (!xargv) {
+		VWM_PERROR("unable to allocate interpolated argv");
+		return 0;
+	}
+
+	/* TODO: clean up xargv on failures perhaps?  we just exit anyways */
+
+	/* clone args into xargs, performing any interpolations while at it */
+	for (unsigned i = 0; i < vmon->n_execv; i++) {
+		xargv[i] = arg_interpolate(vmon, vmon->execv[i]);
+		if (!xargv[i]) {
+			VWM_ERROR("unable to allocate interpolated arg");
+			return 0;
+		}
+	}
+
+	if (signal(SIGCHLD, handle_sigchld) == SIG_ERR) {
+		VWM_PERROR("unable to set SIGCHLD handler");
+		return 0;
+	}
+
+	if (signal(SIGINT, handle_sigint) == SIG_ERR) {
+		VWM_PERROR("unable to set SIGTERM handler");
+		return 0;
+	}
+
+	if (signal(SIGQUIT, handle_sigquit) == SIG_ERR) {
+		VWM_PERROR("unable to set SIGQUIT handler");
+		return 0;
+	}
+
+	pid = fork();
+	if (pid == -1) {
+		VWM_PERROR("unable to fork");
+		return 0;
+	}
+
+	if (pid == 0) {
+		if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
+			VWM_PERROR("unable to prctl(PR_SET_PDEATHSIG, SIGKILL)");
+			exit(EXIT_FAILURE);
+		}
+
+		/* TODO: would be better to synchronize with the monitoring loop starting before the execvp() occurs,
+		 * very early program start can be an interesting thing to observe. */
+		if (execvp(*xargv, xargv) == -1) {
+			VWM_PERROR("unable to exec \"%s\"", *xargv);
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	vmon->pid = pid;
 
 	return 1;
 }
 
 
 /* parse argv, connect to X, create window, attach libvmon to monitored process */
-static vmon_t * vmon_startup(int argc, char * const argv[])
+static vmon_t * vmon_startup(int argc, const char * const *argv)
 {
 	vmon_t				*vmon;
 	XRenderPictureAttributes	pattr = {};
@@ -403,18 +573,12 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 
 	if (!vmon_handle_argv(vmon, argc, argv)) {
 		VWM_ERROR("unable to handle arguments");
-		goto _err_charts;
+		goto _err_xserver;
 	}
 
 	if (signal(SIGUSR1, handle_sigusr1) == SIG_ERR) {
 		VWM_PERROR("unable to set SIGUSR1 handler");
-		goto _err_charts;
-	}
-
-	vmon->chart = vwm_chart_create(vmon->charts, vmon->pid, vmon->width, vmon->height, vmon->name);
-	if (!vmon->chart) {
-		VWM_ERROR("unable to create chart");
-		goto _err_charts;
+		goto _err_xserver;
 	}
 
 	vmon->window = XCreateSimpleWindow(vmon->xserver->display, XSERVER_XROOT(vmon->xserver), 0, 0, vmon->width, vmon->height, 1, 0, 0);
@@ -422,15 +586,31 @@ static vmon_t * vmon_startup(int argc, char * const argv[])
 		XStoreName(vmon->xserver->display, vmon->window, vmon->name);
 	XGetWindowAttributes(vmon->xserver->display, vmon->window, &wattr);
 	vmon->picture = XRenderCreatePicture(vmon->xserver->display, vmon->window, XRenderFindVisualFormat(vmon->xserver->display, wattr.visual), 0, &pattr);
-
 	XMapWindow(vmon->xserver->display, vmon->window);
-
 	XSelectInput(vmon->xserver->display, vmon->window, StructureNotifyMask|ExposureMask);
+	XSync(vmon->xserver->display, False);
+
+	if (vmon->execv) {
+		if (vmon->pid) {
+			VWM_ERROR("combining --pid with a command to run is not yet supported (TODO)\n");
+			goto _err_win;
+		}
+
+		if (!vmon_execv(vmon))
+			goto _err_win;
+	}
+
+	vmon->chart = vwm_chart_create(vmon->charts, vmon->pid ? : 1, vmon->width, vmon->height, vmon->name);
+	if (!vmon->chart) {
+		VWM_ERROR("unable to create chart");
+		goto _err_win;
+	}
 
 	return vmon;
 
-_err_charts:
-	vwm_charts_destroy(vmon->charts);
+_err_win:
+	XDestroyWindow(vmon->xserver->display, vmon->window);
+	XRenderFreePicture(vmon->xserver->display, vmon->picture);
 _err_xserver:
 	vwm_xserver_close(vmon->xserver);
 _err_free:
@@ -530,9 +710,9 @@ static int vmon_snapshot_as_png(vmon_t *vmon, FILE *output)
 		PNG_COMPRESSION_TYPE_BASE,
 		PNG_FILTER_TYPE_BASE);
 
-        png_write_info(png_ctx, info_ctx);
-        png_write_image(png_ctx, row_pointers);
-        png_write_end(png_ctx, NULL);
+	png_write_info(png_ctx, info_ctx);
+	png_write_image(png_ctx, row_pointers);
+	png_write_end(png_ctx, NULL);
 
 	XDestroyImage(chart_as_ximage);
 	free(row_pointers);
@@ -545,43 +725,33 @@ static int vmon_snapshot(vmon_t *vmon)
 {
 	struct tm	*start_time;
 	char		start_str[32];
+	char		*name = NULL;
 	char		path[4096];
-	char		name[200] = {};
 	FILE		*output;
 	int		r;
 
 	assert(vmon);
 
 	if (vmon->name) {
-		for (int i = 0; i < sizeof(name) - 1 && vmon->name[i]; i++) {
-			char	c = vmon->name[i];
-			switch (c) {
-			/* replace characters relevant to path interpolation */
-			case '/':
-				c = '\\';
-				break;
-
-			case '.':
-				/* no leading dot, and no ".." */
-				if (i == 0 || (i == 1 && !vmon->name[2]))
-					c = '_';
-				break;
-			}
-			name[i] = c;
-		}
+		name = filenamify(vmon->name);
+		if (!name)
+			return -errno;
 	}
 
-	if (mkdir(vmon->output_dir, 0755) == -1 && errno != EEXIST)
+	if (mkdir(vmon->output_dir, 0755) == -1 && errno != EEXIST) {
+		free(name);
 		return -errno;
+	}
 
 	start_time = localtime(&vmon->start_time);
 	strftime(start_str, sizeof(start_str), "%m.%d.%y-%T", start_time);
 	snprintf(path, sizeof(path), "%s/%s%s%s-%u.png",
 		vmon->output_dir,
 		name,
-		vmon->name ? "-" : "",
+		name ? "-" : "",
 		start_str,
 		vmon->n_snapshots++);
+	free(name);
 
 	output = fopen(path, "w+");
 	if (!output)
@@ -636,7 +806,7 @@ static void vmon_process_event(vmon_t *vmon)
 }
 
 
-int main(int argc, char * const argv[])
+int main(int argc, const char * const *argv)
 {
 	vmon_t		*vmon;
 	struct pollfd	pfd = { .events = POLLIN };
@@ -660,6 +830,19 @@ int main(int argc, char * const argv[])
 
 		if (XPending(vmon->xserver->display) || poll(&pfd, 1, delay) > 0)
 			vmon_process_event(vmon);
+
+		if (got_sigint > 2 || got_sigquit > 2) {
+			puts ("DONE!");
+			vmon->done = 1;
+		} else if (got_sigint == 1) {
+			got_sigint++;
+
+			kill(vmon->pid, SIGINT);
+		} else if (got_sigquit == 1) {
+			got_sigquit++;
+
+			kill(vmon->pid, SIGQUIT);
+		}
 
 		if (got_sigchld) {
 			int	status;
