@@ -464,7 +464,10 @@ static void vwm_win_assimilate(vwm_t *vwm, vwm_window_t *vwin)
 		/* FIXME TODO: there's some situation where we get here but focused_desktop->focused_window == NULL,
 		 * which shouldn't be possible; for there to be a non-empty screen, the focused_desktop must have a focused_window.
 		 */
-		scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_desktop->focused_window->xwindow);
+		if (vwm->focused_desktop->focused_window)
+			scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwm->focused_desktop->focused_window->xwindow);
+		else
+			VWM_BUG("Screen is not empty, but vwm->focused_desktop->focused_window is NULL!");
 	}
 
 	changes.x = scr->x_org;
