@@ -566,7 +566,6 @@ static int vmon_snapshot(vmon_t *vmon)
 				if (i == 0 || (i == 1 && !vmon->name[2]))
 					c = '_';
 				break;
-			default:
 			}
 			name[i] = c;
 		}
