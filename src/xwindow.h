@@ -41,6 +41,7 @@ void vwm_xwin_message(vwm_t *vwm, vwm_xwindow_t *xwin, Atom type, long foo);
 vwm_xwindow_t * vwm_xwin_lookup(vwm_t *vwm, Window win);
 int vwm_xwin_is_mapped(vwm_t *vwm, vwm_xwindow_t *xwin);
 void vwm_xwin_monitor(vwm_t *vwm, vwm_xwindow_t *xwin);
+int vwm_xwin_should_manage(vwm_t *vwm, vwm_xwindow_t *xwin);
 vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed);
 void vwm_xwin_destroy(vwm_t *vwm, vwm_xwindow_t *xwin);
 void vwm_xwin_restack(vwm_t *vwm, vwm_xwindow_t *xwin, Window new_above);

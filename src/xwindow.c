@@ -109,6 +109,35 @@ void vwm_xwin_setup_chart(vwm_t *vwm, vwm_xwindow_t *xwin)
 	}
 }
 
+/* override_redirect windows typically should not be managed, and it'd be nice if we could
+ * just blindly respect that, but X is a dumpster fire and for multiple reasons I'm going
+ * to use some heuristics to only not manage override_redirect windows when they're substantially
+ * smaller than the size of the display (popup/popover type shit).
+ *
+ * When any old X client can create a fullscreen override_redirect window it not only makes
+ * fullscreen games and shit not explicitly focusable/managable from a vwm perspective, it
+ * also creates a real potential security issue.
+ */
+int vwm_xwin_should_manage(vwm_t *vwm, vwm_xwindow_t *xwin)
+{
+	const vwm_screen_t	*scr;
+
+	if (!xwin->attrs.override_redirect)
+		return 1;
+
+	scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, xwin);
+	if (!scr)
+		return 1;
+
+	/* TODO: for now just using an exact fullscreen heuristic, but should really
+	 * trigger for > XX% coverage.  This suffices for managing annoying
+	 * override_redirect fullscreen windows.
+	 */
+	if (xwin->attrs.width == scr->width && xwin->attrs.height == scr->height)
+		return 1;
+
+	return 0;
+}
 
 /* creates and potentially manages a new window (called in response to CreateNotify events, and during startup for all existing windows) */
 /* if the window is already mapped and not an override_redirect window, it becomes managed here. */
