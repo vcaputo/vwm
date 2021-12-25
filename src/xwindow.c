@@ -129,11 +129,11 @@ int vwm_xwin_should_manage(vwm_t *vwm, vwm_xwindow_t *xwin)
 	if (!scr)
 		return 1;
 
-	/* TODO: for now just using an exact fullscreen heuristic, but should really
+	/* TODO: for now just using an >= fullscreen heuristic, but should really
 	 * trigger for > XX% coverage.  This suffices for managing annoying
 	 * override_redirect fullscreen windows.
 	 */
-	if (xwin->attrs.width == scr->width && xwin->attrs.height == scr->height)
+	if (xwin->attrs.width >= scr->width && xwin->attrs.height >= scr->height)
 		return 1;
 
 	return 0;
