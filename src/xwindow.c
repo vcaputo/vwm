@@ -188,7 +188,10 @@ vwm_xwindow_t * vwm_xwin_create(vwm_t *vwm, Window win, vwm_grab_mode_t grabbed)
 
 	list_add_tail(&xwin->xwindows, &vwm->xwindows);	/* created windows are always placed on the top of the stacking order */
 
-	if (!attrs.override_redirect && xwin->client_mapped)
+	VWM_TRACE_WIN(win, "name=\"%s\" override_redirect=%i client_mapped=%i\n",
+		xwin->name, (int)attrs.override_redirect, (int)xwin->client_mapped);
+
+	if (xwin->client_mapped && vwm_xwin_should_manage(vwm, xwin))
 		vwm_win_manage_xwin(vwm, xwin);
 
 _out_grabbed:

@@ -152,13 +152,8 @@ void vwm_xevent_handle_map_notify(vwm_t *vwm, XMapEvent *ev)
 
 	if ((xwin = vwm_xwin_lookup(vwm, ev->window))) {
 
-		/* XXX: in some circumstances (randomly mplayer -fs) it we see an event sequence for a window like:
-		 * create_notify->map_request (manage)->configure_request->unmap_notify (unmanage)->configure_notify->map_notify (unmanaged!)
-		 * which unless the window's an override_redirect is incorrect.
-		 * So implicitly manage the window if it's not managed and !override_redirect, since it's now mapped.
-		 */
-		if (!xwin->managed && !xwin->attrs.override_redirect)
-			xwin->managed = vwm_win_manage_xwin(vwm, xwin);
+		if (!xwin->managed && vwm_xwin_should_manage(vwm, xwin))
+			vwm_win_manage_xwin(vwm, xwin);
 
 		if (xwin->managed && xwin->managed->mapping) {
 			VWM_TRACE("swallowed vwm-induced MapNotify");
