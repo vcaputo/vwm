@@ -228,9 +228,13 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			} else if (send_it) { /* "send" the focused window to a new desktop in the current context, kind of an alias of send_it+XK_v */
 				if (vwin)
 					vwm_win_send(vwm, vwin, vwm_desktop_mru(vwm, vwm_desktop_create(vwm, vwin->desktop->context)));
-			} else if (keypress->state & ShiftMask) { /* migrate the focused window with the desktop focus to the most recently used desktop */
-				if (vwin)
+			} else if (keypress->state & ShiftMask) { /* migrate the focused window with the desktop focus to the most recently used desktop, creating one if none exists for convenience */
+				if (vwin) {
+					if (next_desktop == vwm->focused_desktop)
+						next_desktop = vwm_desktop_create(vwm, vwin->desktop->context);
+
 					vwm_win_migrate(vwm, vwin, next_desktop);
+				}
 			} else {
 				vwm_desktop_focus(vwm, next_desktop);
 			}
