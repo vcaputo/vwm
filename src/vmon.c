@@ -752,7 +752,7 @@ static int vmon_snapshot(vmon_t *vmon)
 	strftime(start_str, sizeof(start_str), "%m.%d.%y-%T", start_time);
 	snprintf(path, sizeof(path), "%s/%s%s%s-%u.png",
 		vmon->output_dir,
-		name,
+		name ? name : "",
 		name ? "-" : "",
 		start_str,
 		vmon->n_snapshots++);
