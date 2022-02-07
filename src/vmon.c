@@ -837,7 +837,6 @@ int main(int argc, const char * const *argv)
 			vmon_process_event(vmon);
 
 		if (got_sigint > 2 || got_sigquit > 2) {
-			puts ("DONE!");
 			vmon->done = 1;
 		} else if (got_sigint == 1) {
 			got_sigint++;
