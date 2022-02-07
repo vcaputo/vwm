@@ -59,7 +59,7 @@ typedef struct _vwm_charts_t {
 	unsigned long long			last_idle, last_iowait, idle_delta, iowait_delta;
 	vmon_t					vmon;
 	float					prev_sampling_interval, sampling_interval;
-	int					sampling_paused, contiguous_drops;
+	int					sampling_paused, contiguous_drops, primed;
 
 	/* X */
 	XFontStruct				*chart_font;
@@ -1596,7 +1596,8 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay)
 	int	ret = 0;
 
 	gettimeofday(&charts->maybe_sample, NULL);
-	if ((charts->sampling_interval == INFINITY && !charts->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
+	if (!charts->primed ||
+	    (charts->sampling_interval == INFINITY && !charts->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
 	    (charts->sampling_interval != INFINITY && ((this_delta = delta(&charts->maybe_sample, &charts->this_sample)) >= charts->sampling_interval))) {
 		vmon_sys_stat_t	*sys_stat;
 
@@ -1637,6 +1638,10 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay)
 
 		charts->sampling_paused = (charts->sampling_interval == INFINITY);
 		charts->prev_sampling_interval = charts->sampling_interval;
+
+		/* "primed" is just a flag to ensure we always perform the first sample */
+		if (!charts->primed)
+			charts->primed = 1;
 	}
 
 	/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
