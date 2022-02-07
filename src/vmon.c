@@ -345,6 +345,11 @@ static char * arg_interpolate(const vmon_t *vmon, const char *arg)
 			fprintf(memfp, "%s", vmon->output_dir);
 			break;
 
+		case 'P':	/* getpid() of vmon, convenient for triggering png snapshots on SIGUSR1 */
+				/* XXX: note this assumes arg_interpolate() occurs pre-fork, true ATM  */
+			fprintf(memfp, "%li", (long)getpid());
+			break;
+
 		case '%':	/* literal % */
 			fputc(c, memfp);
 			break;
