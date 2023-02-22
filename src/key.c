@@ -471,6 +471,10 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			vwm_charts_rate_decrease(vwm->charts);
 			break;
 
+		case XK_z:	/* zero sampling frequency (disables monitoring) */
+			vwm_charts_rate_set(vwm->charts, 0);
+			break;
+
 		default:
 			VWM_TRACE("Unhandled keycode: %x", (unsigned int)sym);
 			break;
