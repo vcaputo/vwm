@@ -144,7 +144,6 @@ typedef struct _vwm_perproc_ctxt_t {
 
 
 static float			sampling_intervals[] = {
-						INFINITY,	/* STOPPED */
 						1,		/* ~1Hz */
 						.1,		/* ~10Hz */
 						.05,		/* ~20Hz */
