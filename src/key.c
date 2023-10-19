@@ -107,12 +107,12 @@ void vwm_key_released(vwm_t *vwm, Window win, XKeyReleasedEvent *keyrelease)
 /* Called in response to KeyPress events, I currenly only grab Mod1 keypress events */
 void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 {
-	vwm_window_t				*vwin;
-	KeySym					sym;
-	static KeySym				last_sym;
-	static typeof(keypress->state)		last_state;
-	static int				repeat_cnt = 0;
-	int					do_grab = 0;
+	vwm_window_t			*vwin;
+	KeySym				sym;
+	static KeySym			last_sym;
+	static typeof(keypress->state)	last_state;
+	static int			repeat_cnt = 0;
+	int				do_grab = 0;
 
 	sym = XLookupKeysym(keypress, 0);
 
@@ -128,12 +128,12 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 	switch (sym) {
 
 #define launcher(_sym, _label, _argv)\
-		case _sym:	\
-			{	\
+		case _sym: {	\
 			char	*args[] = {"/bin/sh", "-c", "screen -dr " CONSOLE_SESSION_STRING " -X screen /bin/sh -i -x -c \"" _argv " || sleep 86400\"", NULL};\
 			vwm_launch(vwm, args, VWM_LAUNCH_MODE_BG);\
 			break;	\
 		}
+
 #include "launchers.def"
 #undef launcher
 		case XK_Alt_L: /* transaction abort */
