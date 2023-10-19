@@ -81,7 +81,7 @@ vwm_window_t * vwm_win_lookup(vwm_t *vwm, Window win)
 
 
 /* return the currently focused window, may return NULL */
-vwm_window_t * vwm_win_get_focused(vwm_t *vwm)
+vwm_window_t * vwm_win_get_focused(const vwm_t *vwm)
 {
 	return vwm->focused_desktop->focused_window;
 }
