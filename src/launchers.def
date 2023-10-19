@@ -1,8 +1,8 @@
 /* it's up to you to ensure you don't conflict with the global VWM keys */
-/* 		keysym, 	label,		cmd			*/
-launcher(	XK_x, 		"xterm",	"/usr/bin/xterm")
-launcher(	XK_b, 		"firefox",	"/usr/bin/firefox -ProfileManager -no-remote")
-launcher(	XK_g, 		"gimp",		"/usr/bin/gimp")
-launcher(	XK_period,	"lock",		"/usr/bin/xlock")
-launcher(       XK_minus,       "dpms off",     "/usr/bin/xset -dpms s off")
-launcher(       XK_equal,       "dpms on",      "/usr/bin/xset +dpms s on")
+/* 		keysym, 	label,			cmd			*/
+launcher(	XK_x,		"xterm",		"xterm")
+launcher(	XK_b,		"firefox",		"firefox -ProfileManager -no-remote")
+launcher(	XK_g,		"gimp",			"gimp")
+launcher(	XK_period,	"lock",			"xlock")
+launcher(	XK_minus,	"dpms off",		"xset -dpms s off")
+launcher(	XK_equal,	"dpms on",		"xset +dpms s on")
