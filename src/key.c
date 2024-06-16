@@ -208,21 +208,31 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 		case XK_backslash:
 			do_grab = 1;
 
+			/* Backslash is all about screen boundaries within the current desktop.
+			 * Screens are funky since they're basically just subrects within the X "screen"
+			 * that spans all the displays in multihead setups (xinerama).
+			 */
+
 			if (vwin) {
-				if (keypress->state & ShiftMask) {
-					/* TODO: migrate window to another screen within this desktop,
-					 * like VWM_FENCE_MASKED_VIOLATE would focus the next window on
-					 * the next screen, but instead of focusing the next window on
-					 * the next display, move the focused one to that next desktop.
-					 *
-					 * since screens are handled within vwm_win_focus_next() via
-					 * the fence abstraction, but fences aren't exposed outside of
-					 * their, it's non-trivial to implement here.  I may want to
-					 * break that out into a more public interface to make things
-					 * more composable at the screen level.
+				if (send_it) {
+					/* "send" the focused window to the next screen */
+					 VWM_TRACE("send window to screen not implemented yet");
+					/* TODO: this is identical to "migrate" below, but needs to focus
+					 * the next window within the origin screen if there is one.
+					 * It's unclear to me what should happen when you "send" the only
+					 * window in the current scren to another screen - should it just
+					 * turn into a migrate effectively? I don't think there's a situation
+					 * currently where no window is focused in the curent desktop, it's
+					 * one of those things that's prevented from happening, until there's
+					 * no windows left in the desktop.  The screens are just subregions
+					 * of the current desktop which map to displays.
 					 */
-					 VWM_TRACE("migrate window to screen not implemented yet");
+				} else if (keypress->state & ShiftMask) {
+					/* "migrate" the focused window to the next screen */
+					vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN_NEXT, vwin->autoconfigured, vwin->autoconfigured_param);
+					/* TODO reverse via VWM_SCREEN_REL_XWIN_PREV */
 				} else {
+					/* focus the MRU window on the next screen */
 					vwm_win_focus_next(vwm, vwin, direction, VWM_FENCE_MASKED_VIOLATE);
 				}
 			}
