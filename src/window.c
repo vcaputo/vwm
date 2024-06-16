@@ -162,6 +162,7 @@ void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_
 					changes.y = scr->y_org + scr->height / 2;
 					break;
 			}
+			vwin->autoconfigured_param = corner;
 			break;
 		}
 
@@ -196,6 +197,7 @@ void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_
 					changes.y = scr->y_org;
 					break;
 			}
+			vwin->autoconfigured_param = side;
 			break;
 		}
 

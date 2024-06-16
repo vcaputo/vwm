@@ -97,6 +97,8 @@ const vwm_screen_t * vwm_screen_find(vwm_t *vwm, vwm_screen_rel_t rel, ...)
 			break;
 		}
 
+		case VWM_SCREEN_REL_XWIN_NEXT:
+		case VWM_SCREEN_REL_XWIN_PREV:
 		case VWM_SCREEN_REL_XWIN: {
 			va_list		ap;
 			vwm_xwindow_t	*xwin;
@@ -112,6 +114,22 @@ const vwm_screen_t * vwm_screen_find(vwm_t *vwm, vwm_screen_rel_t rel, ...)
 					best = scr;
 					best_pct = this_pct;
 				}
+			}
+
+			if (rel != VWM_SCREEN_REL_XWIN) {
+				unsigned	idx = best - vwm->xinerama_screens;
+
+				/* find the neighboring screen according to rel, note this isn't
+				 * a spatial neighbor trying to consider RandR screen layout - it's
+				 * simply next/prev in the list of screens in the order they appear
+				 * there.
+				 */
+				if (rel == VWM_SCREEN_REL_XWIN_NEXT)
+					idx += 1;
+				else if (rel == VWM_SCREEN_REL_XWIN_PREV)
+					idx += vwm->xinerama_screens_cnt - 1;
+
+				best = &vwm->xinerama_screens[idx % vwm->xinerama_screens_cnt];
 			}
 			break;
 		}

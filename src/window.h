@@ -33,6 +33,7 @@ typedef struct _vwm_window_t {
 	long			hints_supplied;		/* bitfield reflecting the hints the client supplied */
 
 	unsigned int		autoconfigured:3;	/* autoconfigured window states (none/quarter/half/full/all) */
+	unsigned int		autoconfigured_param:2;
 	unsigned int		mapping:1;		/* is the window being mapped? (by vwm) */
 	unsigned int		unmapping:1;		/* is the window being unmapped? (by vwm) */
 } vwm_window_t;
