@@ -192,7 +192,7 @@ static void print_help(void)
 		" -n  --name        Name of chart, shows in window title and output filenames\n"
 		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
 		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
-		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD\n"
+		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD (SIGUSR1 also triggers snapshots)\n"
 		" -v  --version     Print version\n"
 		" -W  --width       Window width\n"
 		" -z  --hertz       Sample rate in hertz\n"
