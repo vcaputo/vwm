@@ -53,6 +53,7 @@ typedef struct vmon_t {
 	time_t		start_time;
 	int		snapshots_interval;
 	int		snapshot;
+	int		now_names;
 	char		*output_dir;
 	char		*name;
 	unsigned	n_snapshots;
@@ -192,6 +193,7 @@ static void print_help(void)
 		" -H  --height      Window height\n"
 		" -l  --linger      Don't exit when top-level process exits\n"
 		" -n  --name        Name of chart, shows in window title and output filenames\n"
+		" -N  --now-names   Use current time in filenames instead of start time\n"
 		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
 		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
 		" -i  --snapshots   Save a PNG snapshot every N seconds (SIGUSR1 also snapshots)\n"
@@ -418,6 +420,9 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 				return 0;
 
 			last = ++argv;
+		} else if (is_flag(*argv, "-N", "--now-names")) {
+			vmon->now_names = 1;
+			last = argv;
 		} else if (is_flag(*argv, "-i", "--snapshots")) {
 			if (!parse_flag_int(argv, end, argv + 1, 1, INT_MAX, &vmon->snapshots_interval))
 				return 0;
@@ -755,8 +760,9 @@ static int vmon_snapshot_as_png(vmon_t *vmon, FILE *output)
 
 static int vmon_snapshot(vmon_t *vmon)
 {
-	struct tm	*start_time;
-	char		start_str[32];
+	time_t		now, *t_ptr = &now;
+	struct tm	*t;
+	char		t_str[32];
 	char		*name = NULL;
 	char		path[4096];
 	FILE		*output;
@@ -775,13 +781,18 @@ static int vmon_snapshot(vmon_t *vmon)
 		return -errno;
 	}
 
-	start_time = localtime(&vmon->start_time);
-	strftime(start_str, sizeof(start_str), "%m.%d.%y-%T", start_time);
+	if (vmon->now_names)
+		now = time(NULL);
+	else
+		t_ptr = &vmon->start_time;
+
+	t = localtime(t_ptr);
+	strftime(t_str, sizeof(t_str), "%m.%d.%y-%T", t);
 	snprintf(path, sizeof(path), "%s/%s%s%s-%u.png",
 		vmon->output_dir,
 		name ? name : "",
 		name ? "-" : "",
-		start_str,
+		t_str,
 		vmon->n_snapshots++);
 	free(name);
 
