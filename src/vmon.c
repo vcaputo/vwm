@@ -27,6 +27,7 @@
 #include <sys/prctl.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -50,6 +51,7 @@ typedef struct vmon_t {
 	int		done;
 	int		linger;
 	time_t		start_time;
+	int		snapshots_interval;
 	int		snapshot;
 	char		*output_dir;
 	char		*name;
@@ -181,9 +183,9 @@ static void print_help(void)
 {
 	puts(
 		"\n"
-		"-----------------------------------------------------------------------------\n"
+		"-------------------------------------------------------------------------------\n"
 		" Flag              Description\n"
-		"-----------------------------------------------------------------------------\n"
+		"-------------------------------------------------------------------------------\n"
 		" --                Sentinel, subsequent arguments form command to execute\n"
 		" -f  --fullscreen  Fullscreen window\n"
 		" -h  --help        Show this help\n"
@@ -192,11 +194,12 @@ static void print_help(void)
 		" -n  --name        Name of chart, shows in window title and output filenames\n"
 		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
 		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
-		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD (SIGUSR1 also triggers snapshots)\n"
+		" -i  --snapshots   Save a PNG snapshot every N seconds (SIGUSR1 also snapshots)\n"
+		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD\n"
 		" -v  --version     Print version\n"
 		" -W  --width       Window width\n"
 		" -z  --hertz       Sample rate in hertz\n"
-		"-----------------------------------------------------------------------------"
+		"-------------------------------------------------------------------------------"
 	);
 }
 
@@ -415,6 +418,11 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 				return 0;
 
 			last = ++argv;
+		} else if (is_flag(*argv, "-i", "--snapshots")) {
+			if (!parse_flag_int(argv, end, argv + 1, 1, INT_MAX, &vmon->snapshots_interval))
+				return 0;
+
+			last = ++argv;
 		} else if (is_flag(*argv, "-s", "--snapshot")) {
 			vmon->snapshot = 1;
 			last = argv;
@@ -584,6 +592,25 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 	if (signal(SIGUSR1, handle_sigusr1) == SIG_ERR) {
 		VWM_PERROR("unable to set SIGUSR1 handler");
 		goto _err_xserver;
+	}
+
+	if (signal(SIGALRM, handle_sigusr1) == SIG_ERR) {
+		VWM_PERROR("unable to set SIGALRM handler");
+		goto _err_xserver;
+	}
+
+	if (vmon->snapshots_interval) {
+		int	r;
+
+		r = setitimer(ITIMER_REAL,
+				&(struct itimerval){
+					.it_interval.tv_sec = vmon->snapshots_interval,
+					.it_value.tv_sec = vmon->snapshots_interval,
+				}, NULL);
+		if (r < 0) {
+			VWM_PERROR("unable to set interval timer");
+			goto _err_xserver;
+		}
 	}
 
 	vmon->window = XCreateSimpleWindow(vmon->xserver->display, XSERVER_XROOT(vmon->xserver), 0, 0, vmon->width, vmon->height, 1, 0, 0);
