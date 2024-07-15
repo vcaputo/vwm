@@ -16,11 +16,8 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <X11/Xlib.h>
 #include <assert.h>
 #include <limits.h>
-#include <png.h>
-#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,20 +30,17 @@
 #include <unistd.h>
 
 #include "charts.h"
+#include "vcr.h"
 #include "util.h"
-#include "xserver.h"
 
 /* vmon exposes the monitoring charts to the shell in an strace-like cli */
 
 typedef struct vmon_t {
-	vwm_xserver_t	*xserver;
+	vcr_backend_t	*vcr_backend;
+	vcr_dest_t	*vcr_dest;
 	vwm_charts_t	*charts;
 	vwm_chart_t	*chart;
-	Atom		wm_protocols_atom;
-	Atom		wm_delete_atom;
-	Window		window;
 	int		width, height;
-	Picture		picture;
 	int		pid;
 	int		done;
 	int		linger;
@@ -163,18 +157,12 @@ static int parse_flag_str(const char * const *flag, const char * const *end, con
 /* set vmon->{width,height} to fullscreen dimensions */
 static int set_fullscreen(vmon_t *vmon)
 {
-	XWindowAttributes	wattr;
-
 	assert(vmon);
-	assert(vmon->xserver);
 
-	if (!XGetWindowAttributes(vmon->xserver->display, XSERVER_XROOT(vmon->xserver), &wattr)) {
-		VWM_ERROR("unable to get root window attributes");
+	if (vcr_backend_get_dimensions(vmon->vcr_backend, &vmon->width, &vmon->height) < 0) {
+		VWM_ERROR("unable to get vcr_backend dimensions");
 		return 0;
 	}
-
-	vmon->width = wattr.width;
-	vmon->height = wattr.height;
 
 	return 1;
 }
@@ -317,7 +305,7 @@ static char * arg_interpolate(const vmon_t *vmon, const char *arg)
 
 		switch (c) {
 		case 'W':	/* vmon's X window id in hex */
-			fprintf(memfp, "%#x", (unsigned)vmon->window);
+			fprintf(memfp, "%#x", vcr_dest_xwindow_get_id(vmon->vcr_dest));
 			break;
 
 		case 'n':	/* --name verbatim */
@@ -431,6 +419,7 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 		} else if (is_flag(*argv, "-s", "--snapshot")) {
 			vmon->snapshot = 1;
 			last = argv;
+#ifdef USE_XLIB
 		} else if (is_flag(*argv, "-f", "--fullscreen")) {
 			if (!set_fullscreen(vmon)) {
 				VWM_ERROR("unable to set fullscreen dimensions");
@@ -438,6 +427,7 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 			}
 
 			last = argv;
+#endif
 		} else if (is_flag(*argv, "-l", "--linger")) {
 			vmon->linger = 1;
 			last = argv;
@@ -548,12 +538,10 @@ int vmon_execv(vmon_t *vmon)
 }
 
 
-/* parse argv, connect to X, create window, attach libvmon to monitored process */
+/* parse argv, init charts/vcr_backend/vcr_dest, attach libvmon to monitored process via vwm_chart_create() */
 static vmon_t * vmon_startup(int argc, const char * const *argv)
 {
-	vmon_t				*vmon;
-	XRenderPictureAttributes	pattr = {};
-	XWindowAttributes		wattr;
+	vmon_t	*vmon;
 
 	assert(argv);
 
@@ -574,34 +562,31 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 		goto _err_free;
 	}
 
-	vmon->xserver = vwm_xserver_open();
-	if (!vmon->xserver) {
-		VWM_ERROR("unable to open xserver");
+	vmon->vcr_backend = vcr_backend_new(VCR_BACKEND_TYPE_XLIB, NULL);
+	if (!vmon->vcr_backend) {
+		VWM_ERROR("unable to create vcr backend");
 		goto _err_free;
 	}
 
-	vmon->wm_delete_atom = XInternAtom(vmon->xserver->display, "WM_DELETE_WINDOW", False);
-	vmon->wm_protocols_atom = XInternAtom(vmon->xserver->display, "WM_PROTOCOLS", False);
-
-	vmon->charts = vwm_charts_create(vmon->xserver);
+	vmon->charts = vwm_charts_create(vmon->vcr_backend);
 	if (!vmon->charts) {
 		VWM_ERROR("unable to create charts instance");
-		goto _err_xserver;
+		goto _err_vcr;
 	}
 
 	if (!vmon_handle_argv(vmon, argc, argv)) {
 		VWM_ERROR("unable to handle arguments");
-		goto _err_xserver;
+		goto _err_vcr;
 	}
 
 	if (signal(SIGUSR1, handle_sigusr1) == SIG_ERR) {
 		VWM_PERROR("unable to set SIGUSR1 handler");
-		goto _err_xserver;
+		goto _err_vcr;
 	}
 
 	if (signal(SIGALRM, handle_sigusr1) == SIG_ERR) {
 		VWM_PERROR("unable to set SIGALRM handler");
-		goto _err_xserver;
+		goto _err_vcr;
 	}
 
 	if (vmon->snapshots_interval) {
@@ -614,18 +599,15 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 				}, NULL);
 		if (r < 0) {
 			VWM_PERROR("unable to set interval timer");
-			goto _err_xserver;
+			goto _err_vcr;
 		}
 	}
 
-	vmon->window = XCreateSimpleWindow(vmon->xserver->display, XSERVER_XROOT(vmon->xserver), 0, 0, vmon->width, vmon->height, 1, 0, 0);
-	if (vmon->name)
-		XStoreName(vmon->xserver->display, vmon->window, vmon->name);
-	XGetWindowAttributes(vmon->xserver->display, vmon->window, &wattr);
-	vmon->picture = XRenderCreatePicture(vmon->xserver->display, vmon->window, XRenderFindVisualFormat(vmon->xserver->display, wattr.visual), 0, &pattr);
-	XMapWindow(vmon->xserver->display, vmon->window);
-	XSelectInput(vmon->xserver->display, vmon->window, StructureNotifyMask|ExposureMask);
-	XSync(vmon->xserver->display, False);
+	vmon->vcr_dest = vcr_dest_xwindow_new(vmon->vcr_backend, vmon->name, vmon->width, vmon->height);
+	if (!vmon->vcr_dest) {
+		VWM_ERROR("unable to create destination XWindow");
+		goto _err_vcr;
+	}
 
 	if (vmon->execv) {
 		if (vmon->pid) {
@@ -646,10 +628,9 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 	return vmon;
 
 _err_win:
-	XDestroyWindow(vmon->xserver->display, vmon->window);
-	XRenderFreePicture(vmon->xserver->display, vmon->picture);
-_err_xserver:
-	vwm_xserver_close(vmon->xserver);
+	(void) vcr_dest_free(vmon->vcr_dest);
+_err_vcr:
+	(void) vcr_backend_free(vmon->vcr_backend);
 _err_free:
 	free(vmon);
 _err:
@@ -661,12 +642,11 @@ _err:
 static void vmon_shutdown(vmon_t *vmon)
 {
 	assert(vmon);
-	assert(vmon->xserver);
 
-	XDestroyWindow(vmon->xserver->display, vmon->window);
 	vwm_chart_destroy(vmon->charts, vmon->chart);
 	vwm_charts_destroy(vmon->charts);
-	vwm_xserver_close(vmon->xserver);
+	(void) vcr_dest_free(vmon->vcr_dest);
+	(void) vcr_backend_free(vmon->vcr_backend);
 	free(vmon);
 }
 
@@ -684,75 +664,15 @@ static void vmon_resize(vmon_t *vmon, int width, int height)
 
 static int vmon_snapshot_as_png(vmon_t *vmon, FILE *output)
 {
-	XImage		*chart_as_ximage;
-	png_bytepp	row_pointers;
-	png_infop	info_ctx;
-	png_structp	png_ctx;
+	vcr_dest_t	*png_dest;
 
-	assert(vmon);
-	assert(output);
-
-	vwm_chart_render_as_ximage(vmon->charts, vmon->chart, NULL, &chart_as_ximage);
-
-	row_pointers = malloc(sizeof(void *) * chart_as_ximage->height);
-	if (!row_pointers) {
-		XDestroyImage(chart_as_ximage);
-
+	png_dest = vcr_dest_png_new(vmon->vcr_backend, output);
+	if (!png_dest)
 		return -ENOMEM;
-	}
 
-	for (unsigned i = 0; i < chart_as_ximage->height; i++)
-		row_pointers[i] = &((png_byte *)chart_as_ximage->data)[i * chart_as_ximage->bytes_per_line];
-
-	png_ctx = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	if (!png_ctx) {
-		free(row_pointers);
-		XDestroyImage(chart_as_ximage);
-
-		return -ENOMEM;
-	}
-
-	info_ctx = png_create_info_struct(png_ctx);
-	if (!info_ctx) {
-		png_destroy_write_struct(&png_ctx, NULL);
-		XDestroyImage(chart_as_ximage);
-		free(row_pointers);
-
-		return -ENOMEM;
-	}
-
-	png_init_io(png_ctx, output);
-
-	if (setjmp(png_jmpbuf(png_ctx)) != 0) {
-		png_destroy_write_struct(&png_ctx, &info_ctx);
-		XDestroyImage(chart_as_ximage);
-		free(row_pointers);
-
-		return -ENOMEM;
-	}
-
-	/* XXX: I'm sure this is making flawed assumptions about the color format
-	 * and type etc, but this makes it work for me and that's Good Enough for now.
-	 * One can easily turn runtime mapping of X color formats, endianness, and packing
-	 * details to whatever a file format like PNG can express into a tar-filled rabbithole
-	 * of fruitless wankery.
-	 */
-	png_set_bgr(png_ctx);
-	png_set_IHDR(png_ctx, info_ctx,
-		chart_as_ximage->width,
-		chart_as_ximage->height,
-		8,
-		PNG_COLOR_TYPE_RGBA,
-		PNG_INTERLACE_NONE,
-		PNG_COMPRESSION_TYPE_BASE,
-		PNG_FILTER_TYPE_BASE);
-
-	png_write_info(png_ctx, info_ctx);
-	png_write_image(png_ctx, row_pointers);
-	png_write_end(png_ctx, NULL);
-
-	XDestroyImage(chart_as_ximage);
-	free(row_pointers);
+	/* FIXME: errors */
+	vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, png_dest, -1, -1, -1, -1);
+	png_dest = vcr_dest_free(png_dest);
 
 	return 0;
 }
@@ -813,38 +733,35 @@ static int vmon_snapshot(vmon_t *vmon)
 }
 
 
-/* handle the next X event, may block */
+/* handle the next backend event, may block */
 static void vmon_process_event(vmon_t *vmon)
 {
-	XEvent	ev;
+	int			width, height;
+	vcr_backend_event_t	ev;
 
 	assert(vmon);
 
-	XNextEvent(vmon->xserver->display, &ev);
-
-	switch (ev.type) {
-		case ConfigureNotify:
-			vmon_resize(vmon, ev.xconfigure.width, ev.xconfigure.height);
-			vwm_chart_compose(vmon->charts, vmon->chart, NULL);
-			vwm_chart_render(vmon->charts, vmon->chart, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
+	ev = vcr_backend_next_event(vmon->vcr_backend, &width, &height);
+	switch (ev) {
+		case VCR_BACKEND_EVENT_RESIZE:
+			vmon_resize(vmon, width, height);
+			vwm_chart_compose(vmon->charts, vmon->chart);
+			vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, vmon->vcr_dest, -1, -1, -1, -1);
 			break;
 
-		case Expose:
-			vwm_chart_render(vmon->charts, vmon->chart, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
+		case VCR_BACKEND_EVENT_REDRAW:
+			vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, vmon->vcr_dest, -1, -1, -1, -1);
 			break;
 
-		case ClientMessage:
-			if (ev.xclient.message_type != vmon->wm_protocols_atom)
-				break;
-
-			if (ev.xclient.data.l[0] != vmon->wm_delete_atom)
-				break;
-
+		case VCR_BACKEND_EVENT_QUIT:
 			vmon->done = 1;
 			break;
 
+		case VCR_BACKEND_EVENT_NOOP:
+			break;
+
 		default:
-			VWM_TRACE("unhandled event: %x\n", ev.type);
+			VWM_TRACE("unhandled event: %x\n", ev);
 	}
 }
 
@@ -852,7 +769,6 @@ static void vmon_process_event(vmon_t *vmon)
 int main(int argc, const char * const *argv)
 {
 	vmon_t		*vmon;
-	struct pollfd	pfd = { .events = POLLIN };
 	int		ret = EXIT_SUCCESS;
 
 	vmon = vmon_startup(argc, argv);
@@ -861,17 +777,20 @@ int main(int argc, const char * const *argv)
 		return EXIT_FAILURE;
 	}
 
-	pfd.fd = ConnectionNumber(vmon->xserver->display);
-
 	while (!vmon->done) {
 		int	delay;
 
+		/* update only actually updates when enough time has passed, and always returns how much time
+		 * to sleep before calling update again (-1 for infinity (paused)).
+		 *
+		 * if 0 is returned, no update was performed/no changes occured.
+		 */
 		if (vwm_charts_update(vmon->charts, &delay)) {
-			vwm_chart_compose(vmon->charts, vmon->chart, NULL);
-			vwm_chart_render(vmon->charts, vmon->chart, PictOpSrc, vmon->picture, 0, 0, vmon->width, vmon->height);
+			vwm_chart_compose(vmon->charts, vmon->chart);
+			vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, vmon->vcr_dest, -1, -1, -1, -1);
 		}
 
-		if (XPending(vmon->xserver->display) || poll(&pfd, 1, delay) > 0)
+		if (vcr_backend_poll(vmon->vcr_backend, delay) > 0)
 			vmon_process_event(vmon);
 
 		if (got_sigint > 2 || got_sigquit > 2) {

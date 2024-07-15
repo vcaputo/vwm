@@ -82,9 +82,14 @@ static vwm_t * vwm_startup(void)
 		goto _err_free;
 	}
 
-	if (!(vwm->charts = vwm_charts_create(vwm->xserver))) {
-		VWM_ERROR("Failed to create charts");
+	if (!(vwm->vcr_backend = vcr_backend_new(VCR_BACKEND_TYPE_XLIB, vwm->xserver))) {
+		VWM_ERROR("Failed to create vcr backend");
 		goto _err_xclose;
+	}
+
+	if (!(vwm->charts = vwm_charts_create(vwm->vcr_backend))) {
+		VWM_ERROR("Failed to create charts");
+		goto _err_vbe;
 	}
 
 	/* query the needed X extensions */
@@ -172,6 +177,9 @@ static vwm_t * vwm_startup(void)
 
 _err_charts:
 	vwm_charts_destroy(vwm->charts);
+
+_err_vbe:
+	vcr_backend_free(vwm->vcr_backend);
 
 _err_xclose:
 	vwm_xserver_close(vwm->xserver);
