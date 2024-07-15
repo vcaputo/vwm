@@ -1,7 +1,7 @@
 /*
  *                                  \/\/\
  *
- *  Copyright (C) 2012-2018  Vito Caputo - <vcaputo@pengaru.com>
+ *  Copyright (C) 2012-2024  Vito Caputo - <vcaputo@pengaru.com>
  *
  *  This program is free software: you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License version 2 as published
@@ -18,28 +18,29 @@
 
 /* libvmon integration, warning: this gets a little crazy especially in the rendering. */
 
-#include <X11/Xatom.h>
-#include <X11/Xlib.h>
-#include <X11/extensions/Xfixes.h>
-#include <X11/extensions/Xrender.h>
 #include <assert.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/time.h>
 
+#ifdef USE_XLIB
+#include <X11/extensions/Xfixes.h>
+#endif
+
+
 #include "charts.h"
-#include "composite.h"
 #include "libvmon/vmon.h"
 #include "list.h"
-#include "vwm.h"
-#include "xwindow.h"
+#include "util.h"
+#include "vcr.h"
 
-#define CHART_MASK_DEPTH	8					/* XXX: 1 would save memory, but Xorg isn't good at it */
-#define CHART_FIXED_FONT	"-misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1"
-#define CHART_ROW_HEIGHT	15					/* this should always be larger than the font height */
-#define CHART_GRAPH_MIN_WIDTH	200					/* always create graphs at least this large */
-#define CHART_GRAPH_MIN_HEIGHT	(4 * CHART_ROW_HEIGHT)
+#ifdef USE_XLIB
+#include "composite.h"
+#include "xwindow.h"
+#include "vwm.h"
+#endif
+
 #define CHART_ISTHREAD_ARGV	"~"					/* use this string to mark threads in the argv field */
 #define CHART_NOCOMM_ARGV	"#missed it!"				/* use this string to substitute the command when missing in argv field */
 #define CHART_MAX_ARGC		64					/* this is a huge amount */
@@ -49,7 +50,7 @@
 
 /* the global charts state, supplied to vwm_chart_create() which keeps a reference for future use. */
 typedef struct _vwm_charts_t {
-	vwm_xserver_t				*xserver;	/* xserver supplied to vwm_charts_init() */
+	vcr_backend_t				*vcr_backend;	/* supplied to vwm_charts_create() */
 
 	/* libvmon */
 	struct timeval				maybe_sample, last_sample, this_sample;
@@ -60,17 +61,6 @@ typedef struct _vwm_charts_t {
 	vmon_t					vmon;
 	float					prev_sampling_interval, sampling_interval;
 	int					sampling_paused, contiguous_drops, primed;
-
-	/* X */
-	XFontStruct				*chart_font;
-	GC					text_gc;
-	Picture					shadow_fill,
-						text_fill,
-						bg_fill,
-						snowflakes_text_fill,
-						grapha_fill,
-						graphb_fill,
-						finish_fill;
 } vwm_charts_t;
 
 typedef enum _vwm_column_type_t {
@@ -113,19 +103,14 @@ typedef struct _vwm_column_t {
 /* everything needed by the per-window chart's context */
 typedef struct _vwm_chart_t {
 	vmon_proc_t	*monitor;				/* vmon process monitor handle */
-	Pixmap		text_pixmap;				/* pixmap for charted text (kept around for XDrawText usage) */
-	Picture		text_picture;				/* picture representation of text_pixmap */
-	Picture		shadow_picture;				/* text shadow layer */
-	Picture		grapha_picture;				/* graph A layer */
-	Picture		graphb_picture;				/* graph B layer */
-	Picture		tmp_picture;				/* 1 row worth of temporary picture space */
-	Picture		picture;				/* chart picture derived from the pixmap, for render compositing */
-	int		width;					/* current width of the chart */
-	int		height;					/* current height of the chart */
+	vcr_t		*vcr;
+
+	int		hierarchy_end;				/* row where the process hierarchy currently ends */
+
+	/* FIXME TODO: this is redundant with the same things in vcr_t now, dedupe them */
 	int		visible_width;				/* currently visible width of the chart */
 	int		visible_height;				/* currently visible height of the chart */
-	int		phase;					/* current position within the (horizontally scrolling) graphs */
-	int		hierarchy_end;				/* row where the process hierarchy currently ends */
+
 	int		snowflakes_cnt;				/* count of snowflaked rows (reset to zero to truncate snowflakes display) */
 	int		gen_last_composed;			/* the last composed vmon generation */
 	int		redraw_needed;				/* if a redraw is required (like when the window is resized...) */
@@ -151,17 +136,6 @@ static float			sampling_intervals[] = {
 						.05,		/* ~20Hz */
 						.025,		/* ~40Hz */
 						.01666};	/* ~60Hz */
-
-static XRenderColor		chart_visible_color = { 0xffff, 0xffff, 0xffff, 0xffff },
-				chart_shadow_color = { 0x0000, 0x0000, 0x0000, 0xC000},
-				chart_bg_color = { 0x0, 0x1000, 0x0, 0x9000},
-				chart_div_color = { 0x2000, 0x3000, 0x2000, 0x9000},
-				chart_snowflakes_visible_color = { 0xd000, 0xd000, 0xd000, 0x8000 },
-				chart_trans_color = {0x00, 0x00, 0x00, 0x00},
-				chart_grapha_color = { 0xff00, 0x0000, 0x0000, 0x3000 },	/* ~red */
-				chart_graphb_color = { 0x0000, 0xffff, 0xffff, 0x3000 };	/* ~cyan */
-static XRenderPictureAttributes	pa_repeat = { .repeat = 1 };
-static XRenderPictureAttributes	pa_no_repeat = { .repeat = 0 };
 
 
 /* wrapper around snprintf always returning the length of what's in the buf */
@@ -212,66 +186,10 @@ static void vmon_dtor_cb(vmon_t *vmon, vmon_proc_t *proc)
 }
 
 
-/* convenience helper for creating a pixmap */
-static Pixmap create_pixmap(vwm_charts_t *charts, unsigned width, unsigned height, unsigned depth)
-{
-	vwm_xserver_t	*xserver = charts->xserver;
-
-	return XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), width, height, depth);
-}
-
-
-/* convenience helper for creating a picture, supply res_pixmap to keep a reference to the pixmap drawable. */
-static Picture create_picture(vwm_charts_t *charts, unsigned width, unsigned height, unsigned depth, unsigned long attr_mask, XRenderPictureAttributes *attr, Pixmap *res_pixmap)
-{
-	vwm_xserver_t	*xserver = charts->xserver;
-	Pixmap		pixmap;
-	Picture		picture;
-	int		format;
-
-	/* FIXME this pixmap->picture dance seems silly, investigate further. TODO */
-	switch (depth) {
-		case 8:
-			format = PictStandardA8;
-			break;
-		case 32:
-			format = PictStandardARGB32;
-			break;
-		default:
-			assert(0);
-	}
-
-	pixmap = create_pixmap(charts, width, height, depth);
-	picture = XRenderCreatePicture(xserver->display, pixmap, XRenderFindStandardFormat(xserver->display, format), attr_mask, attr);
-
-	if (res_pixmap) {
-		*res_pixmap = pixmap;
-	} else {
-		XFreePixmap(xserver->display, pixmap);
-	}
-
-	return picture;
-}
-
-
-/* convenience helper for creating a filled picture, supply res_pixmap to keep a reference to the pixmap drawable. */
-static Picture create_picture_fill(vwm_charts_t *charts, unsigned width, unsigned height, unsigned depth, unsigned long attrs_mask, XRenderPictureAttributes *attrs, const XRenderColor *color, Pixmap *res_pixmap)
-{
-	vwm_xserver_t	*xserver = charts->xserver;
-	Picture		picture;
-
-	picture = create_picture(charts, width, height, depth, attrs_mask, attrs, res_pixmap);
-	XRenderFillRectangle(xserver->display, PictOpSrc, picture, color, 0, 0, width, height);
-
-	return picture;
-}
-
-
 /* initialize charts system */
-vwm_charts_t * vwm_charts_create(vwm_xserver_t *xserver)
+vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe)
 {
 	vwm_charts_t	*charts;
-	Pixmap		bitmask;
 
 	charts = calloc(1, sizeof(vwm_charts_t));
 	if (!charts) {
@@ -279,7 +197,7 @@ vwm_charts_t * vwm_charts_create(vwm_xserver_t *xserver)
 		goto _err;
 	}
 
-	charts->xserver = xserver;
+	charts->vcr_backend = vbe;
 	charts->prev_sampling_interval = charts->sampling_interval = 0.1f;	/* default to 10Hz */
 
 	if (!vmon_init(&charts->vmon, VMON_FLAG_2PASS, CHART_VMON_SYS_WANTS, CHART_VMON_PROC_WANTS)) {
@@ -293,39 +211,7 @@ vwm_charts_t * vwm_charts_create(vwm_xserver_t *xserver)
 	charts->vmon.sample_cb_arg = charts;
 	gettimeofday(&charts->this_sample, NULL);
 
-	/* get all the text and graphics stuff setup for charts */
-	charts->chart_font = XLoadQueryFont(xserver->display, CHART_FIXED_FONT);
-	if (!charts->chart_font) {
-		VWM_ERROR("unable to load chart font \"%s\"", CHART_FIXED_FONT);
-		goto _err_vmon;
-	}
-
-	/* create a GC for rendering the text using Xlib into the text chart stencils */
-	bitmask = create_pixmap(charts, 1, 1, CHART_MASK_DEPTH);
-	charts->text_gc = XCreateGC(xserver->display, bitmask, 0, NULL);
-	XSetForeground(xserver->display, charts->text_gc, WhitePixel(xserver->display, xserver->screen_num));
-	XFreePixmap(xserver->display, bitmask);
-
-	/* create some repeating source fill pictures for drawing through the text and graph stencils */
-	charts->text_fill = create_picture_fill(charts, 1, 1, 32, CPRepeat, &pa_repeat, &chart_visible_color, NULL);
-	charts->shadow_fill = create_picture_fill(charts, 1, 1, 32, CPRepeat, &pa_repeat, &chart_shadow_color, NULL);
-
-	charts->bg_fill = create_picture(charts, 1, CHART_ROW_HEIGHT, 32, CPRepeat, &pa_repeat, NULL);
-	XRenderFillRectangle(xserver->display, PictOpSrc, charts->bg_fill, &chart_bg_color, 0, 0, 1, CHART_ROW_HEIGHT);
-	XRenderFillRectangle(xserver->display, PictOpSrc, charts->bg_fill, &chart_div_color, 0, CHART_ROW_HEIGHT - 1, 1, 1);
-
-	charts->snowflakes_text_fill = create_picture_fill(charts, 1, 1, 32, CPRepeat, &pa_repeat, &chart_snowflakes_visible_color, NULL);
-	charts->grapha_fill = create_picture_fill(charts, 1, 1, 32, CPRepeat, &pa_repeat, &chart_grapha_color, NULL);
-	charts->graphb_fill = create_picture_fill(charts, 1, 1, 32, CPRepeat, &pa_repeat, &chart_graphb_color, NULL);
-
-	charts->finish_fill = create_picture(charts, 1, 2, 32, CPRepeat, &pa_repeat, NULL);
-	XRenderFillRectangle(xserver->display, PictOpSrc, charts->finish_fill, &chart_visible_color, 0, 0, 1, 1);
-	XRenderFillRectangle(xserver->display, PictOpSrc, charts->finish_fill, &chart_trans_color, 0, 1, 1, 1);
-
 	return charts;
-
-_err_vmon:
-	vmon_destroy(&charts->vmon);
 
 _err_charts:
 	free(charts);
@@ -343,151 +229,90 @@ void vwm_charts_destroy(vwm_charts_t *charts)
 }
 
 
-/* copies a row from src to dest */
-static void copy_row(vwm_charts_t *charts, vwm_chart_t *chart, int src_row, Picture src, int dest_row, Picture dest)
+/* moves what's below a given row up above it, preserve the lost row's graphs @ hierarchy end */
+static void snowflake_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 {
-	XRenderComposite(charts->xserver->display, PictOpSrc, src, None, dest,
-		0, src_row * CHART_ROW_HEIGHT,		/* src */
-		0, 0,					/* mask */
-		0, dest_row * CHART_ROW_HEIGHT,		/* dest */
-		chart->width, CHART_ROW_HEIGHT);	/* dimensions */
+	VWM_TRACE("pid=%i chart=%p row=%i heirarhcy_end=%i", chart->monitor->pid, chart, row, chart->hierarchy_end);
+
+	/* stash the graph rows */
+	vcr_stash_row(chart->vcr, VCR_LAYER_GRAPHA, row);
+	vcr_stash_row(chart->vcr, VCR_LAYER_GRAPHB, row);
+
+	/* shift _all_ the layers up by 1 row */
+	vcr_shift_below_row_up_one(chart->vcr, row);
+
+	/* unstash the graph rows @ hierarchy end so we have them in the snowflakes */
+	vcr_unstash_row(chart->vcr, VCR_LAYER_GRAPHA, chart->hierarchy_end);
+	vcr_unstash_row(chart->vcr, VCR_LAYER_GRAPHB, chart->hierarchy_end);
+
+	/* clear the others @ hierarchy end, new argv will get stamped over it */
+	vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, chart->hierarchy_end, -1, -1);
+	vcr_clear_row(chart->vcr, VCR_LAYER_SHADOW, chart->hierarchy_end, -1, -1);
 }
 
-
-/* fills a row with the specified color */
-static void fill_row(vwm_charts_t *charts, vwm_chart_t *chart, int row, Picture pic, XRenderColor *color)
-{
-	XRenderFillRectangle(charts->xserver->display, PictOpSrc, pic, color,
-		0, row * CHART_ROW_HEIGHT,		/* dest */
-		chart->width, CHART_ROW_HEIGHT);	/* dimensions */
-}
-
-
-/* copy what's below a given row up the specified amount within the same picture */
-static void shift_below_row_up(vwm_charts_t *charts, vwm_chart_t *chart, int row, Picture pic, int rows)
-{
-	vwm_xserver_t	*xserver = charts->xserver;
-
-	XRenderChangePicture(xserver->display, pic, CPRepeat, &pa_no_repeat);
-	XRenderComposite(xserver->display, PictOpSrc, pic, None, pic,
-		0, (rows + row) * CHART_ROW_HEIGHT,									/* src */
-		0, 0,													/* mask */
-		0, row * CHART_ROW_HEIGHT,										/* dest */
-		chart->width, (rows + chart->hierarchy_end) * CHART_ROW_HEIGHT - (rows + row) * CHART_ROW_HEIGHT);	/* dimensions */
-	XRenderChangePicture(xserver->display, pic, CPRepeat, &pa_repeat);
-}
-
-
-/* moves what's below a given row up above it if specified, the row becoming discarded */
-static void snowflake_row(vwm_charts_t *charts, vwm_chart_t *chart, Picture pic, int copy, int row)
-{
-	VWM_TRACE("pid=%i chart=%p row=%i copy=%i heirarhcy_end=%i", chart->monitor->pid, chart, row, copy, chart->hierarchy_end);
-
-	if (copy)
-		copy_row(charts, chart, row, pic, 0, chart->tmp_picture);
-
-	shift_below_row_up(charts, chart, row, pic, 1);
-
-	if (copy) {
-		copy_row(charts, chart, 0, chart->tmp_picture, chart->hierarchy_end, pic);
-	} else {
-		fill_row(charts, chart, chart->hierarchy_end, pic, &chart_trans_color);
-	}
-}
 
 /* XXX TODO libvmon automagic children following races with explicit X client pid monitoring with different outcomes, it should be irrelevant which wins,
  *     currently the only visible difference is the snowflakes gap (hierarchy_end) varies, which is why I haven't bothered to fix it, I barely even notice.
  */
 
 
-static void shift_below_row_down(vwm_charts_t *charts, vwm_chart_t *chart, int row, Picture pic, int rows)
-{
-	XRenderComposite(charts->xserver->display, PictOpSrc, pic, None, pic,
-		0, row * CHART_ROW_HEIGHT,					/* src */
-		0, 0,								/* mask */
-		0, (row + rows) * CHART_ROW_HEIGHT,				/* dest */
-		chart->width, chart->height - (rows + row) * CHART_ROW_HEIGHT);	/* dimensions */
-}
-
-
 /* shifts what's below a given row down a row, and clears the row, preparing it for populating */
-static void allocate_row(vwm_charts_t *charts, vwm_chart_t *chart, Picture pic, int row)
+static void allocate_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 {
 	VWM_TRACE("pid=%i chart=%p row=%i", chart->monitor->pid, chart, row);
 
-	shift_below_row_down(charts, chart, row, pic, 1);
-	fill_row(charts, chart, row, pic, &chart_trans_color);
+	vcr_shift_below_row_down_one(chart->vcr, row);
+	/* FIXME TODO: the vcr layers api needs to just support bitmasks for which layers the operation
+	 * applies to.
+	 */
+	vcr_clear_row(chart->vcr, VCR_LAYER_GRAPHA, row, -1, -1);
+	vcr_clear_row(chart->vcr, VCR_LAYER_GRAPHB, row, -1, -1);
+	vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
+	vcr_clear_row(chart->vcr, VCR_LAYER_SHADOW, row, -1, -1);
 }
 
 
 /* shadow a row from the text layer in the shadow layer */
 static void shadow_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 {
-	vwm_xserver_t *xserver = charts->xserver;
-
-	/* the current technique for creating the shadow is to simply render the text at +1/-1 pixel offsets on both axis in translucent black */
-	XRenderComposite(xserver->display, PictOpSrc, charts->shadow_fill, chart->text_picture, chart->shadow_picture,
-		0, 0,
-		-1, row * CHART_ROW_HEIGHT,
-		0, row * CHART_ROW_HEIGHT,
-		chart->visible_width, CHART_ROW_HEIGHT);
-
-	XRenderComposite(xserver->display, PictOpOver, charts->shadow_fill, chart->text_picture, chart->shadow_picture,
-		0, 0,
-		0, -1 + row * CHART_ROW_HEIGHT,
-		0, row * CHART_ROW_HEIGHT,
-		chart->visible_width, CHART_ROW_HEIGHT);
-
-	XRenderComposite(xserver->display, PictOpOver, charts->shadow_fill, chart->text_picture, chart->shadow_picture,
-		0, 0,
-		1, row * CHART_ROW_HEIGHT,
-		0, row * CHART_ROW_HEIGHT,
-		chart->visible_width, CHART_ROW_HEIGHT);
-
-	XRenderComposite(xserver->display, PictOpOver, charts->shadow_fill, chart->text_picture, chart->shadow_picture,
-		0, 0,
-		0, 1 + row * CHART_ROW_HEIGHT,
-		0, row * CHART_ROW_HEIGHT,
-		chart->visible_width, CHART_ROW_HEIGHT);
+	vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
 }
 
 
 /* simple helper to map the vmon per-proc argv array into an XTextItem array, deals with threads vs. processes and the possibility of the comm field not getting read in before the process exited... */
-static void argv2xtext(const vmon_proc_t *proc, XTextItem *items, int max_items, int *nr_items)
+static void proc_argv2strs(const vmon_proc_t *proc, vcr_str_t *strs, int max_strs, int *res_n_strs)
 {
-	int	i;
 	int	nr = 0;
 
+	assert(proc);
+	assert(strs);
+	assert(max_strs > 2);
+	assert(res_n_strs);
+
 	if (proc->is_thread) {	/* stick the thread marker at the start of threads */
-		items[0].nchars = sizeof(CHART_ISTHREAD_ARGV) - 1;
-		items[0].chars = CHART_ISTHREAD_ARGV;
-		items[0].delta = 4;
-		items[0].font = None;
+		strs[0].str = CHART_ISTHREAD_ARGV;
+		strs[0].len = sizeof(CHART_ISTHREAD_ARGV) - 1;
 		nr++;
 	}
 
 	if (((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len) {
-		items[nr].nchars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len - 1;
-		items[nr].chars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.array;
+		strs[nr].str = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.array;
+		strs[nr].len = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len - 1;
 	} else {
 		/* sometimes a process is so ephemeral we don't manage to sample its comm, XXX TODO: we always have a pid, stringify it? */
-		items[nr].nchars = sizeof(CHART_NOCOMM_ARGV) - 1;
-		items[nr].chars = CHART_NOCOMM_ARGV;
+		strs[nr].str = CHART_NOCOMM_ARGV;
+		strs[nr].len = sizeof(CHART_NOCOMM_ARGV) - 1;
 	}
-	items[nr].delta = 4;
-	items[nr].font = None;
 	nr++;
 
 	if (!proc->is_thread) { /* suppress the argv for threads */
-		for (i = 1; nr < max_items && i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
-			items[nr].chars = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i];
-			items[nr].nchars = strlen(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i]);	/* TODO: libvmon should inform us of the length */
-			items[nr].delta = 4;
-			items[nr].font = None;
+		for (int i = 1; nr < max_strs && i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
+			strs[nr].str = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i];
+			strs[nr].len = strlen(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i]);	/* TODO: libvmon should inform us of the length */
 		}
 	}
 
-	(*nr_items) = nr;
+	*res_n_strs = nr;
 }
 
 
@@ -536,72 +361,37 @@ static int proc_hierarchy_changed(vmon_proc_t *proc)
 /* helper for drawing the vertical bars in the graph layers */
 static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, double a_fraction, double a_total, double b_fraction, double b_total)
 {
-	vwm_xserver_t	*xserver = charts->xserver;
-	int		a_height, b_height;
+	float	a_t, b_t;
 
-	/* compute the bar heights for this sample */
-	a_height = (a_fraction / a_total * (double)(CHART_ROW_HEIGHT - 1)); /* give up 1 pixel for the div */
-	b_height = (b_fraction / b_total * (double)(CHART_ROW_HEIGHT - 1));
+	/* compute the bar %ages for this sample */
+	a_t = a_fraction / a_total;
+	b_t = b_fraction / b_total;
 
-	/* round up to 1 pixel when the scaled result is a fraction less than 1,
+	/* ensure at least 1 pixel when the scaled result is a fraction less than 1,
 	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
-	if (a_fraction && !a_height)
-		a_height = 1;
-
-	if (b_fraction && !b_height)
-		b_height = 1;
-
-	/* draw the two bars for this sample at the current phase in the graphs, note the first is ceiling-based, second floor-based */
-	XRenderFillRectangle(xserver->display, PictOpSrc, chart->grapha_picture, &chart_visible_color,
-		chart->phase, row * CHART_ROW_HEIGHT,	/* dst x, y */
-		1, a_height);				/* dst w, h */
-	XRenderFillRectangle(xserver->display, PictOpSrc, chart->graphb_picture, &chart_visible_color,
-		chart->phase, row * CHART_ROW_HEIGHT + (CHART_ROW_HEIGHT - b_height) - 1,	/* dst x, y */
-		1, b_height);									/* dst w, h */
+	vcr_draw_bar(chart->vcr, VCR_LAYER_GRAPHA, row, a_t, a_fraction > 0 ? 1 : 0);
+	vcr_draw_bar(chart->vcr, VCR_LAYER_GRAPHB, row, b_t, b_fraction > 0 ? 1 : 0);
 }
 
 
 /* helper for marking a finish line at the current phase for the specified row */
 static void mark_finish(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 {
-	vwm_xserver_t	*xserver = charts->xserver;
-
-	XRenderComposite(xserver->display, PictOpSrc, charts->finish_fill, None, chart->grapha_picture,
-			 0, 0,					/* src x, y */
-			 0, 0,					/* mask x, y */
-			 chart->phase, row * CHART_ROW_HEIGHT,	/* dst x, y */
-			 1, CHART_ROW_HEIGHT - 1);
-	XRenderComposite(xserver->display, PictOpSrc, charts->finish_fill, None, chart->graphb_picture,
-			 0, 0,					/* src x, y */
-			 0, 0,					/* mask x, y */
-			 chart->phase, row * CHART_ROW_HEIGHT,	/* dst x, y */
-			 1, CHART_ROW_HEIGHT - 1);
+	vcr_mark_finish_line(chart->vcr, VCR_LAYER_GRAPHA, row);
+	vcr_mark_finish_line(chart->vcr, VCR_LAYER_GRAPHB, row);
 }
 
 
 /* helper for drawing a proc's argv @ specified x offset and row on the chart */
 static void print_argv(const vwm_charts_t *charts, const vwm_chart_t *chart, int x, int row, const vmon_proc_t *proc, int *res_width)
 {
-	vwm_xserver_t	*xserver = charts->xserver;
-	XTextItem	items[CHART_MAX_ARGC];
-	int		nr_items;
+	vcr_str_t	strs[VCR_DRAW_TEXT_N_STRS_MAX];
+	int		n_strs;
 
-	argv2xtext(proc, items, NELEMS(items), &nr_items);
-	XDrawText(xserver->display, chart->text_pixmap, charts->text_gc,
-		  x, (row + 1) * CHART_ROW_HEIGHT - 3,		/* dst x, y */
-		  items, nr_items);
+	assert(chart);
 
-	/* if the caller wants to know the width, compute it, it's dumb that XDrawText doesn't
-	 * return the dimensions of what was drawn, fucking xlib.
-	 */
-	if (res_width) {
-		int	width = 0;
-
-		for (int i = 0; i < nr_items; i++)
-			width += XTextWidth(charts->chart_font, items[i].chars, items[i].nchars) + items[i].delta;
-
-		*res_width = width;
-	}
+	proc_argv2strs(proc, strs, NELEMS(strs), &n_strs);
+	vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, x, row, strs, n_strs, res_width);
 }
 
 
@@ -634,12 +424,10 @@ static unsigned interval_as_hz(vwm_charts_t *charts)
 /* draw a process' row slice of a process tree */
 static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int depth, int row, const vmon_proc_t *proc, int *res_width)
 {
-	vwm_xserver_t	*xserver = charts->xserver;
-
 	/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
 	if (proc != chart->monitor) {
 		vmon_proc_t	*child, *ancestor, *sibling, *last_sibling = NULL;
-		int		bar_x = 0, bar_y = (row + 1) * CHART_ROW_HEIGHT;
+		int		bar_x = 0, bar_y = (row + 1) * VCR_ROW_HEIGHT;
 		int		sub;
 
 		/* XXX: everything done in this code block only dirties _this_ process' row in the rendered chart output */
@@ -647,14 +435,14 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 		/* walk up the ancestors until reaching chart->monitor, any ancestors we encounter which have more siblings we draw a vertical bar for */
 		/* this draws the |'s in something like:  | |   |    | comm */
 		for (sub = 1, ancestor = proc->parent; ancestor && ancestor != chart->monitor; ancestor = ancestor->parent, sub++) {
-			bar_x = ((depth - 1) - sub) * (CHART_ROW_HEIGHT / 2) + 4;
+			bar_x = ((depth - 1) - sub) * (VCR_ROW_HEIGHT / 2) + 4;
 
 			assert(depth > 0);
 
 			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
 			if (proc_has_subsequent_siblings(&charts->vmon, ancestor))
-				XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
-					  x + bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
+				vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
+					  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
 					  x + bar_x, bar_y);			/* dst x2, y2 (vertical line) */
 		}
 
@@ -699,20 +487,20 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 
 			/* found a tee is necessary, all that's left is to determine if the tee is a corner and draw it accordingly, stopping the search. */
 			if (needs_tee) {
-				bar_x = (depth - 1) * (CHART_ROW_HEIGHT / 2) + 4;
+				bar_x = (depth - 1) * (VCR_ROW_HEIGHT / 2) + 4;
 
 				/* if we're the last sibling, corner the tee by shortening the vbar */
 				if (proc == last_sibling) {
-					XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
-						  x + bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
+					vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
+						  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
 						  x + bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
 				} else {
-					XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
-						  x + bar_x, bar_y - CHART_ROW_HEIGHT,	/* dst x1, y1 */
+					vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
+						  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
 						  x + bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
 				}
 
-				XDrawLine(xserver->display, chart->text_pixmap, charts->text_gc,
+				vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
 					  x + bar_x, bar_y - 4,				/* dst x1, y1 */
 					  x + bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
 
@@ -722,7 +510,7 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 		}
 
 		if (res_width)
-			*res_width = depth * (CHART_ROW_HEIGHT / 2);
+			*res_width = depth * (VCR_ROW_HEIGHT / 2);
 	}
 }
 
@@ -734,7 +522,6 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 {
 	vmon_sys_stat_t		*sys_stat = charts->vmon.stores[VMON_STORE_SYS_STAT];
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
-	vwm_xserver_t		*xserver = charts->xserver;
 	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
 	char			str[256];
 
@@ -754,13 +541,9 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 		 * the currently configured columns, but long-term this will have to get fixed properly.
 		 */
 		if (c->side == VWM_SIDE_LEFT)
-			XRenderFillRectangle(charts->xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
-				left, row * CHART_ROW_HEIGHT,	/* dst x, y */
-				c->width + CHART_ROW_HEIGHT / 2, CHART_ROW_HEIGHT);	/* dst w, h */
+			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, left, c->width + VCR_ROW_HEIGHT / 2);
 		else
-			XRenderFillRectangle(charts->xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
-				chart->visible_width - (c->width + CHART_ROW_HEIGHT / 2 + right), row * CHART_ROW_HEIGHT,	/* dst x, y */
-				c->width + CHART_ROW_HEIGHT / 2, CHART_ROW_HEIGHT);	/* dst w, h */
+			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, chart->visible_width - (c->width + VCR_ROW_HEIGHT / 2 + right), c->width + VCR_ROW_HEIGHT / 2);
 
 		switch (c->type) {
 		case VWM_COLUMN_VWM:
@@ -894,9 +677,11 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 
 		/* for plain string draws, str_len is left non-zero and they all get handled equally here */
 		if (str_len) {
-			int	str_width, xpos;
+			const vcr_str_t	strs[1] = { (vcr_str_t){.str = str, .len = str_len} };
+			int		str_width, xpos;
 
-			str_width = XTextWidth(charts->chart_font, str, str_len);
+			/* get the width first, so we can place the text, note the -1 to suppress drawings */
+			vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, -1 /* x */, -1 /* row */, strs, 1, &str_width);
 			if (uniform && str_width > c->width) {
 				c->width = str_width;
 				chart->redraw_needed++;
@@ -934,14 +719,12 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 				assert(0);
 			}
 
-			XDrawString(xserver->display, chart->text_pixmap, charts->text_gc,
-				    xpos,  (row + 1) * CHART_ROW_HEIGHT - 3,
-				    str, str_len);
+			vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, xpos, row, strs, 1, NULL);
 		}
 
 		if (advance) {
-			left += (c->side == VWM_SIDE_LEFT) * (c->width + CHART_ROW_HEIGHT / 2);
-			right += (c->side == VWM_SIDE_RIGHT) * (c->width + CHART_ROW_HEIGHT / 2);
+			left += (c->side == VWM_SIDE_LEFT) * (c->width + VCR_ROW_HEIGHT / 2);
+			right += (c->side == VWM_SIDE_RIGHT) * (c->width + VCR_ROW_HEIGHT / 2);
 		}
 	}
 }
@@ -1014,9 +797,7 @@ static void draw_overlay_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc
 		return;
 
 	if (!proc->is_new) /* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
-		XRenderFillRectangle(charts->xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
-			0, row * CHART_ROW_HEIGHT,		/* dst x, y */
-			chart->width, CHART_ROW_HEIGHT);	/* dst w, h */
+		vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
 
 	draw_columns(charts, chart, chart->columns, depth, row, proc);
 	shadow_row(charts, chart, row);
@@ -1073,10 +854,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 		mark_finish(charts, chart, (*row));
 
 		/* extract the row from the various layers */
-		snowflake_row(charts, chart, chart->grapha_picture, 1, (*row));
-		snowflake_row(charts, chart, chart->graphb_picture, 1, (*row));
-		snowflake_row(charts, chart, chart->text_picture, 0, (*row));
-		snowflake_row(charts, chart, chart->shadow_picture, 0, (*row));
+		snowflake_row(charts, chart, (*row));
 		chart->snowflakes_cnt++;
 
 		/* stamp the name (and whatever else we include) into chart.text_picture */
@@ -1096,10 +874,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 		/* what to do when a process has been introduced */
 		VWM_TRACE("%i is new", proc->pid);
 
-		allocate_row(charts, chart, chart->grapha_picture, (*row));
-		allocate_row(charts, chart, chart->graphb_picture, (*row));
-		allocate_row(charts, chart, chart->text_picture, (*row));
-		allocate_row(charts, chart, chart->shadow_picture, (*row));
+		allocate_row(charts, chart, (*row));
 
 		chart->hierarchy_end++;
 	}
@@ -1147,7 +922,6 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 /* recursive draw function entrypoint, draws the IOWait/Idle/HZ row, then enters draw_chart_rest() */
 static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int *depth, int *row)
 {
-	vwm_xserver_t	*xserver = charts->xserver;
 	int		prev_redraw_needed;
 
 /* CPU utilization graphs */
@@ -1156,9 +930,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 
 	/* only draw the \/\/\ and HZ if necessary */
 	if (chart->redraw_needed || charts->prev_sampling_interval != charts->sampling_interval) {
-		XRenderFillRectangle(xserver->display, PictOpSrc, chart->text_picture, &chart_trans_color,
-			0, 0,						/* dst x, y */
-			chart->visible_width, CHART_ROW_HEIGHT);	/* dst w, h */
+		vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, 0, -1, -1);
 		draw_columns(charts, chart, chart->columns, 0, 0, proc);
 		shadow_row(charts, chart, 0);
 	}
@@ -1188,7 +960,6 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 /* consolidated version of chart text and graph rendering, makes snowflakes integration cleaner, this always gets called regardless of the charts mode */
 static void maintain_chart(vwm_charts_t *charts, vwm_chart_t *chart)
 {
-	vwm_xserver_t	*xserver = charts->xserver;
 	int		row = 0, depth = 0;
 
 	if (!chart->monitor || !chart->monitor->stores[VMON_STORE_PROC_STAT])
@@ -1206,10 +977,7 @@ static void maintain_chart(vwm_charts_t *charts, vwm_chart_t *chart)
 	 * For now, the monitors will just be a little latent in window resizes which is pretty harmless artifact.
 	 */
 
-	chart->phase += (chart->width - 1);  /* simply change this to .phase++ to scroll the other direction */
-	chart->phase %= chart->width;
-	XRenderFillRectangle(xserver->display, PictOpSrc, chart->grapha_picture, &chart_trans_color, chart->phase, 0, 1, chart->height);
-	XRenderFillRectangle(xserver->display, PictOpSrc, chart->graphb_picture, &chart_trans_color, chart->phase, 0, 1, chart->height);
+	vcr_advance_phase(chart->vcr, -1); /* change this to +1 to scroll the other direction */
 
 	/* recursively draw the monitored processes to the chart */
 	draw_chart(charts, chart, chart->monitor, &depth, &row);
@@ -1238,15 +1006,6 @@ static void proc_sample_callback(vmon_t *vmon, void *sys_cb_arg, vmon_proc_t *pr
 }
 
 
-/* return the composed height of the chart */
-static int vwm_chart_composed_height(vwm_charts_t *charts, vwm_chart_t *chart)
-{
-	int	snowflakes = chart->snowflakes_cnt ? 1 + chart->snowflakes_cnt : 0; /* don't include the separator row if there are no snowflakes */
-
-	return MIN((chart->hierarchy_end + snowflakes) * CHART_ROW_HEIGHT, chart->visible_height);
-}
-
-
 /* reset snowflakes on the specified chart */
 void vwm_chart_reset_snowflakes(vwm_charts_t *charts, vwm_chart_t *chart)
 {
@@ -1257,88 +1016,14 @@ void vwm_chart_reset_snowflakes(vwm_charts_t *charts, vwm_chart_t *chart)
 }
 
 
-static void free_chart_pictures(vwm_charts_t *charts, vwm_chart_t *chart)
-{
-	vwm_xserver_t	*xserver = charts->xserver;
-
-	XRenderFreePicture(xserver->display, chart->grapha_picture);
-	XRenderFreePicture(xserver->display, chart->graphb_picture);
-	XRenderFreePicture(xserver->display, chart->tmp_picture);
-	XRenderFreePicture(xserver->display, chart->text_picture);
-	XFreePixmap(xserver->display, chart->text_pixmap);
-	XRenderFreePicture(xserver->display, chart->shadow_picture);
-	XRenderFreePicture(xserver->display, chart->picture);
-
-}
-
-
-static void copy_chart_pictures(vwm_charts_t *charts, vwm_chart_t *src, vwm_chart_t *dest)
-{
-	vwm_xserver_t	*xserver = charts->xserver;
-
-	/* XXX: note the graph pictures are copied from their current phase in the x dimension */
-	XRenderComposite(xserver->display, PictOpSrc, src->grapha_picture, None, dest->grapha_picture,
-		src->phase, 0,		/* src x, y */
-		0, 0,			/* mask x, y */
-		dest->phase, 0,		/* dest x, y */
-		src->width, src->height);
-	XRenderComposite(xserver->display, PictOpSrc, src->graphb_picture, None, dest->graphb_picture,
-		src->phase, 0,		/* src x, y */
-		0, 0,			/* mask x, y */
-		dest->phase, 0,		/* dest x, y */
-		src->width, src->height);
-	XRenderComposite(xserver->display, PictOpSrc, src->text_picture, None, dest->text_picture,
-		0, 0,			/* src x, y */
-		0, 0,			/* mask x, y */
-		0, 0,			/* dest x, y */
-		src->width, src->height);
-	XRenderComposite(xserver->display, PictOpSrc, src->shadow_picture, None, dest->shadow_picture,
-		0, 0,			/* src x, y */
-		0, 0,			/* mask x, y */
-		0, 0,			/* dest x, y */
-		src->width, src->height);
-	XRenderComposite(xserver->display, PictOpSrc, src->picture, None, dest->picture,
-		0, 0,			/* src x, y */
-		0, 0,			/* mask x, y */
-		0, 0,			/* dest x, y */
-		src->width, src->height);
-}
-
-
 /* (re)size the specified chart's visible dimensions */
 int vwm_chart_set_visible_size(vwm_charts_t *charts, vwm_chart_t *chart, int width, int height)
 {
-	if (width != chart->visible_width || height != chart->visible_height)
-		chart->redraw_needed = 1;
-
-	/* TODO error handling: if a create failed but we had an chart, free whatever we created and leave it be, succeed.
-	 * if none existed it's a hard error and we must propagate it. */
-
-	/* if larger than the charts currently are, enlarge them */
-	if (width > chart->width || height > chart->height) {
-		vwm_chart_t	existing = *chart;
-
-		chart->width = MAX(chart->width, MAX(width, CHART_GRAPH_MIN_WIDTH));
-		chart->height = MAX(chart->height, MAX(height, CHART_GRAPH_MIN_HEIGHT));
-
-		chart->grapha_picture = create_picture_fill(charts, chart->width, chart->height, CHART_MASK_DEPTH, CPRepeat, &pa_repeat, &chart_trans_color, NULL);
-		chart->graphb_picture = create_picture_fill(charts, chart->width, chart->height, CHART_MASK_DEPTH, CPRepeat, &pa_repeat, &chart_trans_color, NULL);
-		chart->tmp_picture = create_picture(charts, chart->width, CHART_ROW_HEIGHT, CHART_MASK_DEPTH, 0, NULL, NULL);
-
-		/* keep the text_pixmap reference around for XDrawText usage */
-		chart->text_picture = create_picture_fill(charts, chart->width, chart->height, CHART_MASK_DEPTH, 0, NULL, &chart_trans_color, &chart->text_pixmap);
-
-		chart->shadow_picture = create_picture_fill(charts, chart->width, chart->height, CHART_MASK_DEPTH, 0, NULL, &chart_trans_color, NULL);
-		chart->picture = create_picture(charts, chart->width, chart->height, 32, 0, NULL, NULL);
-
-		if (existing.width) {
-			copy_chart_pictures(charts, &existing, chart);
-			free_chart_pictures(charts, &existing);
-		}
-	}
-
 	chart->visible_width = width;
 	chart->visible_height = height;
+
+	if (vcr_resize_visible(chart->vcr, width, height) > 0)
+		chart->redraw_needed = 1;
 
 	return 1;
 }
@@ -1394,6 +1079,8 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->hierarchy_end = 1 + count_rows(chart->monitor);
 	chart->gen_last_composed = -1;
 
+	chart->vcr = vcr_new(charts->vcr_backend, &chart->hierarchy_end, &chart->snowflakes_cnt);
+
 	if (!vwm_chart_set_visible_size(charts, chart, width, height)) {
 		VWM_ERROR("Unable to set initial chart size");
 		goto _err_unmonitor;
@@ -1416,19 +1103,17 @@ _err:
 void vwm_chart_destroy(vwm_charts_t *charts, vwm_chart_t *chart)
 {
 	vmon_proc_unmonitor(&charts->vmon, chart->monitor, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
-	free_chart_pictures(charts, chart);
+	vcr_free(chart->vcr);
+	free(chart->name);
 	free(chart);
 }
 
 
 /* this composes the maintained chart into the base chart picture, this gets called from paint_all() on every repaint of xwin */
 /* we noop the call if the gen_last_composed and monitor->proc.generation numbers match, indicating there's nothing new to compose. */
-void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart, XserverRegion *res_damaged_region)
+void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart)
 {
-	vwm_xserver_t	*xserver = charts->xserver;
-	int		height;
-
-	if (!chart->width || !chart->height)
+	if (!chart->visible_width || !chart->visible_height)
 		return;
 
 	if (chart->gen_last_composed == chart->monitor->generation)
@@ -1438,114 +1123,31 @@ void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart, XserverRegion *
 
 	//VWM_TRACE("composing %p", chart);
 
-	height = vwm_chart_composed_height(charts, chart);
-
-	/* fill the chart picture with the background */
-	XRenderComposite(xserver->display, PictOpSrc, charts->bg_fill, None, chart->picture,
-		0, 0,
-		0, 0,
-		0, 0,
-		chart->visible_width, height);
-
-	/* draw the graphs into the chart through the stencils being maintained by the sample callbacks */
-	XRenderComposite(xserver->display, PictOpOver, charts->grapha_fill, chart->grapha_picture, chart->picture,
-		0, 0,
-		chart->phase, 0,
-		0, 0,
-		chart->visible_width, height);
-	XRenderComposite(xserver->display, PictOpOver, charts->graphb_fill, chart->graphb_picture, chart->picture,
-		0, 0,
-		chart->phase, 0,
-		0, 0,
-		chart->visible_width, height);
-
-	/* draw the shadow into the chart picture using a translucent black source drawn through the shadow mask */
-	XRenderComposite(xserver->display, PictOpOver, charts->shadow_fill, chart->shadow_picture, chart->picture,
-		0, 0,
-		0, 0,
-		0, 0,
-		chart->visible_width, height);
-
-	/* render chart text into the chart picture using a white source drawn through the chart text as a mask, on top of everything */
-	XRenderComposite(xserver->display, PictOpOver, charts->text_fill, chart->text_picture, chart->picture,
-		0, 0,
-		0, 0,
-		0, 0,
-		chart->visible_width, (chart->hierarchy_end * CHART_ROW_HEIGHT));
-
-	XRenderComposite(xserver->display, PictOpOver, charts->snowflakes_text_fill, chart->text_picture, chart->picture,
-		0, 0,
-		0, chart->hierarchy_end * CHART_ROW_HEIGHT,
-		0, chart->hierarchy_end * CHART_ROW_HEIGHT,
-		chart->visible_width, height - (chart->hierarchy_end * CHART_ROW_HEIGHT));
-
-	/* damage the window to ensure the updated chart is drawn (TODO: this can be done more selectively/efficiently) */
-	if (res_damaged_region) {
-		XRectangle	damage = {};
-
-		damage.width = chart->visible_width;
-		damage.height = chart->visible_height;
-
-		*res_damaged_region = XFixesCreateRegion(xserver->display, &damage, 1);
-	}
+	/* FIXME TODO: errors */ (void) vcr_compose(chart->vcr);
 }
 
+
+#ifdef USE_XLIB
+/* xdamage producing variant of the above for vwm composited WM use */
+void vwm_chart_compose_xdamage(vwm_charts_t *charts, vwm_chart_t *chart, XserverRegion *res_damaged_region)
+{
+	assert(charts);
+	assert(chart);
+	assert(res_damaged_region);
+
+	vwm_chart_compose(charts, chart);
+	/* damage the window to ensure the updated chart is drawn (TODO: this can be done more selectively/efficiently) */
+	/* TODO errors: */ (void) vcr_get_composed_xdamage(chart->vcr, res_damaged_region);
+}
+#endif
 
 /* render the chart into a picture at the specified coordinates and dimensions */
-void vwm_chart_render(vwm_charts_t *charts, vwm_chart_t *chart, int op, Picture dest, int x, int y, int width, int height)
+void vwm_chart_render(vwm_charts_t *charts, vwm_chart_t *chart, vcr_present_op_t op, vcr_dest_t *dest, int x, int y, int width, int height)
 {
-	vwm_xserver_t	*xserver = charts->xserver;
-
-	if (!chart->width || !chart->height)
+	if (!chart->visible_width || !chart->visible_height)
 		return;
 
-	/* draw the monitoring chart atop dest, note we stay within the window borders here. */
-	XRenderComposite(xserver->display, op, chart->picture, None, dest,
-			 0, 0, 0, 0,									/* src x,y, maxk x, y */
-			 x,										/* dst x */
-			 y,										/* dst y */
-			 width, MIN(vwm_chart_composed_height(charts, chart), height) /* FIXME */);	/* w, h */
-}
-
-
-/* render the chart into a newly allocated pixmap, intended for snapshotting purposes */
-void vwm_chart_render_as_pixmap(vwm_charts_t *charts, vwm_chart_t *chart, const XRenderColor *bg_color, Pixmap *res_pixmap)
-{
-	static const XRenderColor	blackness = { 0x0000, 0x0000, 0x0000, 0xFFFF};
-	Picture			 	dest;
-
-	assert(charts);
-	assert(chart);
-	assert(res_pixmap);
-
-	if (!bg_color)
-		bg_color = &blackness;
-
-	dest = create_picture_fill(charts, chart->width, vwm_chart_composed_height(charts, chart), 32, 0, NULL, bg_color, res_pixmap);
-	vwm_chart_render(charts, chart, PictOpOver, dest, 0, 0, chart->width, vwm_chart_composed_height(charts, chart));
-	XRenderFreePicture(charts->xserver->display, dest);
-}
-
-
-void vwm_chart_render_as_ximage(vwm_charts_t *charts, vwm_chart_t *chart, const XRenderColor *bg_color, XImage **res_ximage)
-{
-	Pixmap	dest_pixmap;
-
-	assert(charts);
-	assert(chart);
-	assert(res_ximage);
-
-	vwm_chart_render_as_pixmap(charts, chart, bg_color, &dest_pixmap);
-	*res_ximage = XGetImage(charts->xserver->display,
-				dest_pixmap,
-				0,
-				0,
-				chart->width,
-				vwm_chart_composed_height(charts, chart),
-				AllPlanes,
-				ZPixmap);
-
-	XFreePixmap(charts->xserver->display, dest_pixmap);
+	vcr_present(chart->vcr, op, dest, x, y, width, height);
 }
 
 

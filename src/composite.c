@@ -27,6 +27,7 @@
 
 #include "charts.h"
 #include "xwindow.h"
+#include "vcr.h"
 #include "vwm.h"
 
 	/* compositing manager stuff */
@@ -38,6 +39,7 @@ typedef enum _vwm_compositing_mode_t {
 static vwm_compositing_mode_t	compositing_mode = VWM_COMPOSITING_OFF;		/* current compositing mode */
 static XserverRegion		combined_damage = None;
 static Picture			root_picture = None, root_buffer = None;        /* compositing gets double buffered */
+static vcr_dest_t		*root_dest;
 static XWindowAttributes	root_attrs;
 static XRenderPictureAttributes	pa_inferiors = { .subwindow_mode = IncludeInferiors };
 static int			repaint_needed;
@@ -172,6 +174,7 @@ void vwm_composite_invalidate_root(vwm_t *vwm)
 	if (root_buffer) {
 		XRenderFreePicture(VWM_XDISPLAY(vwm), root_buffer);
 		root_buffer = None;
+		root_dest = vcr_dest_free(root_dest);
 	}
 }
 
@@ -211,6 +214,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 						    CPSubwindowMode, &pa_inferiors);
 		root_pixmap = XCreatePixmap(VWM_XDISPLAY(vwm), VWM_XROOT(vwm), root_attrs.width, root_attrs.height, VWM_XDEPTH(vwm));
 		root_buffer = XRenderCreatePicture(VWM_XDISPLAY(vwm), root_pixmap, XRenderFindVisualFormat(VWM_XDISPLAY(vwm), VWM_XVISUAL(vwm)), 0, 0);
+		root_dest = vcr_dest_xpicture_new(vwm->vcr_backend, root_buffer);
 		XFreePixmap(VWM_XDISPLAY(vwm), root_pixmap);
 	}
 
@@ -245,7 +249,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 			if (xwin->chart) {
 				XserverRegion	chart_damage = None;
 
-				vwm_chart_compose(vwm->charts, xwin->chart, &chart_damage);
+				vwm_chart_compose_xdamage(vwm->charts, xwin->chart, &chart_damage);
 				if (chart_damage != None) {
 					/* the damage region is in chart coordinate space, translation necessary. */
 					XFixesTranslateRegion(VWM_XDISPLAY(vwm), chart_damage,
@@ -288,7 +292,7 @@ void vwm_composite_paint_all(vwm_t *vwm)
 
 		if (xwin->chart) {
 			/* draw the monitoring chart atop the window, note we stay within the window borders here. */
-			vwm_chart_render(vwm->charts, xwin->chart, PictOpOver, root_buffer,
+			vwm_chart_render(vwm->charts, xwin->chart, VCR_PRESENT_OP_OVER, root_dest,
 					xwin->attrs.x + xwin->attrs.border_width,
 					xwin->attrs.y + xwin->attrs.border_width,
 					xwin->attrs.width,

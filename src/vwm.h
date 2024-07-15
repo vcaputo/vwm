@@ -8,6 +8,7 @@
 #include "list.h"
 #include "charts.h"
 #include "util.h"
+#include "vcr.h"
 #include "xserver.h"
 
 #define WINDOW_BORDER_WIDTH	1
@@ -43,6 +44,7 @@ typedef enum _vwm_context_color_t {
 
 typedef struct _vwm_t {
 	vwm_xserver_t		*xserver;		/* global xserver instance */
+	vcr_backend_t		*vcr_backend;		/* global vcr backend for charts */
 	vwm_charts_t		*charts;		/* golbal charts instance */
 
 	/* extra X stuff needed by vwm */
