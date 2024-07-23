@@ -138,6 +138,12 @@ static char * load_contents_fd(vmon_t *vmon, vmon_char_array_t *array, int fd, v
 		memcmpcpy(&alloc[total], vmon->buf, len, changed, changed_pos);
 
 		total += len;
+
+		/* assume short read found EOF */
+		if (len < sizeof(vmon->buf)) {
+			len = 0;
+			break;
+		}
 	}
 
 	array->array = alloc;
@@ -347,6 +353,10 @@ static sample_ret_t proc_sample_stat(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_
 					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
+
+		/* assume short read found EOF */
+		if (len < sizeof(vmon->buf))
+			break;
 	}
 
 _out:
@@ -430,6 +440,10 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 					break;
 			}
 		}
+
+		/* assume short read found EOF */
+		if (len < sizeof(vmon->buf))
+			break;
 	}
 
 	/* look for children which seem to no longer exist (found by stale generation numbers) and queue them for unmonitoring, flag this as a children change too */
@@ -791,6 +805,10 @@ static sample_ret_t proc_sample_vm(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_vm
 					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
+
+		/* assume short read found EOF */
+		if (len < sizeof(vmon->buf))
+			break;
 	}
 
 _out:
@@ -848,6 +866,10 @@ static sample_ret_t proc_sample_io(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_io
 					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
+
+		/* assume short read found EOF */
+		if (len < sizeof(vmon->buf))
+			break;
 	}
 
 _out:
@@ -911,6 +933,10 @@ static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
+
+		/* assume short read found EOF */
+		if (len < sizeof(vmon->buf))
+			break;
 	}
 
 _out:
@@ -961,6 +987,10 @@ static sample_ret_t sys_sample_vm(vmon_t *vmon, vmon_sys_vm_t **store)
 					goto _out; /* this saves us the EOF read syscall */
 			}
 		}
+
+		/* assume short read found EOF */
+		if (len < sizeof(vmon->buf))
+			break;
 	}
 
 _out:
