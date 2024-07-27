@@ -590,7 +590,7 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 		goto _err_free;
 	}
 
-	vmon->charts = vwm_charts_create(vmon->vcr_backend);
+	vmon->charts = vwm_charts_create(vmon->vcr_backend, VWM_CHARTS_FLAG_DEFER_MAINTENANCE);
 	if (!vmon->charts) {
 		VWM_ERROR("unable to create charts instance");
 		goto _err_vcr;
@@ -745,6 +745,9 @@ static int vmon_snapshot(vmon_t *vmon)
 			return -ENOMEM;
 		}
 
+		if (vmon->headless)
+			vwm_chart_compose(vmon->charts, vmon->chart);
+
 		/* FIXME: render/libpng errors need to propagate and be handled */
 		vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, png_dest, -1, -1, -1, -1);
 		png_dest = vcr_dest_free(png_dest);
@@ -816,9 +819,10 @@ int main(int argc, const char * const *argv)
 		 * if 0 is returned, no update was performed/no changes occured.
 		 */
 		if (vwm_charts_update(vmon->charts, &delay)) {
-			vwm_chart_compose(vmon->charts, vmon->chart);
-			if (!vmon->headless)
+			if (!vmon->headless) {
+				vwm_chart_compose(vmon->charts, vmon->chart);
 				vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, vmon->vcr_dest, -1, -1, -1, -1);
+			}
 		}
 
 		if (vcr_backend_poll(vmon->vcr_backend, delay) > 0)

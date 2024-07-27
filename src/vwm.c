@@ -87,7 +87,7 @@ static vwm_t * vwm_startup(void)
 		goto _err_xclose;
 	}
 
-	if (!(vwm->charts = vwm_charts_create(vwm->vcr_backend))) {
+	if (!(vwm->charts = vwm_charts_create(vwm->vcr_backend, 0))) {
 		VWM_ERROR("Failed to create charts");
 		goto _err_vbe;
 	}

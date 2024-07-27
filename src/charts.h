@@ -8,10 +8,12 @@
 
 #include "vcr.h"
 
+#define VWM_CHARTS_FLAG_DEFER_MAINTENANCE 0x1
+
 typedef struct _vwm_charts_t vwm_charts_t;
 typedef struct _vwm_chart_t vwm_chart_t;
 
-vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe);
+vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags);
 void vwm_charts_destroy(vwm_charts_t *charts);
 void vwm_charts_rate_increase(vwm_charts_t *charts);
 void vwm_charts_rate_decrease(vwm_charts_t *charts);
