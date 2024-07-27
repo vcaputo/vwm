@@ -75,6 +75,7 @@ typedef struct _vwm_charts_t {
 
 typedef enum _vwm_column_type_t {
 	VWM_COLUMN_VWM,
+	VWM_COLUMN_ROW,
 	VWM_COLUMN_PROC_USER,
 	VWM_COLUMN_PROC_SYS,
 	VWM_COLUMN_PROC_WALL,
@@ -140,6 +141,7 @@ typedef struct _vwm_perproc_ctxt_t {
 	typeof(((vmon_proc_stat_t *)0)->stime)	last_stime;
 	typeof(((vmon_proc_stat_t *)0)->utime)	utime_delta;
 	typeof(((vmon_proc_stat_t *)0)->stime)	stime_delta;
+	int					row;
 } vwm_perproc_ctxt_t;
 
 
@@ -733,6 +735,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 	vmon_sys_stat_t		*sys_stat = charts->vmon.stores[VMON_STORE_SYS_STAT];
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
 	vwm_xserver_t		*xserver = charts->xserver;
+	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
 	char			str[256];
 
 	for (int i = 0, left = 0, right = 0; i < CHART_MAX_COLUMNS; i++) {
@@ -769,6 +772,17 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 
 			uniform = 0; /* XXX this suppresses the c->width assignment so the column can be absent outside the heading */
 			str_justify = VWM_JUSTIFY_RIGHT;
+			break;
+
+		case VWM_COLUMN_ROW: /* row in the chart */
+			if (!row)
+				str_len = snpf(str, sizeof(str), "Row");
+			else
+				str_len = snpf(str, sizeof(str), "%i", row);
+
+			str_justify = VWM_JUSTIFY_LEFT;
+			/* this is kind of hacky, but libvmon doesn't monitor our row, it's implicitly "sampled" when we draw */
+			proc_ctxt->row = row;
 			break;
 
 		case VWM_COLUMN_PROC_USER: /* User CPU time */
@@ -934,10 +948,11 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 
 
 /* return if any of the enabled columns in columns has changed its contents */
-static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart, vwm_column_t *columns, const vmon_proc_t *proc)
+static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart, vwm_column_t *columns, int row, const vmon_proc_t *proc)
 {
 	vmon_sys_stat_t		*sys_stat = charts->vmon.stores[VMON_STORE_SYS_STAT];
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
+	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
 
 	for (int i = 0; i < CHART_MAX_COLUMNS; i++) {
 		const vwm_column_t	*c = &columns[i];
@@ -949,6 +964,8 @@ static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart,
 		case VWM_COLUMN_VWM:
 			/* XXX: meh, maybe we should detect Hz changes here? */
 			break;
+		case VWM_COLUMN_ROW:
+			return (row != proc_ctxt->row);
 		case VWM_COLUMN_PROC_USER:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_UTIME))
 				return 1;
@@ -993,7 +1010,7 @@ static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart,
 static void draw_overlay_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int depth, int row)
 {
 	/* skip if obviously unnecessary (this can be further improved, but this makes a big difference as-is) */
-	if (!chart->redraw_needed && !columns_changed(charts, chart, chart->columns, proc))
+	if (!chart->redraw_needed && !columns_changed(charts, chart, chart->columns, row, proc))
 		return;
 
 	if (!proc->is_new) /* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
@@ -1347,15 +1364,16 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	}
 
 	/* TODO: make the columns interactively configurable @ runtime */
-	chart->columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
-	chart->columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
-	chart->columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
-	chart->columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_TREE, .side = VWM_SIDE_LEFT };
-	chart->columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
-	chart->columns[5] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_STATE, .side = VWM_SIDE_RIGHT };
-	chart->columns[6] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_RIGHT };
-	chart->columns[7] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WCHAN, .side = VWM_SIDE_RIGHT };
-	chart->columns[8] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM, .side = VWM_SIDE_RIGHT };
+	chart->columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_ROW, .side = VWM_SIDE_LEFT };
+	chart->columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
+	chart->columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
+	chart->columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
+	chart->columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_TREE, .side = VWM_SIDE_LEFT };
+	chart->columns[5] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
+	chart->columns[6] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_STATE, .side = VWM_SIDE_RIGHT };
+	chart->columns[7] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_RIGHT };
+	chart->columns[8] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WCHAN, .side = VWM_SIDE_RIGHT };
+	chart->columns[9] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM, .side = VWM_SIDE_RIGHT };
 
 	chart->snowflake_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
 	chart->snowflake_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
