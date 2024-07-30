@@ -1375,10 +1375,11 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->columns[8] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WCHAN, .side = VWM_SIDE_RIGHT };
 	chart->columns[9] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM, .side = VWM_SIDE_RIGHT };
 
-	chart->snowflake_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
-	chart->snowflake_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
-	chart->snowflake_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
-	chart->snowflake_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
+	chart->snowflake_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_LEFT };
+	chart->snowflake_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
+	chart->snowflake_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
+	chart->snowflake_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
+	chart->snowflake_columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
 
 	/* add the client process to the monitoring heirarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
