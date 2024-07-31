@@ -1160,8 +1160,8 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 				/* if a parent was supplied, and there is no current parent, the process is a top-level currently by external callers, but now appears to be a child of something as well,
 				 * so in this scenario, we'll remove it from the top-level siblings list, and make it a child of the new parent.  I don't think there needs to be concern about its being a thread here. */
 				/* Note we can't simply move the process from its current processes list and add it to the supplied parent's children list, as that would break the iterator above us at the top-level, so
-				 * we must defer the migration until the processes iterator context can do it for us - but this is tricky because we're in the middle of traversing our heirarchy and this process may
-				 * be in a critical is_new state which must be realized this sample at its location in the heirarchy for correctness, there will be no reappearance of that critical state in the correct
+				 * we must defer the migration until the processes iterator context can do it for us - but this is tricky because we're in the middle of traversing our hierarchy and this process may
+				 * be in a critical is_new state which must be realized this sample at its location in the hierarchy for correctness, there will be no reappearance of that critical state in the correct
 				 * tree position for users like vwm. */
 				/* the VMON_FLAG_2PASS flag has been introduced for users like vwm */
 				 proc->parent = parent;
@@ -1372,7 +1372,7 @@ static int sample_siblings(vmon_t *vmon, list_head_t *siblings)
 		}
 
 		/* XXX note that sample_callbacks are called only after all the descendants have had their sampling performed (and their potential callbacks invoked)
-		 * this enables the installation of a callback at a specific node in the process heirarchy which can also perform duties on behalf of the children
+		 * this enables the installation of a callback at a specific node in the process hierarchy which can also perform duties on behalf of the children
 		 * being monitored, handy when automatically following children, an immediately relevant use case (vwm)
 		 */
 		list_for_each_entry(cb, &proc->sample_callbacks, callbacks)
@@ -1393,7 +1393,7 @@ static int sample_siblings(vmon_t *vmon, list_head_t *siblings)
 }
 
 
-/* 2pass version of the internal heirarchical sampling helper */
+/* 2pass version of the internal hierarchical sampling helper */
 static int sample_siblings_pass1(vmon_t *vmon, list_head_t *siblings)
 {
 	vmon_proc_t	*proc, *_proc;
@@ -1537,12 +1537,12 @@ int vmon_sample(vmon_t *vmon)
 	/* then the per-process samplers */
 	if ((vmon->flags & VMON_FLAG_PROC_ARRAY)) {
 		int	j;
-		/* TODO: determine if this really makes sense, if we always maintain a heirarchy even in array mode, then we
-		 * should probably always sample in the heirarchical order, or maybe make it caller-specified.
-		 * There is a benefit to invoking the callbacks in heirarchical order, the callbacks can make assumptions about the children
+		/* TODO: determine if this really makes sense, if we always maintain a hierarchy even in array mode, then we
+		 * should probably always sample in the hierarchical order, or maybe make it caller-specified.
+		 * There is a benefit to invoking the callbacks in hierarchical order, the callbacks can make assumptions about the children
 		 * having the callbacks invoked prior to the current node, if done in depth-first order....
-		 * XXX this is a problem, figure out what to do with this, for now we don't even maintain the heirarchy in VMON_FLAG_PROC_ALL
-		 * mode, only FOLLOW_CHILDREN mode, and it's likely PROC_ARRAY will generally be used together with PROC_ALL, so no heirarchy
+		 * XXX this is a problem, figure out what to do with this, for now we don't even maintain the hierarchy in VMON_FLAG_PROC_ALL
+		 * mode, only FOLLOW_CHILDREN mode, and it's likely PROC_ARRAY will generally be used together with PROC_ALL, so no hierarchy
 		 * is available to traverse even if we wanted to.
 		 */
 
@@ -1566,7 +1566,7 @@ int vmon_sample(vmon_t *vmon)
 			}
 		}
 	} else if ((vmon->flags & VMON_FLAG_2PASS)) {
-		/* recursive heirarchical depth-first processes tree sampling, at each node threads come before children, done in two passes:
+		/* recursive hierarchical depth-first processes tree sampling, at each node threads come before children, done in two passes:
 		 * Pass 1. samplers
 		 * Pass 2. callbacks
 		  * XXX this is the path vwm utilizes, everything else is for other uses, like implementing top-like programs.
@@ -1574,7 +1574,7 @@ int vmon_sample(vmon_t *vmon)
 		ret = sample_siblings_pass1(vmon, &vmon->processes);	/* XXX TODO: errors */
 		ret = sample_siblings_pass2(vmon, &vmon->processes);
 	} else {
-		/* recursive heirarchical depth-first processes tree sampling, at each node threads come before children, done in a single pass:
+		/* recursive hierarchical depth-first processes tree sampling, at each node threads come before children, done in a single pass:
 		 * Pass 1. samplers; callbacks (for every node)
 		 */
 		ret = sample_siblings(vmon, &vmon->processes);

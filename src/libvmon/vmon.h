@@ -265,7 +265,7 @@ typedef struct _vmon_t {
 	int			array_hint_free;		/* hint for a free element in the list */
 
 	list_head_t		htab[VMON_HTAB_SIZE];		/* hash table for quickly finding processes being monitored */
-	list_head_t		processes;			/* top of the processes heirarchy */
+	list_head_t		processes;			/* top of the processes hierarchy */
 	list_head_t		orphans;			/* ephemeral list of processes orphaned this sample, orphans wind up becoming top-level processes */
 	int			processes_changed:1;		/* flag set when the toplevel processes list changes */
 

@@ -125,7 +125,7 @@ typedef struct _vwm_chart_t {
 	int		visible_width;				/* currently visible width of the chart */
 	int		visible_height;				/* currently visible height of the chart */
 	int		phase;					/* current position within the (horizontally scrolling) graphs */
-	int		heirarchy_end;				/* row where the process heirarchy currently ends */
+	int		hierarchy_end;				/* row where the process hierarchy currently ends */
 	int		snowflakes_cnt;				/* count of snowflaked rows (reset to zero to truncate snowflakes display) */
 	int		gen_last_composed;			/* the last composed vmon generation */
 	int		redraw_needed;				/* if a redraw is required (like when the window is resized...) */
@@ -373,7 +373,7 @@ static void shift_below_row_up(vwm_charts_t *charts, vwm_chart_t *chart, int row
 		0, (rows + row) * CHART_ROW_HEIGHT,									/* src */
 		0, 0,													/* mask */
 		0, row * CHART_ROW_HEIGHT,										/* dest */
-		chart->width, (rows + chart->heirarchy_end) * CHART_ROW_HEIGHT - (rows + row) * CHART_ROW_HEIGHT);	/* dimensions */
+		chart->width, (rows + chart->hierarchy_end) * CHART_ROW_HEIGHT - (rows + row) * CHART_ROW_HEIGHT);	/* dimensions */
 	XRenderChangePicture(xserver->display, pic, CPRepeat, &pa_repeat);
 }
 
@@ -381,7 +381,7 @@ static void shift_below_row_up(vwm_charts_t *charts, vwm_chart_t *chart, int row
 /* moves what's below a given row up above it if specified, the row becoming discarded */
 static void snowflake_row(vwm_charts_t *charts, vwm_chart_t *chart, Picture pic, int copy, int row)
 {
-	VWM_TRACE("pid=%i chart=%p row=%i copy=%i heirarhcy_end=%i", chart->monitor->pid, chart, row, copy, chart->heirarchy_end);
+	VWM_TRACE("pid=%i chart=%p row=%i copy=%i heirarhcy_end=%i", chart->monitor->pid, chart, row, copy, chart->hierarchy_end);
 
 	if (copy)
 		copy_row(charts, chart, row, pic, 0, chart->tmp_picture);
@@ -389,14 +389,14 @@ static void snowflake_row(vwm_charts_t *charts, vwm_chart_t *chart, Picture pic,
 	shift_below_row_up(charts, chart, row, pic, 1);
 
 	if (copy) {
-		copy_row(charts, chart, 0, chart->tmp_picture, chart->heirarchy_end, pic);
+		copy_row(charts, chart, 0, chart->tmp_picture, chart->hierarchy_end, pic);
 	} else {
-		fill_row(charts, chart, chart->heirarchy_end, pic, &chart_trans_color);
+		fill_row(charts, chart, chart->hierarchy_end, pic, &chart_trans_color);
 	}
 }
 
 /* XXX TODO libvmon automagic children following races with explicit X client pid monitoring with different outcomes, it should be irrelevant which wins,
- *     currently the only visible difference is the snowflakes gap (heirarchy_end) varies, which is why I haven't bothered to fix it, I barely even notice.
+ *     currently the only visible difference is the snowflakes gap (hierarchy_end) varies, which is why I haven't bothered to fix it, I barely even notice.
  */
 
 
@@ -509,8 +509,8 @@ static int count_rows(vmon_proc_t *proc)
 }
 
 
-/* helper for detecting if any children/threads in the process heirarchy rooted @ proc are new/stale this sample */
-static int proc_heirarchy_changed(vmon_proc_t *proc)
+/* helper for detecting if any children/threads in the process hierarchy rooted @ proc are new/stale this sample */
+static int proc_hierarchy_changed(vmon_proc_t *proc)
 {
 	vmon_proc_t	*child;
 
@@ -519,13 +519,13 @@ static int proc_heirarchy_changed(vmon_proc_t *proc)
 
 	if (!proc->is_thread) {
 		list_for_each_entry(child, &proc->threads, threads) {
-			if (proc_heirarchy_changed(child))
+			if (proc_hierarchy_changed(child))
 				return 1;
 		}
 	}
 
 	list_for_each_entry(child, &proc->children, siblings) {
-		if (proc_heirarchy_changed(child))
+		if (proc_hierarchy_changed(child))
 			return 1;
 	}
 
@@ -605,7 +605,7 @@ static void print_argv(const vwm_charts_t *charts, const vwm_chart_t *chart, int
 }
 
 
-/* determine if a given process has subsequent siblings in the heirarchy */
+/* determine if a given process has subsequent siblings in the hierarchy */
 static inline int proc_has_subsequent_siblings(vmon_t *vmon, vmon_proc_t *proc)
 {
 	struct list_head	*sib, *head = &vmon->processes;
@@ -817,7 +817,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
 
-		case VWM_COLUMN_PROC_TREE: { /* print a row of the process heirarchy tree */
+		case VWM_COLUMN_PROC_TREE: { /* print a row of the process hierarchy tree */
 			int	width = 0;
 
 			advance = 0;	/* tree column manages its own advance; c->width is meaningless */
@@ -1006,7 +1006,7 @@ static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart,
 }
 
 
-/* draws proc in a row of the process heirarchy */
+/* draws proc in a row of the process hierarchy */
 static void draw_overlay_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int depth, int row)
 {
 	/* skip if obviously unnecessary (this can be further improved, but this makes a big difference as-is) */
@@ -1023,7 +1023,7 @@ static void draw_overlay_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc
 }
 
 
-/* recursive draw function for "rest" of chart: the per-process rows (heirarchy, argv, state, wchan, pid...) */
+/* recursive draw function for "rest" of chart: the per-process rows (hierarchy, argv, state, wchan, pid...) */
 static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int *depth, int *row)
 {
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
@@ -1032,7 +1032,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 	double			utime_delta, stime_delta;
 
 	/* Some parts of this we must do on every sample to maintain coherence in the graphs, since they're incrementally kept
-	 * in sync with the process heirarchy, allocating and shifting the rows as processes are created and destroyed.  Everything
+	 * in sync with the process hierarchy, allocating and shifting the rows as processes are created and destroyed.  Everything
 	 * else we should be able to skip doing unless chart.redraw_needed or their contents changed.
 	 */
 
@@ -1080,11 +1080,11 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 		chart->snowflakes_cnt++;
 
 		/* stamp the name (and whatever else we include) into chart.text_picture */
-		// print_argv(charts, chart, 5, chart->heirarchy_end, proc, NULL);
-		draw_columns(charts, chart, chart->snowflake_columns, 0, chart->heirarchy_end, proc);
-		shadow_row(charts, chart, chart->heirarchy_end);
+		// print_argv(charts, chart, 5, chart->hierarchy_end, proc, NULL);
+		draw_columns(charts, chart, chart->snowflake_columns, 0, chart->hierarchy_end, proc);
+		shadow_row(charts, chart, chart->hierarchy_end);
 
-		chart->heirarchy_end--;
+		chart->hierarchy_end--;
 
 		if (in_stale_entrypoint) {
 			VWM_TRACE("exited stale at chart=%p depth=%i row=%i", chart, *depth, *row);
@@ -1101,7 +1101,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 		allocate_row(charts, chart, chart->text_picture, (*row));
 		allocate_row(charts, chart, chart->shadow_picture, (*row));
 
-		chart->heirarchy_end++;
+		chart->hierarchy_end++;
 	}
 
 /* CPU utilization graphs */
@@ -1165,7 +1165,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	(*row)++;
 
 	if (!chart->redraw_needed)
-		chart->redraw_needed = proc_heirarchy_changed(proc);
+		chart->redraw_needed = proc_hierarchy_changed(proc);
 
 	prev_redraw_needed = chart->redraw_needed;
 	draw_chart_rest(charts, chart, proc, depth, row);
@@ -1243,7 +1243,7 @@ static int vwm_chart_composed_height(vwm_charts_t *charts, vwm_chart_t *chart)
 {
 	int	snowflakes = chart->snowflakes_cnt ? 1 + chart->snowflakes_cnt : 0; /* don't include the separator row if there are no snowflakes */
 
-	return MIN((chart->heirarchy_end + snowflakes) * CHART_ROW_HEIGHT, chart->visible_height);
+	return MIN((chart->hierarchy_end + snowflakes) * CHART_ROW_HEIGHT, chart->visible_height);
 }
 
 
@@ -1381,7 +1381,7 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->snowflake_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
 	chart->snowflake_columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
 
-	/* add the client process to the monitoring heirarchy */
+	/* add the client process to the monitoring hierarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
 	chart->monitor = vmon_proc_monitor(&charts->vmon, NULL, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
 	if (!chart->monitor) {
@@ -1390,8 +1390,8 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	}
 
 	 /* FIXME: count_rows() isn't returning the right count sometimes (off by ~1), it seems to be related to racing with the automatic child monitoring */
-	 /* the result is an extra row sometimes appearing below the process heirarchy */
-	chart->heirarchy_end = 1 + count_rows(chart->monitor);
+	 /* the result is an extra row sometimes appearing below the process hierarchy */
+	chart->hierarchy_end = 1 + count_rows(chart->monitor);
 	chart->gen_last_composed = -1;
 
 	if (!vwm_chart_set_visible_size(charts, chart, width, height)) {
@@ -1471,13 +1471,13 @@ void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart, XserverRegion *
 		0, 0,
 		0, 0,
 		0, 0,
-		chart->visible_width, (chart->heirarchy_end * CHART_ROW_HEIGHT));
+		chart->visible_width, (chart->hierarchy_end * CHART_ROW_HEIGHT));
 
 	XRenderComposite(xserver->display, PictOpOver, charts->snowflakes_text_fill, chart->text_picture, chart->picture,
 		0, 0,
-		0, chart->heirarchy_end * CHART_ROW_HEIGHT,
-		0, chart->heirarchy_end * CHART_ROW_HEIGHT,
-		chart->visible_width, height - (chart->heirarchy_end * CHART_ROW_HEIGHT));
+		0, chart->hierarchy_end * CHART_ROW_HEIGHT,
+		0, chart->hierarchy_end * CHART_ROW_HEIGHT,
+		chart->visible_width, height - (chart->hierarchy_end * CHART_ROW_HEIGHT));
 
 	/* damage the window to ensure the updated chart is drawn (TODO: this can be done more selectively/efficiently) */
 	if (res_damaged_region) {

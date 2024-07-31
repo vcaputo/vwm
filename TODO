@@ -3,34 +3,34 @@ COMPOSITE (only relevant when monitoring overlays are enabled):
   observed in GIMP during testing.  Right clicking in the image took two
   tries.
 
-- There's often an extra row included after the process heirarchy in the
+- There's often an extra row included after the process hierarchy in the
   overlays.  This depends on wether the client process' monitor was installed
   first by the automatic following of children in libvmon or the vwm explicit
   process monitoring of _NET_WM_PID.  There's an extra row included depending
   on how the race played out, and it's probably because count_rows() is
-  employed in xwin_monitor() to initialize xwin->heirarchy_end but it's not
+  employed in xwin_monitor() to initialize xwin->hierarchy_end but it's not
   making any effort to be proc->is_new aware or something.  Since an extra row
   is relatively harmless I haven't bothered to fix it yet.
 
 - There are a number of optimization opportunities left on the table.
-  * The heirarchy (top) portion of the overlay text is redrawn on every
+  * The hierarchy (top) portion of the overlay text is redrawn on every
     maintain_overlay(), even if it has no changes. (text only, not the graphs)
     *** this has been changed to only happen if compositing is enabled.
   * The shadow layer is inefficiently created with 4 renders through the text
     as a stencil at 4 offsets to create a shadow on every compose_overlay()
     call, even if the text is unchanged since the last compose.
     - keep a cached version of the text shadow for reuse if the text is
-      unchanged. (depends not just on the heirarchy portion, _all_ the text
+      unchanged. (depends not just on the hierarchy portion, _all_ the text
       layer)
     - find a better way to create the text shadow than 4x renders through the
       stencil.
     *** already improved with a shadow layer maintained as the text layer
-	changes.  When the heirarchy rendering becomes more change-aware, so
+	changes.  When the hierarchy rendering becomes more change-aware, so
         will the shadow updates.
   * Snowflake maintenance is probably copying more area than it needs to when
     shifting, it's not aware of snowflakes_cnt.
   * Heirarchy rows are erased unnecessarily in maintain_overlays(), but this is
-    part of excessive heirarchy redraws.
+    part of excessive hierarchy redraws.
   * poll() timeout isn't calculated very well, extraneous wakeups and
     gettimeofday() calls are being performed.
     - This matters even when compositing is off, since we always maintain

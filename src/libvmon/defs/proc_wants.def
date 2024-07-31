@@ -1,7 +1,7 @@
 #include "_begin.def"
 
-/* the available per-process wants, the order here matters, put wants which affect the sampling heirarchy first */
-/* otherwise they will change the heirarchy after samples have been collected, leaving newly introduced nodes with uninitialized sample stores after return from vmon_sample() */
+/* the available per-process wants, the order here matters, put wants which affect the sampling hierarchy first */
+/* otherwise they will change the hierarchy after samples have been collected, leaving newly introduced nodes with uninitialized sample stores after return from vmon_sample() */
 
 /*	  sym,				name,				internal fulfilllment function */
 vmon_want(PROC_FOLLOW_CHILDREN,		proc_follow_children,		proc_follow_children)

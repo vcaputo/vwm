@@ -358,7 +358,7 @@ Composite/Monitoring:
 
   Here are some relevant things worth noting:
 
-  - The monitoring is only heirarchical if your kernel is configured with
+  - The monitoring is only hierarchical if your kernel is configured with
     CONFIG_CHECKPOINT_RESTORE, which seems to be common nowadays.  This is
     required for the /proc/$pid/task/$tid/children files, which is what
     libvmon uses to efficiently scope monitoring to just the descendants of
@@ -459,7 +459,7 @@ Composite/Monitoring:
     exacerbate the situation.
 
   - The monitoring is implemented using sampling, not tracing.  Below the
-    current process heirarchy for every window there is an exited tasks
+    current process hierarchy for every window there is an exited tasks
     snowflakes section filling the remaining space.  Do not mistake this
     for something lossless like bash history or strace output, it's lossy
     since it's produced from sampled data.  In part to try avoid
@@ -495,7 +495,7 @@ Composite/Monitoring:
     
   - In the interests of being efficient, nothing is being logged
     historically.  The snowflakes area is all you get, which is limited to
-    the free pixel space below the instantaneous process heirarchy within
+    the free pixel space below the instantaneous process hierarchy within
     the window.
 
     Everything which falls off the edges of the screen is lost forever,
