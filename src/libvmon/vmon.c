@@ -270,7 +270,9 @@ static sample_ret_t proc_sample_stat(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_
 		try_free((void **)&(*store)->comm);
 		try_close(&(*store)->cmdline_fd);
 		try_free((void **)&(*store)->cmdline);
+		try_free((void **)&(*store)->argv);
 		try_close(&(*store)->wchan_fd);
+		try_free((void **)&(*store)->wchan);
 		try_close(&(*store)->stat_fd);
 		try_free((void **)&(*store)->exe);
 
