@@ -1358,7 +1358,7 @@ static int sample_threads(vmon_t *vmon, list_head_t *threads)
 
 
 /* internal single-pass sampling helper, recursively perform sampling and callbacks for all sibling processes in the provided siblings list */
-static int sample_siblings(vmon_t *vmon, list_head_t *siblings)
+static int sample_siblings_unipass(vmon_t *vmon, list_head_t *siblings)
 {
 	vmon_proc_t	*proc, *_proc;
 
@@ -1372,7 +1372,7 @@ static int sample_siblings(vmon_t *vmon, list_head_t *siblings)
 
 		sample(vmon, proc);			/* invoke samplers for this node */
 		sample_threads(vmon, &proc->threads);	/* invoke samplers for this node's threads */
-		sample_siblings(vmon, &proc->children); /* invoke samplers for this node's children, and their callbacks, by recursing into this function */
+		sample_siblings_unipass(vmon, &proc->children); /* invoke samplers for this node's children, and their callbacks, by recursing into this function */
 							/* XXX TODO: error returns */
 
 		/* if this is the top-level processes list, and proc has found a parent through the above sampling, migrate it to the parent's children list */
@@ -1588,7 +1588,7 @@ int vmon_sample(vmon_t *vmon)
 		/* recursive hierarchical depth-first processes tree sampling, at each node threads come before children, done in a single pass:
 		 * Pass 1. samplers; callbacks (for every node)
 		 */
-		ret = sample_siblings(vmon, &vmon->processes);
+		ret = sample_siblings_unipass(vmon, &vmon->processes);
 	}
 
 	return ret;
