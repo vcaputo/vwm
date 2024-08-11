@@ -20,6 +20,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -1290,8 +1291,18 @@ void vmon_proc_unmonitor(vmon_t *vmon, vmon_proc_t *proc, void (*sample_cb)(vmon
 
 	for (i = 0; i < sizeof(vmon->proc_funcs) / sizeof(vmon->proc_funcs[VMON_STORE_PROC_STAT]); i++) {
 		if (proc->stores[i] != NULL) {	/* any non-NULL stores must have a function installed and must have been sampled, invoke the dtor branch */
-			if (vmon->proc_funcs[i](vmon, NULL, &proc->stores[i]) == DTOR_FREE)
+			sample_ret_t	r;
+
+			r = vmon->proc_funcs[i](vmon, NULL, &proc->stores[i]);
+			switch (r) {
+			case DTOR_FREE:
 				try_free((void **)&proc->stores[i]);
+				break;
+			case DTOR_NOFREE:
+				break;
+			default:
+				assert(0);
+			}
 		}
 	}
 
