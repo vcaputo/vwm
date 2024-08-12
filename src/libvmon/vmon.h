@@ -246,11 +246,11 @@ typedef struct _vmon_proc_t {
 	list_head_t		sample_callbacks;		/* list of callbacks to invoke sample_cb on behalf of (and supply as parameteres to) */
 	void			*foo;				/* another per-process hook for whatever per-process uses the caller may have, but not managed by the api */
 
-	int			children_changed:1;		/* gets set when any of my immediate children have had is_new or is_stale set in the last sample */
-	int			threads_changed:1;		/* gets set when any of my threads have had is_new or is_stale set in the last sample */
-	int			is_new:1;			/* process is new in the most recent sample, automatically cleared on subsequent sample */
-	int			is_stale:1;			/* process became stale in the most recent sample, automatically cleared on subsequent sample (process will be discarded) */
-	int			is_thread:1;			/* process is a thread belonging to parent */
+	unsigned		children_changed:1;		/* gets set when any of my immediate children have had is_new or is_stale set in the last sample */
+	unsigned		threads_changed:1;		/* gets set when any of my threads have had is_new or is_stale set in the last sample */
+	unsigned		is_new:1;			/* process is new in the most recent sample, automatically cleared on subsequent sample */
+	unsigned		is_stale:1;			/* process became stale in the most recent sample, automatically cleared on subsequent sample (process will be discarded) */
+	unsigned		is_thread:1;			/* process is a thread belonging to parent */
 } vmon_proc_t;
 
 
@@ -267,7 +267,7 @@ typedef struct _vmon_t {
 	list_head_t		htab[VMON_HTAB_SIZE];		/* hash table for quickly finding processes being monitored */
 	list_head_t		processes;			/* top of the processes hierarchy */
 	list_head_t		orphans;			/* ephemeral list of processes orphaned this sample, orphans wind up becoming top-level processes */
-	int			processes_changed:1;		/* flag set when the toplevel processes list changes */
+	unsigned		processes_changed:1;		/* flag set when the toplevel processes list changes */
 
 	list_head_t		fobjects;			/* XXX TODO: temporary single fobjects table, in the future this will be an array of type-indexed
 								 * fobject hash tables */
