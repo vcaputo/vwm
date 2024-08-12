@@ -444,6 +444,9 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 
 					child_pid = 0;
 					break;
+
+				default:
+					assert(0);
 			}
 		}
 
