@@ -491,7 +491,8 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 	if (proc->is_thread) /* bypass following the threads of threads */
 		return SAMPLE_UNCHANGED;
 
-	if (!proc->stores || !proc->stores[VMON_STORE_PROC_STAT] || (((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->num_threads <= 1 && list_empty(&proc->threads)))
+	if (!proc->stores[VMON_STORE_PROC_STAT] ||
+	    (((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->num_threads <= 1 && list_empty(&proc->threads)))
 		/* bypass following of threads if we either can't determine the number from the proc stat sample or if the sample says there's 1 or less (and an empty threads list, handling stale exited threads) */
 		/* XXX I'm not sure if this is always the right thing to do, there may be some situations where one could play games with clone() directly
 		 * and escape the monitoring library with a lone thread having had the main thread exit, leaving the count at 1 while having a process
