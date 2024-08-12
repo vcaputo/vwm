@@ -381,8 +381,11 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 		return DTOR_FREE;
 	}
 
-	if (proc->is_thread) /* don't follow children of threads */
+	if (proc->is_thread) { /* don't follow children of threads */
+		assert(!(*store));
+
 		return SAMPLE_UNCHANGED;
+	}
 
 	if (!(*store)) { /* implicit ctor on first sample */
 		*store = calloc(1, sizeof(vmon_proc_follow_children_t));
