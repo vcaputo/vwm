@@ -764,7 +764,7 @@ static int vmon_snapshot(vmon_t *vmon)
 	struct tm	*t;
 	char		t_str[32];
 	char		*name = NULL;
-	char		path[4096];
+	char		path[4096], tmp_path[4096];
 	FILE		*output;
 	int		r;
 
@@ -794,20 +794,31 @@ static int vmon_snapshot(vmon_t *vmon)
 		name ? "-" : "",
 		t_str,
 		vmon->n_snapshots++);
+	snprintf(tmp_path, sizeof(tmp_path), "%s/.%s%s%s-%u.png-WIP",
+		vmon->output_dir,
+		name ? name : "",
+		name ? "-" : "",
+		t_str,
+		vmon->n_snapshots);
 	free(name);
 
-	output = fopen(path, "w+");
+	output = fopen(tmp_path, "w+");
 	if (!output)
 		return -errno;
 
 	r = vmon_snapshot_as_png(vmon, output);
 	if (r < 0) {
-		fclose(output);
+		(void) unlink(tmp_path);
+		(void) fclose(output);
 		return r;
 	}
 
+	fflush(output);
 	fsync(fileno(output));
 	fclose(output);
+	r = rename(tmp_path, path);
+	if (r < 0)
+		return -errno;
 
 	return 0;
 }
