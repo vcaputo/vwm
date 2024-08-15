@@ -120,23 +120,29 @@ typedef enum _vmon_load_flags_t {
 } vmon_load_flags_t;
 
 /* we enlarge *alloc if necessary, but never shrink it.  changed[changed_pos] bit is set if a difference is detected, supply LOAD_FLAGS_NOTRUNCATE if we don't want empty contents to truncate last-known data */
-static char * load_contents_fd(vmon_t *vmon, vmon_char_array_t *array, int fd, vmon_load_flags_t flags, char *changed, int changed_pos)
+static int load_contents_fd(vmon_t *vmon, vmon_char_array_t *array, int fd, vmon_load_flags_t flags, char *changed, int changed_pos)
 {
-	int	total = 0, len, alloc_len = array->alloc_len;
-	char	*alloc = array->array, *tmp;
+	size_t	total = 0;
+	ssize_t	len;
 
+	/* FIXME: this is used to read proc files, you can't actually read proc files iteratively
+	 * without race conditions; it needs to be all done as a single read.
+	 */
 	while ((len = pread(fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
-		if (total + len > alloc_len) {
-			/* realloc to accomodate the new total */
-			tmp = realloc(alloc, total + len);
-			if (!tmp)
-				return NULL;
+		size_t	newsize = total + len;
 
-			alloc_len = total + len;
-			alloc = tmp;
+		if (newsize > array->alloc_len) {
+			char	*tmp;
+
+			tmp = realloc(array->array, newsize);
+			if (!tmp)
+				return -ENOMEM;
+
+			array->array = tmp;
+			array->alloc_len = newsize;
 		}
 
-		memcmpcpy(&alloc[total], vmon->buf, len, changed, changed_pos);
+		memcmpcpy(&array->array[total], vmon->buf, len, changed, changed_pos);
 
 		total += len;
 
@@ -147,9 +153,6 @@ static char * load_contents_fd(vmon_t *vmon, vmon_char_array_t *array, int fd, v
 		}
 	}
 
-	array->array = alloc;
-	array->alloc_len = alloc_len;
-
 	/* if we read something or didn't encounter an error, store the new total */
 	if (total || (len == 0 && !(flags & LOAD_FLAGS_NOTRUNCATE))) {
 		/* if the new length differs ensure the changed bit is set */
@@ -159,7 +162,7 @@ static char * load_contents_fd(vmon_t *vmon, vmon_char_array_t *array, int fd, v
 		array->len = total;
 	}
 
-	return alloc;
+	return 0;
 }
 
 
@@ -200,51 +203,48 @@ static DIR * opendirf(vmon_t *vmon, DIR *dir, char *fmt, ...)
 
 
 /* enlarge an array by the specified amount */
-static int grow_array(vmon_char_array_t *array, int amount)
+static int grow_array(vmon_char_array_t *array, size_t amount)
 {
 	char	*tmp;
 
 	tmp = realloc(array->array, array->alloc_len + amount);
 	if (!tmp)
-		return 0;
+		return -ENOMEM;
 
 	array->alloc_len += amount;
 	array->array = tmp;
 
-	return 1;
+	return 0;
 }
 
 
 /* load the contents of a symlink, dir is not optional */
 #define READLINKF_GROWINIT	10
 #define READLINKF_GROWBY	2
-static char * readlinkf(vmon_t *vmon, vmon_char_array_t *array, DIR *dir, char *fmt, ...)
+static int readlinkf(vmon_t *vmon, vmon_char_array_t *array, DIR *dir, char *fmt, ...)
 {
-	va_list	va_arg;
-	int	len;
 	char	buf[4096];
+	va_list	va_arg;
+	ssize_t	len;
 
 	va_start(va_arg, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, va_arg);
 	va_end(va_arg);
 
-	if (!array->array && !grow_array(array, READLINKF_GROWINIT))
-		goto _fail;
+	if (!array->array && grow_array(array, READLINKF_GROWINIT) < 0)
+		return -ENOMEM;
 
 	do {
 		len = readlinkat(dirfd(dir), buf, array->array, (array->alloc_len - 1));
-	} while (len != -1 && len == (array->alloc_len - 1) && (len = grow_array(array, READLINKF_GROWBY)));
+	} while (len != -1 && len == (array->alloc_len - 1) && (len = grow_array(array, READLINKF_GROWBY)) >= 0);
 
-	if (len <= 0)
-		goto _fail;
+	if (len < 0)
+		return -errno;
 
 	array->len = len;
 	array->array[array->len] = '\0';
 
-	return array->array;
-
-_fail:
-	return NULL;
+	return 0;
 }
 
 
@@ -268,14 +268,14 @@ static sample_ret_t proc_sample_stat(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_
 
 	if (!proc) { /* dtor */
 		try_close(&(*store)->comm_fd);
-		try_free((void **)&(*store)->comm);
+		try_free((void **)&(*store)->comm.array);
 		try_close(&(*store)->cmdline_fd);
-		try_free((void **)&(*store)->cmdline);
+		try_free((void **)&(*store)->cmdline.array);
 		try_free((void **)&(*store)->argv);
 		try_close(&(*store)->wchan_fd);
-		try_free((void **)&(*store)->wchan);
+		try_free((void **)&(*store)->wchan.array);
 		try_close(&(*store)->stat_fd);
-		try_free((void **)&(*store)->exe);
+		try_free((void **)&(*store)->exe.array);
 
 		return DTOR_FREE;
 	}
@@ -643,7 +643,7 @@ static void del_fd(vmon_t *vmon, vmon_proc_fd_t *fd)
 	list_del(&fd->fds);
 	if (fd->object)
 		fobject_unref(vmon, fd->object, fd); /* note we supply both the fobject ptr and proc_fd ptr (fd) */
-	try_free((void **)&fd->object_path);
+	try_free((void **)&fd->object_path.array);
 	free(fd);
 }
 

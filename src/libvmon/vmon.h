@@ -49,14 +49,14 @@ typedef enum _vmon_proc_wants_t {
 /* we add some new complex types */
 typedef struct _vmon_char_array_t {
 	char	*array;
-	int	len;
-	int	alloc_len;
+	size_t	len;
+	size_t	alloc_len;
 } vmon_char_array_t;
 
 typedef struct _vmon_str_array_t {
 	char	**array;
-	int	len;
-	int	alloc_len;
+	size_t	len;
+	size_t	alloc_len;
 } vmon_str_array_t;
 
 
