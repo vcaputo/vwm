@@ -145,8 +145,9 @@ typedef struct vcr_t {
 		} xlib;
 #endif /* USE_XLIB */
 		struct {
-			uint8_t	*bits;	/* width * height bytes are used to represent the coverage status of up to 8 layers */
-			uint8_t	*tmp;	/* width * VCR_ROW_HEIGHT bytes for a row's worth of temporary storage */
+			uint8_t	*bits;	/* .pitch * height bytes are used to represent the coverage status of up to 8 layers */
+			uint8_t	*tmp;	/* .pitch * VCR_ROW_HEIGHT bytes for a row's worth of temporary storage */
+			int	pitch;	/* "pitch" of mem surface in bytes, which is half the width rounded up to an even number divisible by two. */
 		} mem;
 	};
 } vcr_t;
@@ -509,6 +510,7 @@ vcr_backend_t * vcr_backend_free(vcr_backend_t *vbe)
 #endif /* USE_XLIB */
 		case VCR_BACKEND_TYPE_MEM:
 			break;
+
 		default:
 			assert(0);
 		}
@@ -863,39 +865,32 @@ int vcr_resize_visible(vcr_t *vcr, int width, int height)
 	}
 #endif /* USE_XLIB */
 
-	case VCR_BACKEND_TYPE_MEM:
+	case VCR_BACKEND_TYPE_MEM: {
+		int	pitch = (width + 1) >> 1;
+
 		/* no attempt to preserve the existing contents is done for the mem backend,
 		 * as it's intended for a non-interactive headless use case - there is no
 		 * resizing @ runtime.  We get entered once to create the initial dimensions,
 		 * then never recurs.
 		 */
 		assert(!vcr->mem.bits); /* since we're assuming this doesn't recur, assert it */
-		vcr->mem.bits = calloc(width * height, sizeof(uint8_t));
+		vcr->mem.bits = calloc(pitch * height, sizeof(uint8_t));
 		if (!vcr->mem.bits)
 			return -ENOMEM;
 
 		assert(!vcr->mem.tmp); /* since we're assuming this doesn't recur, assert it */
-		vcr->mem.tmp = calloc(width * VCR_ROW_HEIGHT, sizeof(uint8_t));
+		vcr->mem.tmp = calloc(pitch * VCR_ROW_HEIGHT, sizeof(uint8_t));
 		if (!vcr->mem.tmp) {
 			free(vcr->mem.bits);
 			return -ENOMEM;
 		}
 
-		{ /* populate the background layer up front */
-			uint8_t	bg = (0x1 << VCR_LAYER_BG);
-
-			for (int i = VCR_ROW_HEIGHT - 1; i < height; i += VCR_ROW_HEIGHT) {
-				uint8_t	*p = &vcr->mem.bits[i * width];
-
-				for (int j = 0; j < width; j++, p++)
-					*p = bg;
-			}
-		}
-
+		vcr->mem.pitch = pitch;
 		vcr->width = width;
 		vcr->height = height;
 
 		break;
+	}
 
 	default:
 		assert(0);
@@ -979,7 +974,6 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, int x, int row, const vcr_str_
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-
 		if (row >= 0 && row * VCR_ROW_HEIGHT < vcr->height) {
 			int	y = row * VCR_ROW_HEIGHT + 3;
 			uint8_t	mask = (0x1 << layer);
@@ -1006,12 +1000,14 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, int x, int row, const vcr_str_
 
 					for (int k = 0; k < ASCII_HEIGHT; k++) {
 						for (int l = 0; l < ASCII_WIDTH; l++) {
-							uint8_t	*p = &vcr->mem.bits[(y + k) * vcr->width + x + l];
+							int	x_l = x + l;
+							uint8_t	*p = &vcr->mem.bits[(y + k) * vcr->mem.pitch + (x_l >> 1)];
+
 							/* FIXME this can all be done more efficiently */
-							if (x + l < 0)
+							if (x_l < 0)
 								continue;
 
-							*p = (*p & ~mask) | (mask * ascii_chars[c][k * ASCII_WIDTH + l]);
+							*p = (*p & ~(mask << ((x_l & 0x1) << 2))) | ((mask * ascii_chars[c][k * ASCII_WIDTH + l]) << ((x_l & 0x1) << 2));
 						}
 					}
 
@@ -1078,6 +1074,8 @@ void vcr_draw_ortho_line(vcr_t *vcr, vcr_layer_t layer, int x1, int y1, int x2, 
 
 	case VCR_BACKEND_TYPE_MEM: {
 		if (x1 == x2) {
+			unsigned	which = (x1 & 0x1) << 2;
+
 			if (y1 > y2) {
 				int	t = y1;
 
@@ -1086,8 +1084,8 @@ void vcr_draw_ortho_line(vcr_t *vcr, vcr_layer_t layer, int x1, int y1, int x2, 
 			}
 
 			/* vertical */
-			for (uint8_t *p = &vcr->mem.bits[y1 * vcr->width + x1]; y1 <= y2; p += vcr->width, y1++)
-				*p |= (0x1 << layer);
+			for (uint8_t *p = &vcr->mem.bits[y1 * vcr->mem.pitch + (x1 >> 1)]; y1 <= y2; p += vcr->mem.pitch, y1++)
+				*p |= (0x1 << layer) << which;
 
 		} else {
 			/* horizontal */
@@ -1099,8 +1097,12 @@ void vcr_draw_ortho_line(vcr_t *vcr, vcr_layer_t layer, int x1, int y1, int x2, 
 				x2 = t;
 			}
 
-			for (uint8_t *p = &vcr->mem.bits[y1 * vcr->width + x1]; x1 <= x2; p++, x1++)
-				*p |= (0x1 << layer);
+			for (; x1 <= x2; x1++) {
+				uint8_t		*p = &vcr->mem.bits[y1 * vcr->mem.pitch + (x1 >> 1)];
+				unsigned	which = (x1 & 0x1) << 2;
+
+				*p |= (0x1 << layer) << which;
+			}
 		}
 
 		break;
@@ -1152,11 +1154,11 @@ void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row)
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-		uint8_t	mask = (0x1 << layer);
+		uint8_t	mask = (0x1 << layer) << ((vcr->phase & 0x1) << 2);
 		uint8_t	*p;
 
-		p = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->width + vcr->phase];
-		for (int i = 0; i < VCR_ROW_HEIGHT; i++, p += vcr->width)
+		p = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->mem.pitch + (vcr->phase >> 1)];
+		for (int i = 0; i < VCR_ROW_HEIGHT; i++, p += vcr->mem.pitch)
 			*p = ((*p & ~mask) | (mask * (i & 0x1)));
 
 		break;
@@ -1218,14 +1220,15 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, double t, int min_heig
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
+		uint8_t	mask = (0x1 << layer) << ((vcr->phase & 0x1) << 2);
 		uint8_t	*p;
 
 		if (layer == VCR_LAYER_GRAPHB)
 			y += VCR_ROW_HEIGHT - height - 1;
 
-		p = &vcr->mem.bits[y * vcr->width + vcr->phase];
-		for (int i = 0; i < height; i++, p += vcr->width)
-			*p |= (0x1 << layer);
+		p = &vcr->mem.bits[y * vcr->mem.pitch + (vcr->phase >> 1)];
+		for (int i = 0; i < height; i++, p += vcr->mem.pitch)
+			*p |= mask;
 
 		break;
 	}
@@ -1247,6 +1250,9 @@ void vcr_clear_row(vcr_t *vcr, vcr_layer_t layer, int row, int x, int width)
 
 	if (x < 0)
 		x = 0;
+
+	if (x > vcr->width)
+		x = vcr->width;
 
 	if (width < 0)
 		width = vcr->width;
@@ -1278,14 +1284,32 @@ void vcr_clear_row(vcr_t *vcr, vcr_layer_t layer, int row, int x, int width)
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-		uint8_t	mask = ~((uint8_t)(0x1 << layer));
+		uint8_t	mask = ((uint8_t)(0x1 << layer));
 
 		/* naive but correct for now - TODO: optimize */
 		for (int i = 0; i < VCR_ROW_HEIGHT; i++) {
-			uint8_t *p = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->width + x];
+			uint8_t *p = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->mem.pitch + (x >> 1)];
 
-			for (int j = 0; j < width; j++, p++)
-				*p &= mask;
+			if (width >= 2) {
+				int	W = ((width >> 1) << 1);
+
+				for (int j = 0; j < W; j++, p++) {
+					unsigned	which = ((x + j) & 0x1) << 2;
+
+					*p &= ~(mask << which);
+
+					j++;
+
+					which = ((x + j) & 0x1) << 2;
+					*p &= ~(mask << which);
+				}
+			}
+
+			if (width & 0x1) {
+				unsigned	which = ((x + 1) & 0x1) << 2;
+
+				*p &= ~(mask << which);
+			}
 		}
 		break;
 	}
@@ -1336,9 +1360,9 @@ void vcr_shift_below_row_up_one(vcr_t *vcr, int row)
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-		uint8_t	*dest = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->width];
-		uint8_t	*src = &vcr->mem.bits[(1 + row) * VCR_ROW_HEIGHT * vcr->width];
-		size_t	len = ((1 + *(vcr->hierarchy_end_ptr)) - (1 + row)) * VCR_ROW_HEIGHT * vcr->width;
+		uint8_t	*dest = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->mem.pitch];
+		uint8_t	*src = &vcr->mem.bits[(1 + row) * VCR_ROW_HEIGHT * vcr->mem.pitch];
+		size_t	len = ((1 + *(vcr->hierarchy_end_ptr)) - (1 + row)) * VCR_ROW_HEIGHT * vcr->mem.pitch;
 
 		memmove(dest, src, len);
 		break;
@@ -1387,9 +1411,9 @@ void vcr_shift_below_row_down_one(vcr_t *vcr, int row)
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-		uint8_t	*dest = &vcr->mem.bits[dest_y * vcr->width];
-		uint8_t	*src = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->width];
-		size_t	len = (vcr->height - dest_y) * vcr->width;
+		uint8_t	*dest = &vcr->mem.bits[dest_y * vcr->mem.pitch];
+		uint8_t	*src = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->mem.pitch];
+		size_t	len = (vcr->height - dest_y) * vcr->mem.pitch;
 
 		memmove(dest, src, len);
 		break;
@@ -1458,16 +1482,27 @@ void vcr_shadow_row(vcr_t *vcr, vcr_layer_t layer, int row)
 		uint8_t	shadow_mask = (0x1 << VCR_LAYER_SHADOW);
 		int	vcr_width = vcr->width;
 
-		/* TODO: optimize this */
+		/* TODO: optimize this abomination, maybe switch to shadowing the text @ serialization to png time for the mem->png headless scenario? */
+
 		/* first pass has to clean up the shadow plane while doing one offset of shadow bits */
 		for (int i = 1; i < VCR_ROW_HEIGHT - 1; i++) {
-			uint8_t	*s = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->width + 1];
-			uint8_t	*d = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->width + 2];
+			uint8_t	*s = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->mem.pitch];
+			uint8_t	*d = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->mem.pitch + 1];
 
-			for (int j = 0; j < vcr_width - 2; j++, s++, d++) {
-				uint8_t	t = (*s & text_mask) << 1; /* turn text bit into shadow bit by shifting over one */
+			for (int j = 0; j < vcr_width - 2; j++, d++) {
+				int	s_shift = (((j + 1) & 0x1) << 2);
+				int	d_shift = ((j & 0x1) << 2);
+				uint8_t	t = ((*s & (0xf << s_shift) & (text_mask << s_shift)) << 1) >> s_shift; /* turn text bit into shadow bit by shifting over one */
 
-				*d = (*d & ~shadow_mask) | t;
+				*d = (*d & ~(shadow_mask << d_shift)) | (t << d_shift);
+
+				j++;
+				s++;
+
+				s_shift = (((j + 1) & 0x1) << 2);
+				d_shift = ((j & 0x1) << 2);
+				t = ((*s & (0xf << s_shift) & (text_mask << s_shift)) << 1) >> s_shift; /* turn text bit into shadow bit by shifting over one */
+				*d = (*d & ~(shadow_mask << d_shift)) | (t << d_shift);
 			}
 		}
 
@@ -1476,18 +1511,31 @@ void vcr_shadow_row(vcr_t *vcr, vcr_layer_t layer, int row)
 		 * OR things additively.
 		 */
 		for (int i = 1; i < VCR_ROW_HEIGHT - 1; i++) {
-			uint8_t	*s = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->width + 1];
+			uint8_t	*s = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->mem.pitch];
+			uint8_t	*d = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->mem.pitch];
 
-			for (int j = 0; j < vcr_width - 2; j++, s++) {
-				uint8_t	t = (*s & text_mask);
+			for (int j = 0; j < vcr_width - 2; j++, d++) {
+				int	s_shift = (((j + 1) & 0x1) << 2);
+				int	d_shift = ((j & 0x1) << 2);
+				uint8_t	t = ((*s & (0xf << s_shift) & (text_mask << s_shift)) << 1) >> s_shift; /* turn text bit into shadow bit by shifting over one */
 
-				if (t) {
-					t <<= 1; /* turn text bit into shadow bit by shifting over one */
+				*d |= t << d_shift;
 
-					*(s - vcr_width) |= t;
-					*(s - 1) |= t;
-					*(s + vcr_width) |= t;
-				}
+				/* for above and below use *s as dest */
+				*(s - vcr->mem.pitch) |= t << s_shift;
+				*(s + vcr->mem.pitch) |= t << s_shift;
+
+				j++;
+				s++;
+
+				s_shift = (((j + 1) & 0x1) << 2);
+				d_shift = ((j & 0x1) << 2);
+				t = ((*s & (0xf << s_shift) & (text_mask << s_shift)) << 1) >> s_shift; /* turn text bit into shadow bit by shifting over one */
+				*d |= t << d_shift;
+
+				/* for above and below use *s as dest */
+				*(s - vcr->mem.pitch) |= t << s_shift;
+				*(s + vcr->mem.pitch) |= t << s_shift;
 			}
 		}
 		break;
@@ -1532,12 +1580,17 @@ void vcr_stash_row(vcr_t *vcr, vcr_layer_t layer, int row)
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-		uint8_t	*src = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->width];
+		uint8_t	*src = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->mem.pitch];
 		uint8_t *dest = &vcr->mem.tmp[0];
 		uint8_t	mask = 0x1 << layer;
 
+		/* we'll do both nibbles at once since this is simply a masked, full-pitch copy of a row,
+		 * which means we need to prep the mask for doing both nibbles concurrently.
+		 */
+		mask |= mask << 4;
+
 		for (int i = 0; i < VCR_ROW_HEIGHT; i++) {
-			for (int j = 0; j < vcr->width; j++, dest++, src++) {
+			for (int j = 0; j < vcr->mem.pitch; j++, dest++, src++) {
 				*dest = (*dest & ~mask) | (*src & mask);
 			}
 		}
@@ -1582,12 +1635,15 @@ void vcr_unstash_row(vcr_t *vcr, vcr_layer_t layer, int row)
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-		uint8_t	*dest = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->width];
+		uint8_t	*dest = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->mem.pitch];
 		uint8_t *src = &vcr->mem.tmp[0];
 		uint8_t	mask = (0x1 << layer);
 
+		/* see comment above for stash_row */
+		mask |= mask << 4;
+
 		for (int i = 0; i < VCR_ROW_HEIGHT; i++) {
-			for (int j = 0; j < vcr->width; j++, dest++, src++) {
+			for (int j = 0; j < vcr->mem.pitch; j++, dest++, src++) {
 				*dest = (*dest & ~mask) | (*src & mask);
 			}
 		}
@@ -1630,10 +1686,10 @@ void vcr_advance_phase(vcr_t *vcr, int delta)
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-		uint8_t	*p = &vcr->mem.bits[vcr->phase];
-		uint8_t	mask = ~(uint8_t)((0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB));
+		uint8_t	mask = ~(((uint8_t)((0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB))) << ((vcr->phase & 0x1) << 2));
+		uint8_t	*p = &vcr->mem.bits[vcr->phase >> 1];
 
-		for (int i = 0; i < vcr->height; i++, p += vcr->width)
+		for (int i = 0; i < vcr->height; i++, p += vcr->mem.pitch)
 			*p &= mask;
 
 		break;
@@ -1911,7 +1967,7 @@ static int vcr_present_xlib_to_png(vcr_t *vcr, vcr_dest_t *dest)
 #define VCR_GRAPHA		(0x1 << VCR_LAYER_GRAPHA)
 #define VCR_GRAPHB		(0x1 << VCR_LAYER_GRAPHB)
 #define VCR_GRAPHAB		((0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB))
-#define VCR_BG			(0x1 << VCR_LAYER_BG)
+#define VCR_BG			(0x1 << VCR_LAYER_CNT)
 
 /* text over anything is going to just be white */
 #define VCR_TEXT_BG		(VCR_TEXT | VCR_BG)
@@ -1971,7 +2027,6 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					[VCR_BG] = VCR_PNG_DARK_GRAY,
 				};
 
-	int			n_rows = MIN(vcr_composed_rows(vcr), vcr->height / VCR_ROW_HEIGHT); /* prevent n_rows from overflowing the height */
 	png_bytepp		row_pointers;
 	uint8_t			*row_pixels;
 
@@ -2015,34 +2070,55 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 	 * a little slower.
 	 */
 	png_write_info(dest->png.png_ctx, dest->png.info_ctx);
-	for (int i = 0; i < n_rows; i++) {
-		uint8_t	*s = &vcr->mem.bits[i * VCR_ROW_HEIGHT * vcr->width];
-		uint8_t	*d = row_pixels;
-		uint8_t	mask = (0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB);
+	{
+		int	n_rows = MIN(vcr_composed_rows(vcr), vcr->height / VCR_ROW_HEIGHT); /* prevent n_rows from overflowing the height */
 
-		/* The graph layers need to be moved to vcr->phase, since the per-sample updates just draw
-		 * individual graph bars without bothering to move the whole graph layer every sample.
-		 * It makes the present more complicated / less efficient, but generally sampling is done
-		 * more frequently.
-		 */
-		for (int j = 0; j < VCR_ROW_HEIGHT; j++) {
-			for (int k = 0; k < vcr->width; k++, s++, d++) { /* TODO: optimize */
-				uint8_t	*sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->width + ((vcr->phase + k) % vcr->width)];
+		for (int i = 0; i < n_rows; i++) {
+			uint8_t	*d = row_pixels;
+			uint8_t	mask = (0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB);
 
-				*d = (*s & ~mask) | (*sg & mask);
+			/* The graph layers need to be moved to vcr->phase, since the per-sample updates just draw
+			 * individual graph bars without bothering to move the whole graph layer every sample.
+			 * It makes the present more complicated / less efficient, but generally sampling is done
+			 * more frequently.
+			 */
+			for (int j = 0; j < VCR_ROW_HEIGHT; j++) {
+				uint8_t	*s = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch];
+				uint8_t	border = j == (VCR_ROW_HEIGHT - 1) ? VCR_BG : 0x0;
 
+				for (int k = 0; k < vcr->width; k++, s++, d++) {
+					unsigned phase_k_mod_width = ((vcr->phase + k) % vcr->width);
+					unsigned sg_shift = (phase_k_mod_width & 0x1) << 2;
+					uint8_t	*sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
+
+					*d = (*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border;
+
+					/* this copy pasta unrolls the loop to unpack two pixels from the nibbles at a time */
+					d++;
+					k++;
+					/* note there's no need to advance s twice since we get two pixels out of it per byte, and sg
+					 * is simply recomputed entirely again because of the phase wrapping that must be dealt with,
+					 * this can all be optimized later if we care.
+					 */
+
+					phase_k_mod_width = ((vcr->phase + k) % vcr->width);
+					sg_shift = (phase_k_mod_width & 0x1) << 2;
+					sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
+
+					*d = ((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border;
+				}
 			}
+
+			png_write_rows(dest->png.png_ctx, row_pointers, VCR_ROW_HEIGHT);
 		}
 
-		png_write_rows(dest->png.png_ctx, row_pointers, VCR_ROW_HEIGHT);
+		/* just black out whatever remains */
+		memset(row_pixels, 0x00, vcr->width);
+		for (int i = n_rows * VCR_ROW_HEIGHT; i < vcr->height; i++)
+			png_write_row(dest->png.png_ctx, row_pointers[0]);
 	}
-
-	/* just black out whatever remains */
-	memset(row_pixels, 0x00, vcr->width);
-	for (int i = n_rows * VCR_ROW_HEIGHT; i < vcr->height; i++)
-		png_write_row(dest->png.png_ctx, row_pointers[0]);
-
 	png_write_end(dest->png.png_ctx, dest->png.info_ctx);
+
 	free(row_pixels);
 	free(row_pointers);
 

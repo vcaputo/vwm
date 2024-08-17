@@ -35,15 +35,6 @@ typedef enum vcr_layer_t {
 	VCR_LAYER_SHADOW,	/* the shadow layer below the text (XXX: this must be kept after text) */
 	VCR_LAYER_GRAPHA,	/* the graph A layer below the shadow layer */
 	VCR_LAYER_GRAPHB,	/* the graph B layer below the shadow layer */
-	VCR_LAYER_BG,		/* the background layer (row separators, with milestone breaks */
-#if 0
-	/* It should be reasonable to support up to eight layers, so there's room to grow.
-	 * per-thread memory use seems like a good idea..
-	 */
-	VCR_LAYER_UNUSED1,	/* TODO */
-	VCR_LAYER_UNUSED2,	/* TODO */
-	VCR_LAYER_UNUSED3,	/* TODO */
-#endif
 	VCR_LAYER_CNT,
 } vcr_layer_t;
 
