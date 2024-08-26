@@ -21,6 +21,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/prctl.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -52,6 +53,7 @@ typedef struct vmon_t {
 	int		hertz;
 	char		*output_dir;
 	char		*name;
+	char		*wip_name;
 	unsigned	n_snapshots;
 	const char	* const *execv;
 	unsigned	n_execv;
@@ -193,6 +195,7 @@ static void print_help(void)
 		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
 		" -i  --snapshots   Save a PNG snapshot every N seconds (SIGUSR1 also snapshots)\n"
 		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD\n"
+		" -w  --wip-name    Name to use for work-in-progress snapshot filename\n"
 		" -v  --version     Print version\n"
 		" -W  --width       Chart width\n"
 		" -z  --hertz       Sample rate in hertz\n"
@@ -431,6 +434,16 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 		} else if (is_flag(*argv, "-s", "--snapshot")) {
 			vmon->snapshot = 1;
 			last = argv;
+		} else if (is_flag(*argv, "-w", "--wip-name")) {
+			if (!parse_flag_str(argv, end, argv + 1, 1, &vmon->wip_name))
+				return 0;
+
+			if (strchr(vmon->wip_name, '/')) {
+				VWM_ERROR("invalid --wip-name: \"%s\"", vmon->wip_name);
+				return 0;
+			}
+
+			last = ++argv;
 		} else if (is_flag(*argv, "-f", "--fullscreen")) {
 			if (!set_fullscreen(vmon)) {
 				VWM_ERROR("unable to set fullscreen dimensions");
@@ -723,12 +736,16 @@ static int vmon_snapshot(vmon_t *vmon)
 		name ? "-" : "",
 		t_str,
 		vmon->n_snapshots++);
-	snprintf(tmp_path, sizeof(tmp_path), "%s/.%s%s%s-%u.png-WIP",
-		vmon->output_dir,
-		name ? name : "",
-		name ? "-" : "",
-		t_str,
-		vmon->n_snapshots);
+	if (vmon->wip_name) {
+		snprintf(tmp_path, sizeof(tmp_path), "%s/%s", vmon->output_dir, vmon->wip_name);
+	} else {
+		snprintf(tmp_path, sizeof(tmp_path), "%s/.%s%s%s-%u.png-WIP",
+			vmon->output_dir,
+			name ? name : "",
+			name ? "-" : "",
+			t_str,
+			vmon->n_snapshots);
+	}
 	free(name);
 
 	output = fopen(tmp_path, "w+");
