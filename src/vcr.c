@@ -145,7 +145,7 @@ typedef struct vcr_t {
 		} xlib;
 #endif /* USE_XLIB */
 		struct {
-			uint8_t	*bits;	/* .pitch * height bytes are used to represent the coverage status of up to 8 layers */
+			uint8_t	*bits;	/* .pitch * height bytes are used to represent the coverage status of up to 4 layers (was 8 until nibbles happened) */
 			uint8_t	*tmp;	/* .pitch * VCR_ROW_HEIGHT bytes for a row's worth of temporary storage */
 			int	pitch;	/* "pitch" of mem surface in bytes, which is half the width rounded up to an even number divisible by two. */
 		} mem;
