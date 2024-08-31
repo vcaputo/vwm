@@ -667,7 +667,7 @@ vcr_dest_t * vcr_dest_free(vcr_dest_t *dest)
 
 
 /* vcr is the workhorse of doing the actual chart compositing/rendering using a given backend.
- * 
+ *
  * The vcr object encapsulates a chart instance and the state of all its layers, in whatever form
  * is appropriate for the backend it's derived from.
  *
@@ -713,7 +713,7 @@ static void vcr_free_xlib_internal(vcr_t *vcr)
 	assert(vcr);
 	assert(vcr->backend);
 	assert(vcr->backend->type == VCR_BACKEND_TYPE_XLIB);
-	
+
 	xserver = vcr->backend->xlib.xserver;
 
 	assert(xserver);
@@ -743,7 +743,7 @@ static void vcr_copy_xlib_internal(vcr_t *src, vcr_t *dest)
 	assert(dest->backend);
 	assert(dest->backend->type == VCR_BACKEND_TYPE_XLIB);
 	assert(src->backend->xlib.xserver == dest->backend->xlib.xserver);
-	
+
 	xserver = src->backend->xlib.xserver;
 
 	/* XXX: note the graph pictures are copied from their current phase in the x dimension */
@@ -1129,7 +1129,7 @@ void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row)
 	case VCR_BACKEND_TYPE_XLIB: {
 		vwm_xserver_t	*xserver = vcr->backend->xlib.xserver;
 		Picture		dest;
-		
+
 		switch (layer) {
 		case VCR_LAYER_GRAPHA:
 			dest = vcr->xlib.grapha_picture;
@@ -1196,7 +1196,7 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, double t, int min_heig
 	case VCR_BACKEND_TYPE_XLIB: {
 		vwm_xserver_t	*xserver = vcr->backend->xlib.xserver;
 		Picture		*dest;
-		
+
 		switch (layer) {
 		case VCR_LAYER_GRAPHA:
 			dest = &vcr->xlib.grapha_picture;
@@ -1275,7 +1275,7 @@ void vcr_clear_row(vcr_t *vcr, vcr_layer_t layer, int row, int x, int width)
 					&vcr->xlib.graphb_picture,
 				};
 		vwm_xserver_t	*xserver = vcr->backend->xlib.xserver;
-		
+
 		XRenderFillRectangle(xserver->display, PictOpSrc, *layers[layer], &chart_trans_color,
 			x, row * VCR_ROW_HEIGHT,	/* dst x, y */
 			width, VCR_ROW_HEIGHT);		/* dst w, h */
@@ -1876,7 +1876,7 @@ static void vcr_present_xlib_to_ximage(vcr_t *vcr, const XRenderColor *bg_color,
 	xserver = vcr->backend->xlib.xserver;
 
 	assert(xserver);
-	
+
 	vcr_present_xlib_to_pixmap(vcr, bg_color, &dest_pixmap);
 	*res_ximage = XGetImage(xserver->display,
 				dest_pixmap,
@@ -2135,7 +2135,7 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
  *
  * Note there are coordinates/dimensions provided which most of the time will just
  * match the destination, but especially in the vwm composited WM use case this
- * won't be true because the dest is a picture representing the X root window. 
+ * won't be true because the dest is a picture representing the X root window.
  * There we must translate the presented output within the root window wherever the
  * related X window is being composited, and clip it to within the window's borders.
  *
