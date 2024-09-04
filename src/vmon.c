@@ -66,7 +66,7 @@ typedef struct vmon_t {
 #define WIDTH_MIN	200
 #define HEIGHT_MIN	28
 
-static volatile int got_sigchld, got_sigusr1, got_sigint, got_sigquit;
+static volatile int got_sigchld, got_sigusr1, got_sigint, got_sigquit, got_sigterm;
 
 /* return if arg == flag or altflag if provided */
 static int is_flag(const char *arg, const char *flag, const char *altflag)
@@ -193,8 +193,8 @@ static void print_help(void)
 		" -N  --now-names   Use current time in filenames instead of start time\n"
 		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
 		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
-		" -i  --snapshots   Save a PNG snapshot every N seconds (SIGUSR1 also snapshots)\n"
-		" -s  --snapshot    Save a PNG snapshot upon receiving SIGCHLD\n"
+		" -i  --snapshots   Save a PNG snapshot every N seconds (SIG{TERM,USR1} also snapshots)\n"
+		" -s  --snapshot    Save a PNG snapshot upon receiving SIG{CHLD,TERM,USR1}\n"
 		" -w  --wip-name    Name to use for work-in-progress snapshot filename\n"
 		" -v  --version     Print version\n"
 		" -W  --width       Chart width\n"
@@ -223,25 +223,35 @@ static void print_copyright(void)
 }
 
 
-/* collect status of child */
+/* collect status of child, triggering snapshot if snapshotting active */
 static void handle_sigchld(int signum)
 {
 	got_sigchld = 1;
 }
 
 
+/* trigger a snapshot */
 static void handle_sigusr1(int signum)
 {
 	got_sigusr1 = 1;
 }
 
 
+/* trigger a snapshot and exit immediately after it's been written */
+static void handle_sigterm(int signum)
+{
+	got_sigterm = 1;
+}
+
+
+/* propagates to child first time, quits second time */
 static void handle_sigint(int signum)
 {
 	got_sigint++;
 }
 
 
+/* propagates to child first time, quits second time */
 static void handle_sigquit(int signum)
 {
 	got_sigquit++;
@@ -622,6 +632,11 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 		goto _err_vcr;
 	}
 
+	if (signal(SIGTERM, handle_sigterm) == SIG_ERR) {
+		VWM_PERROR("unable to set SIGTERM handler");
+		goto _err_vcr;
+	}
+
 	if (vmon->snapshots_interval) {
 		int	r;
 
@@ -855,6 +870,13 @@ int main(int argc, const char * const *argv)
 			got_sigquit++;
 
 			kill(vmon->pid, SIGQUIT);
+		} else if (got_sigterm) {
+			if (vmon->snapshot || vmon->snapshots_interval) {
+				/* simulate sigusr1 to trigger a final snapshot, */
+				got_sigusr1 = 1;
+			}
+
+			vmon->done = 1;
 		}
 
 		if (got_sigchld) {
