@@ -1971,39 +1971,68 @@ static int vcr_present_xlib_to_png(vcr_t *vcr, vcr_dest_t *dest)
  * so first we or together all the relevant palette indices for those combinations, and
  * give them symbolic names to later use when populating hte palette with actual rgb values.
  */
-#define VCR_TEXT		(0x1 << VCR_LAYER_TEXT)
-#define VCR_SHADOW		(0x1 << VCR_LAYER_SHADOW)
-#define VCR_GRAPHA		(0x1 << VCR_LAYER_GRAPHA)
-#define VCR_GRAPHB		(0x1 << VCR_LAYER_GRAPHB)
-#define VCR_GRAPHAB		((0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB))
-#define VCR_BG			(0x1 << VCR_LAYER_CNT)
+#define VCR_TEXT			(0x1 << VCR_LAYER_TEXT)
+#define VCR_SHADOW			(0x1 << VCR_LAYER_SHADOW)
+#define VCR_GRAPHA			(0x1 << VCR_LAYER_GRAPHA)
+#define VCR_GRAPHB			(0x1 << VCR_LAYER_GRAPHB)
+#define VCR_GRAPHAB			((0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB))
+/* These bits aren't stored in the vcr->mem.bits[] nibbles, but do get used as palette indices.
+ * Their value is generated during the mem_to_png() process, derived from Y position within a row,
+ * and row position within a snapshot.
+ */
+#define VCR_SEP				(0x1 << VCR_LAYER_CNT)
+#define VCR_ODD				(0x1 << (VCR_LAYER_CNT + 1))
+
+#define VCR_SEP_ODD			(VCR_SEP | VCR_ODD)
+#define VCR_GRAPHA_ODD			(VCR_GRAPHA | VCR_ODD)
+#define VCR_GRAPHB_ODD			(VCR_GRAPHB | VCR_ODD)
+#define VCR_GRAPHAB_ODD			(VCR_GRAPHAB | VCR_ODD)
+#define VCR_SHADOW_ODD			(VCR_SHADOW | VCR_ODD)
 
 /* text over anything is going to just be white */
-#define VCR_TEXT_BG		(VCR_TEXT | VCR_BG)
-#define VCR_TEXT_GRAPHA		(VCR_TEXT | VCR_GRAPHA)
-#define VCR_TEXT_GRAPHB		(VCR_TEXT | VCR_GRAPHB)
-#define VCR_TEXT_GRAPHAB	(VCR_TEXT | VCR_GRAPHAB)
-#define VCR_TEXT_SHADOW 	(VCR_TEXT | VCR_SHADOW)
-#define VCR_TEXT_BG_SHADOW 	(VCR_TEXT | VCR_BG | VCR_SHADOW)
-#define VCR_TEXT_GRAPHA_SHADOW	(VCR_TEXT | VCR_GRAPHA | VCR_SHADOW)
-#define VCR_TEXT_GRAPHB_SHADOW	(VCR_TEXT | VCR_GRAPHB | VCR_SHADOW)
-#define VCR_TEXT_GRAPHAB_SHADOW	(VCR_TEXT | VCR_GRAPHAB | VCR_SHADOW)
+#define VCR_TEXT_SEP			(VCR_TEXT | VCR_SEP)
+#define VCR_TEXT_ODD			(VCR_TEXT | VCR_ODD)
+#define VCR_TEXT_SEP_ODD		(VCR_TEXT | VCR_SEP | VCR_ODD)
+
+#define VCR_TEXT_GRAPHA			(VCR_TEXT | VCR_GRAPHA)
+#define VCR_TEXT_GRAPHB			(VCR_TEXT | VCR_GRAPHB)
+#define VCR_TEXT_GRAPHAB		(VCR_TEXT | VCR_GRAPHAB)
+#define VCR_TEXT_SHADOW			(VCR_TEXT | VCR_SHADOW)
+#define VCR_TEXT_GRAPHA_SHADOW		(VCR_TEXT | VCR_GRAPHA | VCR_SHADOW)
+#define VCR_TEXT_GRAPHB_SHADOW		(VCR_TEXT | VCR_GRAPHB | VCR_SHADOW)
+#define VCR_TEXT_GRAPHAB_SHADOW		(VCR_TEXT | VCR_GRAPHAB | VCR_SHADOW)
+
+#define VCR_TEXT_SEP_SHADOW		(VCR_TEXT | VCR_SEP | VCR_SHADOW)
+
+#define VCR_TEXT_ODD_SEP		(VCR_TEXT | VCR_SEP | VCR_ODD)
+#define VCR_TEXT_ODD_GRAPHA		(VCR_TEXT | VCR_ODD | VCR_GRAPHA)
+#define VCR_TEXT_ODD_GRAPHB		(VCR_TEXT | VCR_ODD | VCR_GRAPHB)
+#define VCR_TEXT_ODD_GRAPHAB		(VCR_TEXT | VCR_ODD | VCR_GRAPHAB)
+#define VCR_TEXT_ODD_SHADOW		(VCR_TEXT | VCR_ODD | VCR_SHADOW)
+#define VCR_TEXT_ODD_SEP_SHADOW		(VCR_TEXT | VCR_ODD | VCR_SEP | VCR_SHADOW)
+#define VCR_TEXT_ODD_GRAPHA_SHADOW	(VCR_TEXT | VCR_ODD | VCR_GRAPHA | VCR_SHADOW)
+#define VCR_TEXT_ODD_GRAPHB_SHADOW	(VCR_TEXT | VCR_ODD | VCR_GRAPHB | VCR_SHADOW)
+#define VCR_TEXT_ODD_GRAPHAB_SHADOW	(VCR_TEXT | VCR_ODD | VCR_GRAPHAB | VCR_SHADOW)
 
 /* shadows over graph colors get blended, otherwise they're left black */
-#define VCR_SHADOW_GRAPHA	(VCR_SHADOW | VCR_GRAPHA)
-#define VCR_SHADOW_GRAPHB	(VCR_SHADOW | VCR_GRAPHB)
-#define VCR_SHADOW_GRAPHAB	(VCR_SHADOW | VCR_GRAPHAB)
+#define VCR_SHADOW_GRAPHA		(VCR_SHADOW | VCR_GRAPHA)
+#define VCR_SHADOW_GRAPHB		(VCR_SHADOW | VCR_GRAPHB)
+#define VCR_SHADOW_GRAPHAB		(VCR_SHADOW | VCR_GRAPHAB)
+#define VCR_SHADOW_ODD_GRAPHA		(VCR_SHADOW | VCR_ODD | VCR_GRAPHA)
+#define VCR_SHADOW_ODD_GRAPHB		(VCR_SHADOW | VCR_ODD | VCR_GRAPHB)
+#define VCR_SHADOW_ODD_GRAPHAB		(VCR_SHADOW | VCR_ODD | VCR_GRAPHAB)
 
 /* when without shadow */
-#define VCR_PNG_WHITE		{0xff, 0xff, 0xff}
-#define VCR_PNG_RED		{0xff, 0x00, 0x00}
-#define VCR_PNG_CYAN		{0x00, 0xff, 0xff}
-#define VCR_PNG_DARK_GRAY	{0x20, 0x20, 0x20}
+#define VCR_PNG_WHITE			{0xff, 0xff, 0xff}
+#define VCR_PNG_RED			{0xff, 0x00, 0x00}
+#define VCR_PNG_CYAN			{0x00, 0xff, 0xff}
+#define VCR_PNG_DARK_GRAY		{0x20, 0x20, 0x20}
+#define VCR_PNG_DARKER_GRAY		{0x08, 0x08, 0x08}
 
 /* when in shadow */
-#define VCR_PNG_DARK_WHITE	{0x4a, 0x4a, 0x4a}
-#define VCR_PNG_DARK_RED	{0x80, 0x00, 0x00}
-#define VCR_PNG_DARK_CYAN	{0x00, 0x5b, 0x5b}
+#define VCR_PNG_DARK_WHITE		{0x4a, 0x4a, 0x4a}
+#define VCR_PNG_DARK_RED		{0x80, 0x00, 0x00}
+#define VCR_PNG_DARK_CYAN		{0x00, 0x5b, 0x5b}
 
 
 static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
@@ -2012,8 +2041,8 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 
 					/* text solid white above all layers */
 					[VCR_TEXT] = VCR_PNG_WHITE,
-					[VCR_TEXT_BG] = VCR_PNG_WHITE,
-					[VCR_TEXT_BG_SHADOW] = VCR_PNG_WHITE,
+					[VCR_TEXT_SEP] = VCR_PNG_WHITE,
+					[VCR_TEXT_SEP_SHADOW] = VCR_PNG_WHITE,
 					[VCR_TEXT_GRAPHA] = VCR_PNG_WHITE,
 					[VCR_TEXT_GRAPHB] = VCR_PNG_WHITE,
 					[VCR_TEXT_GRAPHAB] = VCR_PNG_WHITE,
@@ -2021,19 +2050,37 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					[VCR_TEXT_GRAPHA_SHADOW] = VCR_PNG_WHITE,
 					[VCR_TEXT_GRAPHB_SHADOW] = VCR_PNG_WHITE,
 					[VCR_TEXT_GRAPHAB_SHADOW] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_SEP] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_SEP_SHADOW] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_GRAPHA] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_GRAPHB] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_GRAPHAB] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_SHADOW] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_GRAPHA_SHADOW] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_GRAPHB_SHADOW] = VCR_PNG_WHITE,
+					[VCR_TEXT_ODD_GRAPHAB_SHADOW] = VCR_PNG_WHITE,
 
 					/* no shadow or text, plain graph colors */
 					[VCR_GRAPHA] = VCR_PNG_RED,
 					[VCR_GRAPHB] = VCR_PNG_CYAN,
 					[VCR_GRAPHAB] = VCR_PNG_WHITE,
+					[VCR_GRAPHA_ODD] = VCR_PNG_RED,
+					[VCR_GRAPHB_ODD] = VCR_PNG_CYAN,
+					[VCR_GRAPHAB_ODD] = VCR_PNG_WHITE,
 
 					/* shadowed same but dark */
 					[VCR_SHADOW_GRAPHA] = VCR_PNG_DARK_RED,
 					[VCR_SHADOW_GRAPHB] = VCR_PNG_DARK_CYAN,
 					[VCR_SHADOW_GRAPHAB] = VCR_PNG_DARK_WHITE,
+					[VCR_SHADOW_ODD_GRAPHA] = VCR_PNG_DARK_RED,
+					[VCR_SHADOW_ODD_GRAPHB] = VCR_PNG_DARK_CYAN,
+					[VCR_SHADOW_ODD_GRAPHAB] = VCR_PNG_DARK_WHITE,
 
 					/* the rest get defaulted to black, which is great. */
-					[VCR_BG] = VCR_PNG_DARK_GRAY,
+					[VCR_SEP] = VCR_PNG_DARK_GRAY,
+					[VCR_ODD] = VCR_PNG_DARKER_GRAY,
+					[VCR_SEP_ODD] = VCR_PNG_DARK_GRAY,
 				};
 
 	png_bytepp		row_pointers;
@@ -2085,6 +2132,7 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 		for (int i = 0; i < n_rows; i++) {
 			uint8_t	*d = row_pixels;
 			uint8_t	mask = (0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB);
+			uint8_t odd = ((VCR_ODD << 4 | VCR_ODD) * (i & 0x1));
 
 			/* The graph layers need to be moved to vcr->phase, since the per-sample updates just draw
 			 * individual graph bars without bothering to move the whole graph layer every sample.
@@ -2093,14 +2141,14 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 			 */
 			for (int j = 0; j < VCR_ROW_HEIGHT; j++) {
 				uint8_t	*s = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch];
-				uint8_t	border = j == (VCR_ROW_HEIGHT - 1) ? VCR_BG : 0x0;
+				uint8_t	border = j == (VCR_ROW_HEIGHT - 1) ? VCR_SEP : 0x0;
 
 				for (int k = 0; k < vcr->width; k++, s++, d++) {
 					unsigned phase_k_mod_width = ((vcr->phase + k) % vcr->width);
 					unsigned sg_shift = (phase_k_mod_width & 0x1) << 2;
 					uint8_t	*sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
 
-					*d = (*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border;
+					*d = (*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd;
 
 					/* this copy pasta unrolls the loop to unpack two pixels from the nibbles at a time */
 					d++;
@@ -2114,7 +2162,7 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					sg_shift = (phase_k_mod_width & 0x1) << 2;
 					sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
 
-					*d = ((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border;
+					*d = ((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd;
 				}
 			}
 
