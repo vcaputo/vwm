@@ -1124,6 +1124,9 @@ void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row)
 	/* FIXME: the layers in backend/vcr etc should be in a layer-indexable array */
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
 
+	if (row * VCR_ROW_HEIGHT >= vcr->height)
+		return;
+
 	switch (vcr->backend->type) {
 #ifdef USE_XLIB
 	case VCR_BACKEND_TYPE_XLIB: {
@@ -1555,6 +1558,9 @@ void vcr_stash_row(vcr_t *vcr, vcr_layer_t layer, int row)
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
 	/* for now we only support stashing graphs */
 
+	if (row * VCR_ROW_HEIGHT >= vcr->height)
+		return;
+
 	switch (vcr->backend->type) {
 #ifdef USE_XLIB
 	case VCR_BACKEND_TYPE_XLIB: {
@@ -1609,6 +1615,9 @@ void vcr_unstash_row(vcr_t *vcr, vcr_layer_t layer, int row)
 	assert(vcr);
 	assert(vcr->backend);
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
+
+	if (row * VCR_ROW_HEIGHT >= vcr->height)
+		return;
 
 	switch (vcr->backend->type) {
 #ifdef USE_XLIB
