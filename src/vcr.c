@@ -2026,8 +2026,8 @@ static int vcr_present_xlib_to_png(vcr_t *vcr, vcr_dest_t *dest)
 #define VCR_PNG_WHITE			{0xff, 0xff, 0xff}
 #define VCR_PNG_RED			{0xff, 0x00, 0x00}
 #define VCR_PNG_CYAN			{0x00, 0xff, 0xff}
-#define VCR_PNG_DARK_GRAY		{0x20, 0x20, 0x20}
-#define VCR_PNG_DARKER_GRAY		{0x08, 0x08, 0x08}
+#define VCR_PNG_DARK_GRAY		{0x30, 0x30, 0x30}	/* used for separator */
+#define VCR_PNG_DARKER_GRAY		{0x10, 0x10, 0x10}	/* used for odd rows background */
 
 /* when in shadow */
 #define VCR_PNG_DARK_WHITE		{0x4a, 0x4a, 0x4a}
