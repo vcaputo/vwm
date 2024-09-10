@@ -1488,7 +1488,7 @@ void vcr_shadow_row(vcr_t *vcr, vcr_layer_t layer, int row)
 		/* TODO: optimize this abomination, maybe switch to shadowing the text @ serialization to png time for the mem->png headless scenario? */
 
 		/* first pass has to clean up the shadow plane while doing one offset of shadow bits */
-		for (int i = 1; i < VCR_ROW_HEIGHT - 1; i++) {
+		for (int i = 0; i < VCR_ROW_HEIGHT; i++) {
 			uint8_t	*s = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->mem.pitch];
 			uint8_t	*d = &vcr->mem.bits[(row * VCR_ROW_HEIGHT + i) * vcr->mem.pitch + 1];
 
