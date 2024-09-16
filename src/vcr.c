@@ -1124,7 +1124,7 @@ void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row)
 	/* FIXME: the layers in backend/vcr etc should be in a layer-indexable array */
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
 
-	if (row * VCR_ROW_HEIGHT >= vcr->height)
+	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
 	switch (vcr->backend->type) {
@@ -1186,7 +1186,7 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, double t, int min_heig
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
 	assert(min_height >= 0 && min_height < (VCR_ROW_HEIGHT - 1));
 
-	if (row * VCR_ROW_HEIGHT >= vcr->height)
+	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
 	height = fabs(t) * (double)(VCR_ROW_HEIGHT - 1);
@@ -1265,7 +1265,7 @@ void vcr_clear_row(vcr_t *vcr, vcr_layer_t layer, int row, int x, int width)
 
 	assert(x + width <= vcr->width);
 
-	if (row * VCR_ROW_HEIGHT >= vcr->height)
+	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
 	switch (vcr->backend->type) {
@@ -1333,7 +1333,7 @@ void vcr_shift_below_row_up_one(vcr_t *vcr, int row)
 	assert(vcr->backend);
 	assert(row > 0); /* TODO? assert row doesn't overflow? clamp to hierarchy_end? */
 
-	if (row * VCR_ROW_HEIGHT >= vcr->height)
+	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
 	switch (vcr->backend->type) {
@@ -1437,7 +1437,7 @@ void vcr_shadow_row(vcr_t *vcr, vcr_layer_t layer, int row)
 	assert(layer == VCR_LAYER_TEXT);
 	assert(row >= 0);
 
-	if (row * VCR_ROW_HEIGHT >= vcr->height)
+	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
 	switch (vcr->backend->type) {
@@ -1558,7 +1558,7 @@ void vcr_stash_row(vcr_t *vcr, vcr_layer_t layer, int row)
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
 	/* for now we only support stashing graphs */
 
-	if (row * VCR_ROW_HEIGHT >= vcr->height)
+	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
 	switch (vcr->backend->type) {
@@ -1616,7 +1616,7 @@ void vcr_unstash_row(vcr_t *vcr, vcr_layer_t layer, int row)
 	assert(vcr->backend);
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
 
-	if (row * VCR_ROW_HEIGHT >= vcr->height)
+	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
 	switch (vcr->backend->type) {
