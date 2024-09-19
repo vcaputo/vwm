@@ -2034,53 +2034,77 @@ static int vcr_present_xlib_to_png(vcr_t *vcr, vcr_dest_t *dest)
 #define VCR_PNG_DARK_RED		{0x80, 0x00, 0x00}
 #define VCR_PNG_DARK_CYAN		{0x00, 0x5b, 0x5b}
 
+enum {
+	VCR_LUT_BLACK = 0,
+	VCR_LUT_WHITE,
+	VCR_LUT_RED,
+	VCR_LUT_CYAN,
+	VCR_LUT_DARK_GRAY,
+	VCR_LUT_DARKER_GRAY,
+	VCR_LUT_DARK_WHITE,
+	VCR_LUT_DARK_RED,
+	VCR_LUT_DARK_CYAN,
+};
+
 
 static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 {
-	static png_color	pal[256] = { /* programming gfx like it's 1990 can be such a joy */
+	static png_color	pal[] = { /* programming gfx like it's 1990 can be such a joy */
+					[VCR_LUT_BLACK] = {},
+					[VCR_LUT_WHITE] = VCR_PNG_WHITE,
+					[VCR_LUT_RED] = VCR_PNG_RED,
+					[VCR_LUT_CYAN] = VCR_PNG_CYAN,
+					[VCR_LUT_DARK_GRAY] = VCR_PNG_DARK_GRAY,
+					[VCR_LUT_DARKER_GRAY] = VCR_PNG_DARKER_GRAY,
+					[VCR_LUT_DARK_WHITE] = VCR_PNG_DARK_WHITE,
+					[VCR_LUT_DARK_RED] = VCR_PNG_DARK_RED,
+					[VCR_LUT_DARK_CYAN] = VCR_PNG_DARK_CYAN,
+				};
 
+	/* lut is an indirection table for mapping layer bit combinations to the above deduplicated denser color palette */
+	static uint8_t		lut[256] = {
 					/* text solid white above all layers */
-					[VCR_TEXT] = VCR_PNG_WHITE,
-					[VCR_TEXT_SEP] = VCR_PNG_WHITE,
-					[VCR_TEXT_SEP_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_GRAPHA] = VCR_PNG_WHITE,
-					[VCR_TEXT_GRAPHB] = VCR_PNG_WHITE,
-					[VCR_TEXT_GRAPHAB] = VCR_PNG_WHITE,
-					[VCR_TEXT_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_GRAPHA_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_GRAPHB_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_GRAPHAB_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_SEP] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_SEP_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_GRAPHA] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_GRAPHB] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_GRAPHAB] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_GRAPHA_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_GRAPHB_SHADOW] = VCR_PNG_WHITE,
-					[VCR_TEXT_ODD_GRAPHAB_SHADOW] = VCR_PNG_WHITE,
+					[VCR_TEXT] = VCR_LUT_WHITE,
+					[VCR_TEXT_SEP] = VCR_LUT_WHITE,
+					[VCR_TEXT_SEP_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_GRAPHA] = VCR_LUT_WHITE,
+					[VCR_TEXT_GRAPHB] = VCR_LUT_WHITE,
+					[VCR_TEXT_GRAPHAB] = VCR_LUT_WHITE,
+					[VCR_TEXT_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_GRAPHA_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_GRAPHB_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_GRAPHAB_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_SEP] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_SEP_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_GRAPHA] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_GRAPHB] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_GRAPHAB] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_GRAPHA_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_GRAPHB_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_GRAPHAB_SHADOW] = VCR_LUT_WHITE,
 
 					/* no shadow or text, plain graph colors */
-					[VCR_GRAPHA] = VCR_PNG_RED,
-					[VCR_GRAPHB] = VCR_PNG_CYAN,
-					[VCR_GRAPHAB] = VCR_PNG_WHITE,
-					[VCR_GRAPHA_ODD] = VCR_PNG_RED,
-					[VCR_GRAPHB_ODD] = VCR_PNG_CYAN,
-					[VCR_GRAPHAB_ODD] = VCR_PNG_WHITE,
+					[VCR_GRAPHA] = VCR_LUT_RED,
+					[VCR_GRAPHB] = VCR_LUT_CYAN,
+					[VCR_GRAPHAB] = VCR_LUT_WHITE,
+					[VCR_GRAPHA_ODD] = VCR_LUT_RED,
+					[VCR_GRAPHB_ODD] = VCR_LUT_CYAN,
+					[VCR_GRAPHAB_ODD] = VCR_LUT_WHITE,
 
 					/* shadowed same but dark */
-					[VCR_SHADOW_GRAPHA] = VCR_PNG_DARK_RED,
-					[VCR_SHADOW_GRAPHB] = VCR_PNG_DARK_CYAN,
-					[VCR_SHADOW_GRAPHAB] = VCR_PNG_DARK_WHITE,
-					[VCR_SHADOW_ODD_GRAPHA] = VCR_PNG_DARK_RED,
-					[VCR_SHADOW_ODD_GRAPHB] = VCR_PNG_DARK_CYAN,
-					[VCR_SHADOW_ODD_GRAPHAB] = VCR_PNG_DARK_WHITE,
+					[VCR_SHADOW_GRAPHA] = VCR_LUT_DARK_RED,
+					[VCR_SHADOW_GRAPHB] = VCR_LUT_DARK_CYAN,
+					[VCR_SHADOW_GRAPHAB] = VCR_LUT_DARK_WHITE,
+					[VCR_SHADOW_ODD_GRAPHA] = VCR_LUT_DARK_RED,
+					[VCR_SHADOW_ODD_GRAPHB] = VCR_LUT_DARK_CYAN,
+					[VCR_SHADOW_ODD_GRAPHAB] = VCR_LUT_DARK_WHITE,
 
 					/* the rest get defaulted to black, which is great. */
-					[VCR_SEP] = VCR_PNG_DARK_GRAY,
-					[VCR_ODD] = VCR_PNG_DARKER_GRAY,
-					[VCR_SEP_ODD] = VCR_PNG_DARK_GRAY,
+					[VCR_SEP] = VCR_LUT_DARK_GRAY,
+					[VCR_ODD] = VCR_LUT_DARKER_GRAY,
+					[VCR_SEP_ODD] = VCR_LUT_DARK_GRAY,
 				};
 
 	png_bytepp		row_pointers;
@@ -2148,7 +2172,7 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					unsigned sg_shift = (phase_k_mod_width & 0x1) << 2;
 					uint8_t	*sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
 
-					*d = (*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd;
+					*d = lut[(*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd];
 
 					/* this copy pasta unrolls the loop to unpack two pixels from the nibbles at a time */
 					d++;
@@ -2162,7 +2186,7 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					sg_shift = (phase_k_mod_width & 0x1) << 2;
 					sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
 
-					*d = ((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd;
+					*d = lut[((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd];
 				}
 			}
 
