@@ -2109,8 +2109,9 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 
 	png_bytepp		row_pointers;
 	uint8_t			*row_pixels;
+	size_t			row_stride = vcr->width >> 1;
 
-	row_pixels = malloc(VCR_ROW_HEIGHT * vcr->width * sizeof(uint8_t));
+	row_pixels = malloc(VCR_ROW_HEIGHT * row_stride);
 	if (!row_pixels)
 		return -ENOMEM;
 
@@ -2121,7 +2122,7 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 	}
 
 	for (int i = 0; i < VCR_ROW_HEIGHT; i++)
-		row_pointers[i] = &((png_byte *)row_pixels)[i * vcr->width];
+		row_pointers[i] = &((png_byte *)row_pixels)[i * row_stride];
 
 	if (setjmp(png_jmpbuf(dest->png.png_ctx)) != 0) {
 		free(row_pixels);
@@ -2130,9 +2131,9 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 	}
 
 	png_set_IHDR(dest->png.png_ctx, dest->png.info_ctx,
-		vcr->width,	/* just always use the full width/height for the file dimensions, it's annoying when comparing things to have a variety of dimensions. */
+		vcr->width,		/* always use the full width/height for the file dimensions, it's annoying when comparing images to have a variety of dimensions. */
 		vcr->height,
-		8,
+		4,			/* 4-bit color index (16 color palette) for smaller file sizes */
 		PNG_COLOR_TYPE_PALETTE,	/* we use a palette for mem->png for less ram and filesize */
 		PNG_INTERLACE_NONE,
 		PNG_COMPRESSION_TYPE_BASE,
@@ -2171,11 +2172,12 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					unsigned phase_k_mod_width = ((vcr->phase + k) % vcr->width);
 					unsigned sg_shift = (phase_k_mod_width & 0x1) << 2;
 					uint8_t	*sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
+					uint8_t	pp;
 
-					*d = lut[(*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd];
+					/* pp will hold the png-appropriate indexed-color 4bpp packed pixel */
+					pp = lut[(*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd] << 4;
 
 					/* this copy pasta unrolls the loop to unpack two pixels from the nibbles at a time */
-					d++;
 					k++;
 					/* note there's no need to advance s twice since we get two pixels out of it per byte, and sg
 					 * is simply recomputed entirely again because of the phase wrapping that must be dealt with,
@@ -2185,8 +2187,9 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					phase_k_mod_width = ((vcr->phase + k) % vcr->width);
 					sg_shift = (phase_k_mod_width & 0x1) << 2;
 					sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
+					pp |= lut[((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd];
 
-					*d = lut[((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd];
+					*d = pp;
 				}
 			}
 
@@ -2194,7 +2197,7 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 		}
 
 		/* just black out whatever remains */
-		memset(row_pixels, 0x00, vcr->width);
+		memset(row_pixels, 0x00, row_stride);
 		for (int i = n_rows * VCR_ROW_HEIGHT; i < vcr->height; i++)
 			png_write_row(dest->png.png_ctx, row_pointers[0]);
 	}
