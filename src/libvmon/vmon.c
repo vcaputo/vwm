@@ -1011,6 +1011,9 @@ int vmon_init(vmon_t *vmon, vmon_flags_t flags, vmon_sys_wants_t sys_wants, vmon
 	vmon->sys_wants = sys_wants;
 	vmon->proc_wants = proc_wants;
 	vmon->ticks_per_sec = sysconf(_SC_CLK_TCK);
+	vmon->num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+	if (vmon->num_cpus <= 0)
+		vmon->num_cpus = 1; /* default to 1 cpu */
 
 	/* here we populate the sys and proc function tables */
 #define vmon_want(_sym, _name, _func) \
