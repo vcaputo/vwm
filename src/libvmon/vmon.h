@@ -251,6 +251,7 @@ typedef struct _vmon_proc_t {
 	unsigned		is_new:1;			/* process is new in the most recent sample, automatically cleared on subsequent sample */
 	unsigned		is_stale:1;			/* process became stale in the most recent sample, automatically cleared on subsequent sample (process will be discarded) */
 	unsigned		is_thread:1;			/* process is a thread belonging to parent */
+	unsigned		is_threaded:1;			/* gets set when any of my immediate children are/have been threads */
 } vmon_proc_t;
 
 

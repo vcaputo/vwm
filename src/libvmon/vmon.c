@@ -1178,6 +1178,7 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 		if (is_thread) {
 			list_add_tail(&proc->threads, &parent->threads);
 			parent->threads_changed = 1;
+			parent->is_threaded = 1;
 		} else {
 			list_add_tail(&proc->siblings, &parent->children);
 			parent->children_changed = 1;
