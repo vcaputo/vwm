@@ -364,13 +364,13 @@ static int proc_hierarchy_changed(vmon_proc_t *proc)
 
 
 /* helper for drawing the vertical bars in the graph layers */
-static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, double a_fraction, double a_total, double b_fraction, double b_total)
+static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, double mult, double a_fraction, double a_total, double b_fraction, double b_total)
 {
 	float	a_t, b_t;
 
 	/* compute the bar %ages for this sample */
-	a_t = a_fraction / a_total;
-	b_t = b_fraction / b_total;
+	a_t = a_fraction / a_total * mult; /* TODO: these divides could be turned into multiplies, since the totals are sys-wide uniforms throughout the sample */
+	b_t = b_fraction / b_total * mult;
 
 	/* ensure at least 1 pixel when the scaled result is a fraction less than 1,
 	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
@@ -921,7 +921,14 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 			utime_delta = proc_ctxt->utime_delta;
 		}
 
-		draw_bars(charts, chart, *row, stime_delta, charts->total_delta, utime_delta, charts->total_delta);
+		draw_bars(charts,
+			chart,
+			*row,
+			(proc->is_thread || !proc->is_threaded) ? charts->vmon.num_cpus : 1.0,
+			stime_delta,
+			charts->total_delta,
+			utime_delta,
+			charts->total_delta);
 	}
 
 	draw_overlay_row(charts, chart, proc, *depth, *row, deferred_pass);
@@ -948,7 +955,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	int	prev_redraw_needed;
 
 	/* IOWait and Idle % @ row 0 */
-	draw_bars(charts, chart, 0, charts->iowait_delta, charts->total_delta, charts->idle_delta, charts->total_delta);
+	draw_bars(charts, chart, 0, 1.0, charts->iowait_delta, charts->total_delta, charts->idle_delta, charts->total_delta);
 
 	/* only draw the \/\/\ and HZ if necessary */
 	if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval != charts->sampling_interval))) {

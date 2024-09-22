@@ -1194,6 +1194,10 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, double t, int min_heig
 	if (height < min_height)
 		height = min_height;
 
+	/* clamp the height to not potentially overflow */
+	if (height > (VCR_ROW_HEIGHT - 1))
+		height = (VCR_ROW_HEIGHT - 1);
+
 	switch (vcr->backend->type) {
 #ifdef USE_XLIB
 	case VCR_BACKEND_TYPE_XLIB: {
