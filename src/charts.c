@@ -103,7 +103,7 @@ typedef struct _vwm_column_t {
 
 /* everything needed by the per-window chart's context */
 typedef struct _vwm_chart_t {
-	vmon_proc_t	*monitor;				/* vmon process monitor handle */
+	vmon_proc_t	*proc;					/* vmon process monitor handle */
 	vcr_t		*vcr;
 
 	int		hierarchy_end;				/* row where the process hierarchy currently ends */
@@ -237,7 +237,7 @@ void vwm_charts_destroy(vwm_charts_t *charts)
 /* moves what's below a given row up above it, preserve the lost row's graphs @ hierarchy end */
 static void snowflake_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 {
-	VWM_TRACE("pid=%i chart=%p row=%i heirarhcy_end=%i", chart->monitor->pid, chart, row, chart->hierarchy_end);
+	VWM_TRACE("pid=%i chart=%p row=%i heirarhcy_end=%i", chart->proc->pid, chart, row, chart->hierarchy_end);
 
 	/* stash the graph rows */
 	vcr_stash_row(chart->vcr, VCR_LAYER_GRAPHA, row);
@@ -264,7 +264,7 @@ static void snowflake_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 /* shifts what's below a given row down a row, and clears the row, preparing it for populating */
 static void allocate_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 {
-	VWM_TRACE("pid=%i chart=%p row=%i", chart->monitor->pid, chart, row);
+	VWM_TRACE("pid=%i chart=%p row=%i", chart->proc->pid, chart, row);
 
 	vcr_shift_below_row_down_one(chart->vcr, row);
 	/* FIXME TODO: the vcr layers api needs to just support bitmasks for which layers the operation
@@ -430,16 +430,16 @@ static unsigned interval_as_hz(vwm_charts_t *charts)
 static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int depth, int row, const vmon_proc_t *proc, int *res_width)
 {
 	/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
-	if (proc != chart->monitor) {
+	if (proc != chart->proc) {
 		vmon_proc_t	*child, *ancestor, *sibling, *last_sibling = NULL;
 		int		bar_x = 0, bar_y = (row + 1) * VCR_ROW_HEIGHT;
 		int		sub;
 
 		/* XXX: everything done in this code block only dirties _this_ process' row in the rendered chart output */
 
-		/* walk up the ancestors until reaching chart->monitor, any ancestors we encounter which have more siblings we draw a vertical bar for */
+		/* walk up the ancestors until reaching chart->proc, any ancestors we encounter which have more siblings we draw a vertical bar for */
 		/* this draws the |'s in something like:  | |   |    | comm */
-		for (sub = 1, ancestor = proc->parent; ancestor && ancestor != chart->monitor; ancestor = ancestor->parent, sub++) {
+		for (sub = 1, ancestor = proc->parent; ancestor && ancestor != chart->proc; ancestor = ancestor->parent, sub++) {
 			bar_x = ((depth - 1) - sub) * (VCR_ROW_HEIGHT / 2) + 4;
 
 			assert(depth > 0);
@@ -991,7 +991,7 @@ static void maintain_chart(vwm_charts_t *charts, vwm_chart_t *chart, int deferre
 {
 	int	row = 0, depth = 0;
 
-	if (!chart->monitor || !chart->monitor->stores[VMON_STORE_PROC_STAT])
+	if (!chart->proc || !chart->proc->stores[VMON_STORE_PROC_STAT])
 		return;
 
 	/* TODO:
@@ -1009,7 +1009,7 @@ static void maintain_chart(vwm_charts_t *charts, vwm_chart_t *chart, int deferre
 		vcr_advance_phase(chart->vcr, -1); /* change this to +1 to scroll the other direction */
 
 	/* recursively draw the monitored processes to the chart */
-	draw_chart(charts, chart, chart->monitor, &depth, &row, charts->defer_maintenance && deferred_pass);
+	draw_chart(charts, chart, chart->proc, &depth, &row, charts->defer_maintenance && deferred_pass);
 }
 
 
@@ -1097,15 +1097,15 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 
 	/* add the client process to the monitoring hierarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
-	chart->monitor = vmon_proc_monitor(&charts->vmon, NULL, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
-	if (!chart->monitor) {
+	chart->proc = vmon_proc_monitor(&charts->vmon, NULL, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
+	if (!chart->proc) {
 		VWM_ERROR("Unable to establish proc monitor");
 		goto _err_free;
 	}
 
 	 /* FIXME: count_rows() isn't returning the right count sometimes (off by ~1), it seems to be related to racing with the automatic child monitoring */
 	 /* the result is an extra row sometimes appearing below the process hierarchy */
-	chart->hierarchy_end = 1 + count_rows(chart->monitor);
+	chart->hierarchy_end = 1 + count_rows(chart->proc);
 	chart->gen_last_composed = -1;
 
 	chart->vcr = vcr_new(charts->vcr_backend, &chart->hierarchy_end, &chart->snowflakes_cnt);
@@ -1118,7 +1118,7 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	return chart;
 
 _err_unmonitor:
-	vmon_proc_unmonitor(&charts->vmon, chart->monitor, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
+	vmon_proc_unmonitor(&charts->vmon, chart->proc, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
 
 _err_free:
 	free(chart->name);
@@ -1131,7 +1131,7 @@ _err:
 /* stop monitoring and destroy the supplied chart */
 void vwm_chart_destroy(vwm_charts_t *charts, vwm_chart_t *chart)
 {
-	vmon_proc_unmonitor(&charts->vmon, chart->monitor, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
+	vmon_proc_unmonitor(&charts->vmon, chart->proc, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
 	vcr_free(chart->vcr);
 	free(chart->name);
 	free(chart);
@@ -1139,13 +1139,13 @@ void vwm_chart_destroy(vwm_charts_t *charts, vwm_chart_t *chart)
 
 
 /* this composes the maintained chart into the base chart picture, this gets called from paint_all() on every repaint of xwin */
-/* we noop the call if the gen_last_composed and monitor->proc.generation numbers match, indicating there's nothing new to compose. */
+/* we noop the call if the gen_last_composed and proc->generation numbers match, indicating there's nothing new to compose. */
 void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart)
 {
 	if (!chart->visible_width || !chart->visible_height)
 		return;
 
-	if (chart->gen_last_composed == chart->monitor->generation)
+	if (chart->gen_last_composed == chart->proc->generation)
 		return; /* noop if no sampling occurred since last compose */
 
 	/* In deferred maintenance mode, we skip maintaining a bunch of layers until the compose happens.
@@ -1165,7 +1165,7 @@ void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart)
 	if (charts->defer_maintenance)
 		maintain_chart(charts, chart, 1 /* deferred_pass */);
 
-	chart->gen_last_composed = chart->monitor->generation; /* remember this generation */
+	chart->gen_last_composed = chart->proc->generation; /* remember this generation */
 
 	//VWM_TRACE("composing %p", chart);
 
@@ -1300,7 +1300,7 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 		}
 
 		ret = vmon_sample(&charts->vmon);	/* XXX: calls proc_sample_callback() for explicitly monitored processes after sampling their descendants */
-						/* XXX: also calls sample_callback() per invocation after sampling the sys wants */
+							/* XXX: also calls sample_callback() per invocation after sampling the sys wants */
 
 		charts->sampling_paused = (charts->sampling_interval == INFINITY);
 		charts->prev_sampling_interval = charts->sampling_interval;
