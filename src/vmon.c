@@ -843,21 +843,21 @@ int main(int argc, const char * const *argv)
 	}
 
 	while (!vmon->done) {
-		int	delay;
+		int	delay_us;
 
 		/* update only actually updates when enough time has passed, and always returns how much time
 		 * to sleep before calling update again (-1 for infinity (paused)).
 		 *
 		 * if 0 is returned, no update was performed/no changes occured.
 		 */
-		if (vwm_charts_update(vmon->charts, &delay)) {
+		if (vwm_charts_update(vmon->charts, &delay_us)) {
 			if (!vmon->headless) {
 				vwm_chart_compose(vmon->charts, vmon->chart);
 				vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, vmon->vcr_dest, -1, -1, -1, -1);
 			}
 		}
 
-		if (vcr_backend_poll(vmon->vcr_backend, delay) > 0)
+		if (vcr_backend_poll(vmon->vcr_backend, delay_us) > 0)
 			vmon_process_event(vmon);
 
 		if (got_sigint > 2 || got_sigquit > 2) {
