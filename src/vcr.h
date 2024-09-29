@@ -49,7 +49,7 @@ typedef struct vcr_str_t {
 
 vcr_backend_t * vcr_backend_new(vcr_backend_type_t backend, ...);
 int vcr_backend_get_dimensions(vcr_backend_t *vbe, int *res_width, int *res_height);
-int vcr_backend_poll(vcr_backend_t *vbe, int timeout);
+int vcr_backend_poll(vcr_backend_t *vbe, int timeout_us);
 vcr_backend_event_t vcr_backend_next_event(vcr_backend_t *vbe, int *res_width, int *res_height);
 vcr_backend_t * vcr_backend_free(vcr_backend_t *vbe);
 

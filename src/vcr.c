@@ -410,7 +410,7 @@ int vcr_backend_get_dimensions(vcr_backend_t *vbe, int *res_width, int *res_heig
 
 /* this is basically just needed by the vmon use case */
 /* returns 1 if the backend has events to process, 0 on timeout/error. */
-int vcr_backend_poll(vcr_backend_t *vbe, int timeout)
+int vcr_backend_poll(vcr_backend_t *vbe, int timeout_us)
 {
 	/* FIXME TODO: should probably switch to ppoll() and keep signals blocked outside of
 	 * while blocked in ppoll().  Then ppoll() becomes our signal delivery/handling point...
@@ -426,11 +426,11 @@ int vcr_backend_poll(vcr_backend_t *vbe, int timeout)
 		if (XPending(vbe->xlib.xserver->display))
 			return 1;
 
-		return poll(&pfd, 1, timeout);
+		return poll(&pfd, 1, timeout_us);
 	}
 #endif
 	case VCR_BACKEND_TYPE_MEM:
-		return poll(NULL, 0, timeout);
+		return poll(NULL, 0, timeout_us);
 
 	default:
 		assert(0);
