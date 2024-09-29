@@ -1255,8 +1255,8 @@ static float delta(struct timeval *cur, struct timeval *prev)
 }
 
 
-/* update the charts if necessary, return if updating occurred, and duration before another update needed in *desired_delay */
-int vwm_charts_update(vwm_charts_t *charts, int *desired_delay)
+/* update the charts if necessary, return if updating occurred, and duration before another update needed in *desired_delay_us */
+int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 {
 	float	this_delta = 0.0f;
 	int	ret = 0;
@@ -1311,7 +1311,7 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay)
 	}
 
 	/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
-	*desired_delay = charts->sampling_interval == INFINITY ? -1 : charts->sampling_interval * 300.0;
+	*desired_delay_us = charts->sampling_interval == INFINITY ? -1 : charts->sampling_interval * 300.0;
 
 	return ret;
 }
