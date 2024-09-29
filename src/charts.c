@@ -54,6 +54,7 @@ typedef struct _vwm_charts_t {
 
 	/* libvmon */
 	struct timeval				maybe_sample, last_sample, this_sample;
+	unsigned				this_sample_duration;
 	typeof(((vmon_sys_stat_t *)0)->user)	last_user_cpu;
 	typeof(((vmon_sys_stat_t *)0)->system)	last_system_cpu;
 	unsigned long long			last_total, this_total, total_delta;
@@ -1272,12 +1273,22 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 		    charts->sampling_interval <= charts->prev_sampling_interval &&
 		    this_delta >= (charts->sampling_interval * 1.5)) {
 
+			/* adjust charts->this_sample_duration as needed since we've missed our deadline.
+			 * This is more of an issue in headless mode, especially when run on slower/embedded
+			 * devices, even worse when periodically snapshoting costly PNGs that may take
+			 * several seconds during which no sampling occurs.
+			 */
+			charts->this_sample_duration = (this_delta / charts->sampling_interval) + .5f /* rounded to int */;
+
 			/* require > 1 contiguous drops before lowering the rate, tolerates spurious one-off stalls */
 			if (++charts->contiguous_drops > 2)
 				vwm_charts_rate_decrease(charts);
 		} else {
 			charts->contiguous_drops = 0;
+			charts->this_sample_duration = 1; /* ideally always 1, but > 1 when sample deadline missed (repeat sample)  */
 		}
+
+		VWM_TRACE("sample_duration=%u", charts->this_sample_duration);
 
 		/* age the sys-wide sample data into "last" variables, before the new sample overwrites them. */
 		charts->last_sample = charts->this_sample;
