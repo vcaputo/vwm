@@ -335,13 +335,13 @@ int main(int argc, char *argv[])
 
 	while (!vwm->done) {
 		do {
-			int	delay;
+			int	delay_us;
 
-			if (vwm_charts_update(vwm->charts, &delay))
+			if (vwm_charts_update(vwm->charts, &delay_us))
 				vwm_composite_repaint_needed(vwm);
 
 			if (!XPending(VWM_XDISPLAY(vwm))) {
-				if (poll(&pfd, 1, delay) == 0)
+				if (poll(&pfd, 1, delay_us) == 0)
 					break;
 			}
 
