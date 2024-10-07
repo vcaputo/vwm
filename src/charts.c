@@ -47,7 +47,7 @@
 #define CHART_VMON_SYS_WANTS		(VMON_WANT_SYS_STAT)
 #define CHART_MAX_COLUMNS		16
 #define CHART_DELTA_SECONDS_EPSILON	.001f				/* adherence errors smaller than this are treated as zero */
-#define CHART_NUM_FIXED_HEADER_ROWS	1				/* number of rows @ top before the hierarchy */
+#define CHART_NUM_FIXED_HEADER_ROWS	2				/* number of rows @ top before the hierarchy */
 
 /* the global charts state, supplied to vwm_chart_create() which keeps a reference for future use. */
 typedef struct _vwm_charts_t {
@@ -986,14 +986,16 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	int	row = 0, depth = 0;
 
 	/* IOWait and Idle % @ row 0 */
-	draw_bars(charts, chart, 0, 1.0, charts->iowait_delta, charts->total_delta, charts->idle_delta, charts->total_delta);
+	draw_bars(charts, chart, row, 1.0, charts->iowait_delta, charts->total_delta, charts->idle_delta, charts->total_delta);
+	/* "adherence" @ row 1 */
+	draw_bars(charts, chart, row + 1, 1.0, charts->this_sample_adherence > 0.f ? charts->this_sample_adherence : 0.f /* a_fraction */, 1.f /* a_total */, charts->this_sample_adherence < 0.f ? -charts->this_sample_adherence : 0.f /* b_fraction */, /* b_total */ 1.f);
 
-	/* only draw the \/\/\ and HZ if necessary */
+	/* only draw the column headings, \/\/\ and HZ if necessary */
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
 		if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval_secs != charts->sampling_interval_secs))) {
-			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
-			draw_columns(charts, chart, chart->columns, 1 /* heading */, 0 /* depth */, row, proc);
-			shadow_row(charts, chart, row);
+			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 1, -1, -1);
+			draw_columns(charts, chart, chart->columns, 1 /* heading */, 0 /* depth */, row + 1, proc);
+			shadow_row(charts, chart, row + 1);
 		}
 
 		if (!prev_redraw_needed)
