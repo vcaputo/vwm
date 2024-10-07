@@ -55,6 +55,7 @@ typedef struct _vwm_charts_t {
 	/* libvmon */
 	struct timeval				maybe_sample, last_sample, this_sample;
 	unsigned				this_sample_duration;
+	float					this_sample_adherence;	/* 0 = on time, (+) behind schedule, (-) ahead of schedule(TODO), units is fraction of .sampling_interval_secs */
 	typeof(((vmon_sys_stat_t *)0)->user)	last_user_cpu;
 	typeof(((vmon_sys_stat_t *)0)->system)	last_system_cpu;
 	unsigned long long			last_total, this_total, total_delta;
@@ -1342,7 +1343,13 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 			charts->this_sample_duration = 1; /* ideally always 1, but > 1 when sample deadline missed (repeat sample)  */
 		}
 
-		VWM_TRACE("sample_duration=%u", charts->this_sample_duration);
+		charts->this_sample_adherence = -(charts->sampling_interval_secs - this_delta);
+		if (charts->this_sample_adherence < CHART_DELTA_SECONDS_EPSILON && charts->this_sample_adherence > -CHART_DELTA_SECONDS_EPSILON)
+			charts->this_sample_adherence = 0;
+		charts->this_sample_adherence /= charts->sampling_interval_secs; /* turn adherence into a fraction of the current interval */
+
+		VWM_TRACE("sample_duration=%u sample_adherence=%f",
+			charts->this_sample_duration, charts->this_sample_adherence);
 
 		/* age the sys-wide sample data into "last" variables, before the new sample overwrites them. */
 		charts->last_sample = charts->this_sample;
