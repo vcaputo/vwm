@@ -119,6 +119,7 @@ typedef struct _vwm_chart_t {
 	int		gen_last_composed;			/* the last composed vmon generation */
 	int		redraw_needed;				/* if a redraw is required (like when the window is resized...) */
 	char		*name;					/* name if provided, included in chart by the \/\/\ */
+	vwm_column_t	top_columns[CHART_MAX_COLUMNS];		/* "top" columns in the chart (vwm logo, hz) */
 	vwm_column_t	columns[CHART_MAX_COLUMNS];		/* columns in the chart TODO, for now just stowing the real/user/sys width here */
 	vwm_column_t	snowflake_columns[CHART_MAX_COLUMNS];	/* columns in the snowflaked rows */
 } vwm_chart_t;
@@ -993,6 +994,10 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	/* only draw the column headings, \/\/\ and HZ if necessary */
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
 		if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval_secs != charts->sampling_interval_secs))) {
+			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
+			draw_columns(charts, chart, chart->top_columns, 1 /* heading */, 0 /* depth */, row, proc);
+			shadow_row(charts, chart, row);
+
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 1, -1, -1);
 			draw_columns(charts, chart, chart->columns, 1 /* heading */, 0 /* depth */, row + 1, proc);
 			shadow_row(charts, chart, row + 1);
@@ -1125,6 +1130,8 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 		}
 	}
 
+	chart->top_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM, .side = VWM_SIDE_RIGHT };
+
 	/* TODO: make the columns interactively configurable @ runtime */
 	chart->columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_ROW, .side = VWM_SIDE_LEFT };
 	chart->columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
@@ -1135,7 +1142,6 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->columns[6] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_STATE, .side = VWM_SIDE_RIGHT };
 	chart->columns[7] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_RIGHT };
 	chart->columns[8] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WCHAN, .side = VWM_SIDE_RIGHT };
-	chart->columns[9] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM, .side = VWM_SIDE_RIGHT };
 
 	chart->snowflake_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_LEFT };
 	chart->snowflake_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
