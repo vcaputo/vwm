@@ -977,9 +977,10 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 
 
 /* recursive draw function entrypoint, draws the IOWait/Idle/HZ row, then enters draw_chart_rest() */
-static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int *depth, int *row, int deferred_pass, unsigned sample_duration_idx)
+static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *proc, int deferred_pass, unsigned sample_duration_idx)
 {
 	int	prev_redraw_needed = chart->redraw_needed;
+	int	row = 0, depth = 0;
 
 	/* IOWait and Idle % @ row 0 */
 	draw_bars(charts, chart, 0, 1.0, charts->iowait_delta, charts->total_delta, charts->idle_delta, charts->total_delta);
@@ -987,17 +988,17 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	/* only draw the \/\/\ and HZ if necessary */
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
 		if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval_secs != charts->sampling_interval_secs))) {
-			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, 0, -1, -1);
-			draw_columns(charts, chart, chart->columns, 1 /* heading */, 0 /* depth */, 0, proc);
-			shadow_row(charts, chart, 0);
+			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
+			draw_columns(charts, chart, chart->columns, 1 /* heading */, 0 /* depth */, row, proc);
+			shadow_row(charts, chart, row);
 		}
 
 		if (!prev_redraw_needed)
 			chart->redraw_needed = proc_hierarchy_changed(proc);
 	}
-	(*row)++;
+	row++;
 
-	draw_chart_rest(charts, chart, proc, depth, row, deferred_pass, sample_duration_idx);
+	draw_chart_rest(charts, chart, proc, &depth, &row, deferred_pass, sample_duration_idx);
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
 		if (chart->redraw_needed > prev_redraw_needed) {
 			/* Drawing bumped redraw_needed (like a layout change from widths changing),
@@ -1042,19 +1043,14 @@ static void maintain_chart(vwm_charts_t *charts, vwm_chart_t *chart, int deferre
 	 */
 
 	/* deferred pass updates the arbitrarily reproducible overlays, not incrementally rendered graphs; this_sample_duration is irrelevant */
-	if (deferred_pass) {
-		int	row = 0, depth = 0;
-
-		return draw_chart(charts, chart, chart->proc, &depth, &row, deferred_pass, 0 /* sample_duration_idx */);
-	}
+	if (deferred_pass)
+		return draw_chart(charts, chart, chart->proc, deferred_pass, 0 /* sample_duration_idx */);
 
 	for (unsigned i = 0; i < charts->this_sample_duration; i++) {
-		int	row = 0, depth = 0;
-
 		vcr_advance_phase(chart->vcr, -1); /* change this to +1 to scroll the other direction */
 
 		/* recursively draw the monitored processes to the chart */
-		draw_chart(charts, chart, chart->proc, &depth, &row, 0 /* deferred_pass */, i);
+		draw_chart(charts, chart, chart->proc, 0 /* deferred_pass */, i);
 	}
 }
 
