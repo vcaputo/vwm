@@ -28,7 +28,6 @@
 #include <X11/extensions/Xfixes.h>
 #endif
 
-
 #include "charts.h"
 #include "libvmon/vmon.h"
 #include "list.h"
@@ -60,7 +59,7 @@ typedef struct _vwm_charts_t {
 	unsigned long long			last_total, this_total, total_delta;
 	unsigned long long			last_idle, last_iowait, idle_delta, iowait_delta;
 	vmon_t					vmon;
-	float					prev_sampling_interval, sampling_interval;
+	float					prev_sampling_interval_secs, sampling_interval_secs;
 	int					sampling_paused, contiguous_drops, primed;
 	unsigned				defer_maintenance:1;
 } vwm_charts_t;
@@ -132,12 +131,13 @@ typedef struct _vwm_perproc_ctxt_t {
 } vwm_perproc_ctxt_t;
 
 
-static float			sampling_intervals[] = {
-						1,		/* ~1Hz */
-						.1,		/* ~10Hz */
-						.05,		/* ~20Hz */
-						.025,		/* ~40Hz */
-						.01666};	/* ~60Hz */
+static float	sampling_intervals[] = {
+			1,	/* ~1Hz */
+			.1,	/* ~10Hz */
+			.05,	/* ~20Hz */
+			.025,	/* ~40Hz */
+			.01666,	/* ~60Hz */
+		};
 
 
 /* wrapper around snprintf always returning the length of what's in the buf */
@@ -204,7 +204,7 @@ vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 	if (flags & VWM_CHARTS_FLAG_DEFER_MAINTENANCE)
 		charts->defer_maintenance = 1;
 
-	charts->prev_sampling_interval = charts->sampling_interval = 0.1f;	/* default to 10Hz */
+	charts->prev_sampling_interval_secs = charts->sampling_interval_secs = 0.1f;	/* default to 10Hz */
 
 	if (!vmon_init(&charts->vmon, VMON_FLAG_2PASS, CHART_VMON_SYS_WANTS, CHART_VMON_PROC_WANTS)) {
 		VWM_ERROR("unable to initialize libvmon");
@@ -419,11 +419,11 @@ static inline int proc_has_subsequent_siblings(vmon_t *vmon, vmon_proc_t *proc)
 
 
 /* convert chart sampling interval back into an integral hertz value, basically
- * open-coded ceilf(1.f / charts->sampling_interval) to avoid needing -lm.
+ * open-coded ceilf(1.f / charts->sampling_interval_secs) to avoid needing -lm.
  */
 static unsigned interval_as_hz(vwm_charts_t *charts)
 {
-	return (1.f / charts->sampling_interval + .5f);
+	return (1.f / charts->sampling_interval_secs + .5f);
 }
 
 
@@ -987,7 +987,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 
 	/* only draw the \/\/\ and HZ if necessary */
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
-		if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval != charts->sampling_interval))) {
+		if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval_secs != charts->sampling_interval_secs))) {
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, 0, -1, -1);
 			draw_columns(charts, chart, chart->columns, 0, 0, proc);
 			shadow_row(charts, chart, 0);
@@ -1214,8 +1214,6 @@ void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart)
 
 	chart->gen_last_composed = chart->proc->generation; /* remember this generation */
 
-	//VWM_TRACE("composing %p", chart);
-
 	/* FIXME TODO: errors */ (void) vcr_compose(chart->vcr);
 }
 
@@ -1233,6 +1231,7 @@ void vwm_chart_compose_xdamage(vwm_charts_t *charts, vwm_chart_t *chart, Xserver
 	/* TODO errors: */ (void) vcr_get_composed_xdamage(chart->vcr, res_damaged_region);
 }
 #endif
+
 
 /* render the chart into a picture at the specified coordinates and dimensions */
 void vwm_chart_render(vwm_charts_t *charts, vwm_chart_t *chart, vcr_present_op_t op, vcr_dest_t *dest, int x, int y, int width, int height)
@@ -1252,8 +1251,8 @@ void vwm_charts_rate_increase(vwm_charts_t *charts)
 	assert(charts);
 
 	for (i = 0; i < NELEMS(sampling_intervals); i++) {
-		if (sampling_intervals[i] < charts->sampling_interval) {
-			charts->sampling_interval = sampling_intervals[i];
+		if (sampling_intervals[i] < charts->sampling_interval_secs) {
+			charts->sampling_interval_secs = sampling_intervals[i];
 			break;
 		}
 	}
@@ -1268,8 +1267,8 @@ void vwm_charts_rate_decrease(vwm_charts_t *charts)
 	assert(charts);
 
 	for (i = NELEMS(sampling_intervals) - 1; i >= 0; i--) {
-		if (sampling_intervals[i] > charts->sampling_interval) {
-			charts->sampling_interval = sampling_intervals[i];
+		if (sampling_intervals[i] > charts->sampling_interval_secs) {
+			charts->sampling_interval_secs = sampling_intervals[i];
 			break;
 		}
 	}
@@ -1282,7 +1281,7 @@ void vwm_charts_rate_set(vwm_charts_t *charts, unsigned hertz)
 	assert(charts);
 
 	/* XXX: note floating point divide by 0 simply results in infinity */
-	charts->sampling_interval = 1.0f / (float)hertz;
+	charts->sampling_interval_secs = 1.0f / (float)hertz;
 }
 
 
@@ -1310,21 +1309,21 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 
 	gettimeofday(&charts->maybe_sample, NULL);
 	if (!charts->primed ||
-	    (charts->sampling_interval == INFINITY && !charts->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
-	    (charts->sampling_interval != INFINITY && ((this_delta = delta(&charts->maybe_sample, &charts->this_sample)) >= charts->sampling_interval))) {
+	    (charts->sampling_interval_secs == INFINITY && !charts->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
+	    (charts->sampling_interval_secs != INFINITY && ((this_delta = delta(&charts->maybe_sample, &charts->this_sample)) >= charts->sampling_interval_secs))) {
 		vmon_sys_stat_t	*sys_stat;
 
 		/* automatically lower the sample rate if we can't keep up with the current sample rate */
-		if (charts->sampling_interval < INFINITY &&
-		    charts->sampling_interval <= charts->prev_sampling_interval &&
-		    this_delta >= (charts->sampling_interval * 1.5)) {
+		if (charts->sampling_interval_secs < INFINITY &&
+		    charts->sampling_interval_secs <= charts->prev_sampling_interval_secs &&
+		    this_delta >= (charts->sampling_interval_secs * 1.5)) {
 
 			/* adjust charts->this_sample_duration as needed since we've missed our deadline.
 			 * This is more of an issue in headless mode, especially when run on slower/embedded
 			 * devices, even worse when periodically snapshoting costly PNGs that may take
 			 * several seconds during which no sampling occurs.
 			 */
-			charts->this_sample_duration = (this_delta / charts->sampling_interval) + .5f /* rounded to int */;
+			charts->this_sample_duration = (this_delta / charts->sampling_interval_secs) + .5f /* rounded to int */;
 
 			/* require > 1 contiguous drops before lowering the rate, tolerates spurious one-off stalls */
 			if (++charts->contiguous_drops > 2)
@@ -1359,8 +1358,8 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 		ret = vmon_sample(&charts->vmon);	/* XXX: calls proc_sample_callback() for explicitly monitored processes after sampling their descendants */
 							/* XXX: also calls sample_callback() per invocation after sampling the sys wants */
 
-		charts->sampling_paused = (charts->sampling_interval == INFINITY);
-		charts->prev_sampling_interval = charts->sampling_interval;
+		charts->sampling_paused = (charts->sampling_interval_secs == INFINITY);
+		charts->prev_sampling_interval_secs = charts->sampling_interval_secs;
 
 		/* "primed" is just a flag to ensure we always perform the first sample */
 		if (!charts->primed)
@@ -1368,7 +1367,7 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 	}
 
 	/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
-	*desired_delay_us = charts->sampling_interval == INFINITY ? -1 : charts->sampling_interval * 300.0;
+	*desired_delay_us = charts->sampling_interval_secs == INFINITY ? -1 : charts->sampling_interval_secs * 300.0;
 
 	return ret;
 }
