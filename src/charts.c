@@ -47,6 +47,7 @@
 #define CHART_VMON_SYS_WANTS		(VMON_WANT_SYS_STAT)
 #define CHART_MAX_COLUMNS		16
 #define CHART_DELTA_SECONDS_EPSILON	.001f				/* adherence errors smaller than this are treated as zero */
+#define CHART_NUM_FIXED_HEADER_ROWS	1				/* number of rows @ top before the hierarchy */
 
 /* the global charts state, supplied to vwm_chart_create() which keeps a reference for future use. */
 typedef struct _vwm_charts_t {
@@ -569,7 +570,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			if (heading)
 				str_len = snpf(str, sizeof(str), "Row");
 			else
-				str_len = snpf(str, sizeof(str), "%i", row);
+				str_len = snpf(str, sizeof(str), "%i", row - CHART_NUM_FIXED_HEADER_ROWS);
 
 			str_justify = VWM_JUSTIFY_LEFT;
 			/* this is kind of hacky, but libvmon doesn't monitor our row, it's implicitly "sampled" when we draw */
@@ -998,8 +999,9 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 		if (!prev_redraw_needed)
 			chart->redraw_needed = proc_hierarchy_changed(proc);
 	}
-	row++;
+	row = CHART_NUM_FIXED_HEADER_ROWS;
 
+	/* now everything else */
 	draw_chart_rest(charts, chart, proc, &depth, &row, deferred_pass, sample_duration_idx);
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
 		if (chart->redraw_needed > prev_redraw_needed) {
@@ -1149,7 +1151,7 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 
 	 /* FIXME: count_rows() isn't returning the right count sometimes (off by ~1), it seems to be related to racing with the automatic child monitoring */
 	 /* the result is an extra row sometimes appearing below the process hierarchy */
-	chart->hierarchy_end = 1 + count_rows(chart->proc);
+	chart->hierarchy_end = CHART_NUM_FIXED_HEADER_ROWS + count_rows(chart->proc);
 	chart->gen_last_composed = -1;
 
 	chart->vcr = vcr_new(charts->vcr_backend, &chart->hierarchy_end, &chart->snowflakes_cnt);
@@ -1358,14 +1360,14 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 			charts->last_user_cpu = sys_stat->user;
 			charts->last_system_cpu = sys_stat->system;
 			charts->last_total =	sys_stat->user +
-					sys_stat->nice +
-					sys_stat->system +
-					sys_stat->idle +
-					sys_stat->iowait +
-					sys_stat->irq +
-					sys_stat->softirq +
-					sys_stat->steal +
-					sys_stat->guest;
+						sys_stat->nice +
+						sys_stat->system +
+						sys_stat->idle +
+						sys_stat->iowait +
+						sys_stat->irq +
+						sys_stat->softirq +
+						sys_stat->steal +
+						sys_stat->guest;
 
 			charts->last_idle = sys_stat->idle;
 			charts->last_iowait = sys_stat->iowait;
