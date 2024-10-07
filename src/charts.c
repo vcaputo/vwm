@@ -524,7 +524,7 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 /* draw a proc row according to the columns configured in columns,
  * row==0 is treated specially as the heading row
  */
-static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t *columns, int depth, int row, const vmon_proc_t *proc)
+static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t *columns, int heading, int depth, int row, const vmon_proc_t *proc)
 {
 	vmon_sys_stat_t		*sys_stat = charts->vmon.stores[VMON_STORE_SYS_STAT];
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
@@ -553,7 +553,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 
 		switch (c->type) {
 		case VWM_COLUMN_VWM:
-			if (!row) /* "\/\/\ # name @ XXHz" is only relevant to the heading */
+			if (heading) /* "\/\/\ # name @ XXHz" is only relevant to the heading */
 				str_len = snpf(str, sizeof(str), "\\/\\/\\%s%s @ %2uHz ",
 					chart->name ? " # " : "",
 					chart->name ? chart->name : "",
@@ -564,7 +564,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			break;
 
 		case VWM_COLUMN_ROW: /* row in the chart */
-			if (!row)
+			if (heading)
 				str_len = snpf(str, sizeof(str), "Row");
 			else
 				str_len = snpf(str, sizeof(str), "%i", row);
@@ -575,7 +575,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			break;
 
 		case VWM_COLUMN_PROC_USER: /* User CPU time */
-			if (!row)
+			if (heading)
 				str_len = snpf(str, sizeof(str), "User");
 			else
 				str_len = snpf(str, sizeof(str), "%.2fs",
@@ -585,7 +585,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			break;
 
 		case VWM_COLUMN_PROC_SYS: /* Sys CPU time */
-			if (!row)
+			if (heading)
 				str_len = snpf(str, sizeof(str), "Sys");
 			else
 				str_len = snpf(str, sizeof(str), "%.2fs",
@@ -595,7 +595,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			break;
 
 		case VWM_COLUMN_PROC_WALL: /* User Sys Wall times */
-			if (!row)
+			if (heading)
 				str_len = snpf(str, sizeof(str), "Wall");
 			else if (!proc_stat->start || proc_stat->start > sys_stat->boottime)
 				str_len = snpf(str, sizeof(str), "??s");
@@ -611,7 +611,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 
 			advance = 0;	/* tree column manages its own advance; c->width is meaningless */
 
-			if (!row)	/* tree markup needs no heading */
+			if (heading)	/* tree markup needs no heading */
 				break;
 
 			assert(c->side == VWM_SIDE_LEFT); /* XXX: technically SIDE_RIGHT could work, but doesn't currently */
@@ -622,7 +622,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 		}
 
 		case VWM_COLUMN_PROC_ARGV: { /* print the process' argv */
-			if (!row) {
+			if (heading) {
 				str_len = snpf(str, sizeof(str), "ArgV/~ThreadName");
 				str_justify = VWM_JUSTIFY_LEFT;
 			} else {
@@ -638,7 +638,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 		}
 
 		case VWM_COLUMN_PROC_PID: /* print the process' PID */
-			if (!row)
+			if (heading)
 				str_len = snpf(str, sizeof(str), "PID");
 			else
 				str_len = snpf(str, sizeof(str), "%5i", proc->pid);
@@ -647,7 +647,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			break;
 
 		case VWM_COLUMN_PROC_WCHAN: /* print the process' wchan */
-			if (!row)
+			if (heading)
 				str_len = snpf(str, sizeof(str), "WChan");
 			else {
 
@@ -664,7 +664,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			break;
 
 		case VWM_COLUMN_PROC_STATE: /* print the process' state */
-			if (!row)
+			if (heading)
 				str_len = snpf(str, sizeof(str), "State");
 			else {
 				/* don't show process state for processes with threads, since their main thread will show it. */
@@ -809,7 +809,7 @@ static void draw_overlay_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc
 	if (!proc->is_new) /* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
 		vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
 
-	draw_columns(charts, chart, chart->columns, depth, row, proc);
+	draw_columns(charts, chart, chart->columns, 0 /* heading */, depth, row, proc);
 	shadow_row(charts, chart, row);
 }
 
@@ -882,8 +882,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 				chart->snowflakes_cnt++;
 
 				/* stamp the name (and whatever else we include) into chart.text_picture */
-				// print_argv(charts, chart, 5, chart->hierarchy_end, proc, NULL);
-				draw_columns(charts, chart, chart->snowflake_columns, 0, chart->hierarchy_end, proc);
+				draw_columns(charts, chart, chart->snowflake_columns, 0 /* heading */, 0 /* depth */, chart->hierarchy_end, proc);
 				shadow_row(charts, chart, chart->hierarchy_end);
 
 				chart->hierarchy_end--;
@@ -989,7 +988,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
 		if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval_secs != charts->sampling_interval_secs))) {
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, 0, -1, -1);
-			draw_columns(charts, chart, chart->columns, 0, 0, proc);
+			draw_columns(charts, chart, chart->columns, 1 /* heading */, 0 /* depth */, 0, proc);
 			shadow_row(charts, chart, 0);
 		}
 
