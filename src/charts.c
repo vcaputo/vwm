@@ -1362,7 +1362,7 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 	}
 
 	/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
-	*desired_delay_us = charts->sampling_interval_secs == INFINITY ? -1 : charts->sampling_interval_secs * 300.0;
+	*desired_delay_us = charts->sampling_interval_secs == INFINITY ? -1 : charts->sampling_interval_secs * 300000.0;
 
 	return ret;
 }

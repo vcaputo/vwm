@@ -51,6 +51,7 @@
  * positions.
  */
 
+#define _GNU_SOURCE	/* for ppoll() */
 #include <assert.h>
 #include <math.h>
 #include <poll.h>
@@ -412,9 +413,16 @@ int vcr_backend_get_dimensions(vcr_backend_t *vbe, int *res_width, int *res_heig
 /* returns 1 if the backend has events to process, 0 on timeout/error. */
 int vcr_backend_poll(vcr_backend_t *vbe, int timeout_us)
 {
-	/* FIXME TODO: should probably switch to ppoll() and keep signals blocked outside of
-	 * while blocked in ppoll().  Then ppoll() becomes our signal delivery/handling point...
-	 */
+	struct timespec	ts, *pto = NULL;
+
+	/* TODO: keep signals blocked outside of ppoll() */
+
+	if (timeout_us >= 0) {
+		ts.tv_sec = timeout_us / 10000000;
+		ts.tv_nsec = (timeout_us - (ts.tv_sec * 10000000)) * 1000;
+		pto = &ts;
+	}
+
 	switch (vbe->type) {
 #ifdef USE_XLIB
 	case VCR_BACKEND_TYPE_XLIB: {
@@ -426,11 +434,11 @@ int vcr_backend_poll(vcr_backend_t *vbe, int timeout_us)
 		if (XPending(vbe->xlib.xserver->display))
 			return 1;
 
-		return poll(&pfd, 1, timeout_us);
+		return ppoll(&pfd, 1, pto, NULL);
 	}
 #endif
 	case VCR_BACKEND_TYPE_MEM:
-		return poll(NULL, 0, timeout_us);
+		return ppoll(NULL, 0, pto, NULL);
 
 	default:
 		assert(0);
