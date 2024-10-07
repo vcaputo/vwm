@@ -40,12 +40,13 @@
 #include "vwm.h"
 #endif
 
-#define CHART_ISTHREAD_ARGV	"~"					/* use this string to mark threads in the argv field */
-#define CHART_NOCOMM_ARGV	"# missed it!"				/* use this string to substitute the command when missing in argv field */
-#define CHART_MAX_ARGC		64					/* this is a huge amount */
-#define CHART_VMON_PROC_WANTS	(VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS)
-#define CHART_VMON_SYS_WANTS	(VMON_WANT_SYS_STAT)
-#define CHART_MAX_COLUMNS	16
+#define CHART_ISTHREAD_ARGV		"~"				/* use this string to mark threads in the argv field */
+#define CHART_NOCOMM_ARGV		"# missed it!"			/* use this string to substitute the command when missing in argv field */
+#define CHART_MAX_ARGC			64				/* this is a huge amount */
+#define CHART_VMON_PROC_WANTS		(VMON_WANT_PROC_STAT | VMON_WANT_PROC_FOLLOW_CHILDREN | VMON_WANT_PROC_FOLLOW_THREADS)
+#define CHART_VMON_SYS_WANTS		(VMON_WANT_SYS_STAT)
+#define CHART_MAX_COLUMNS		16
+#define CHART_DELTA_SECONDS_EPSILON	.001f				/* adherence errors smaller than this are treated as zero */
 
 /* the global charts state, supplied to vwm_chart_create() which keeps a reference for future use. */
 typedef struct _vwm_charts_t {
@@ -1296,16 +1297,29 @@ static float delta(struct timeval *cur, struct timeval *prev)
 }
 
 
+static inline int delta_close_enough(vwm_charts_t *charts, float delta)
+{
+	float	remainder = charts->sampling_interval_secs - delta;
+
+	/* if within .1ms of the scheduled next sample (or behind schedule at all), consider it "close enough" and take the sample. */
+	if (remainder <= CHART_DELTA_SECONDS_EPSILON)
+		return 1;
+
+	return 0;
+}
+
+
 /* update the charts if necessary, return if updating occurred, and duration before another update needed in *desired_delay_us */
 int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 {
+	int	ret = 0, sampled = 0;
 	float	this_delta = 0.0f;
-	int	ret = 0;
 
 	gettimeofday(&charts->maybe_sample, NULL);
+	this_delta = delta(&charts->maybe_sample, &charts->this_sample);
 	if (!charts->primed ||
 	    (charts->sampling_interval_secs == INFINITY && !charts->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
-	    (charts->sampling_interval_secs != INFINITY && ((this_delta = delta(&charts->maybe_sample, &charts->this_sample)) >= charts->sampling_interval_secs))) {
+	    (charts->sampling_interval_secs != INFINITY && delta_close_enough(charts, this_delta))) {
 		vmon_sys_stat_t	*sys_stat;
 
 		/* automatically lower the sample rate if we can't keep up with the current sample rate */
@@ -1359,10 +1373,30 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 		/* "primed" is just a flag to ensure we always perform the first sample */
 		if (!charts->primed)
 			charts->primed = 1;
+
+		sampled = 1;
 	}
 
-	/* TODO: make some effort to compute how long to sleep, but this is perfectly fine for now. */
-	*desired_delay_us = charts->sampling_interval_secs == INFINITY ? -1 : charts->sampling_interval_secs * 300000.0;
+	if (charts->sampling_interval_secs == INFINITY) {
+		*desired_delay_us = -1; /* sleep forever */
+	} else {
+		float	remaining_secs;
+
+		if (sampled) {	/* sampling takes time, so let's subtract that from the interval-derived sleep time to try get the next sample started on-time (if possible) */
+			struct timeval	post_sampled;
+
+			gettimeofday(&post_sampled, NULL);
+			this_delta += delta(&post_sampled, &charts->this_sample);
+		}
+
+		remaining_secs = charts->sampling_interval_secs - this_delta;
+		if (remaining_secs <= 0) {
+			/* always sleep some minimal amount, we don't want to spin */
+			*desired_delay_us = CHART_DELTA_SECONDS_EPSILON * 1000000.f;
+		} else {
+			*desired_delay_us = remaining_secs * 1000000.f;
+		}
+	}
 
 	return ret;
 }
