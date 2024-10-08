@@ -321,17 +321,12 @@ void vwm_process_event(vwm_t *vwm)
 
 int main(int argc, char *argv[])
 {
-	vwm_t		*vwm;
-	struct pollfd	pfd;
+	vwm_t	*vwm;
 
 	if (!(vwm = vwm_startup())) {
 		VWM_ERROR("Unable to startup vwm");
 		goto _err;
 	}
-
-	pfd.events = POLLIN;
-	pfd.revents = 0;
-	pfd.fd = ConnectionNumber(VWM_XDISPLAY(vwm));
 
 	while (!vwm->done) {
 		do {
@@ -340,10 +335,8 @@ int main(int argc, char *argv[])
 			if (vwm_charts_update(vwm->charts, &delay_us))
 				vwm_composite_repaint_needed(vwm);
 
-			if (!XPending(VWM_XDISPLAY(vwm))) {
-				if (poll(&pfd, 1, delay_us) == 0)
-					break;
-			}
+			if (vcr_backend_poll(vwm->vcr_backend, delay_us) == 0)
+				break;
 
 			vwm_process_event(vwm);
 		} while (QLength(VWM_XDISPLAY(vwm)));
