@@ -22,7 +22,7 @@
 #include <math.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include <sys/time.h>
+#include <time.h>
 
 #ifdef USE_XLIB
 #include <X11/extensions/Xfixes.h>
@@ -54,7 +54,7 @@ typedef struct _vwm_charts_t {
 	vcr_backend_t				*vcr_backend;	/* supplied to vwm_charts_create() */
 
 	/* libvmon */
-	struct timeval				maybe_sample, last_sample, this_sample;
+	struct timespec				maybe_sample, last_sample, this_sample;
 	unsigned				this_sample_duration;
 	float					this_sample_adherence;	/* 0 = on time, (+) behind schedule, (-) ahead of schedule(TODO), units is fraction of .sampling_interval_secs */
 	typeof(((vmon_sys_stat_t *)0)->user)	last_user_cpu;
@@ -219,7 +219,7 @@ vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 	charts->vmon.proc_dtor_cb = vmon_dtor_cb;
 	charts->vmon.sample_cb = sample_callback;
 	charts->vmon.sample_cb_arg = charts;
-	gettimeofday(&charts->this_sample, NULL);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &charts->this_sample);
 
 	return charts;
 
@@ -1293,16 +1293,22 @@ void vwm_charts_rate_set(vwm_charts_t *charts, unsigned hertz)
 
 
 /* convenience function for returning the time delta as a seconds.fraction float */
-static float delta(struct timeval *cur, struct timeval *prev)
+static float delta(struct timespec *cur, struct timespec *prev)
 {
-	struct timeval	res;
+	struct timespec	res;
 	float		delta;
 
 	/* determine the # of whole.fractional seconds between prev and cur */
-	timersub(cur, prev, &res);
+	/* this is basically open-coded timersub() to operate on timespec */
+	res.tv_sec = cur->tv_sec - prev->tv_sec;
+	res.tv_nsec = cur->tv_nsec - prev->tv_nsec;
+	if (res.tv_nsec < 0 ) {
+		res.tv_sec--;
+		res.tv_nsec += 1000000000;
+	}
 
 	delta = res.tv_sec;
-	delta += (float)((float)res.tv_usec) / 1000000.0;
+	delta += (float)((float)res.tv_nsec) * .000000001f;
 
 	return delta;
 }
@@ -1326,7 +1332,7 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 	int	ret = 0, sampled = 0;
 	float	this_delta = 0.0f;
 
-	gettimeofday(&charts->maybe_sample, NULL);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &charts->maybe_sample);
 	this_delta = delta(&charts->maybe_sample, &charts->this_sample);
 	if (!charts->primed ||
 	    (charts->sampling_interval_secs == INFINITY && !charts->sampling_paused) || /* XXX this is kind of a kludge to get the 0 Hz indicator drawn before pausing */
@@ -1400,9 +1406,9 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 		float	remaining_secs;
 
 		if (sampled) {	/* sampling takes time, so let's subtract that from the interval-derived sleep time to try get the next sample started on-time (if possible) */
-			struct timeval	post_sampled;
+			struct timespec	post_sampled;
 
-			gettimeofday(&post_sampled, NULL);
+			clock_gettime(CLOCK_MONOTONIC_RAW, &post_sampled);
 			this_delta += delta(&post_sampled, &charts->this_sample);
 		}
 
