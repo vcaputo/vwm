@@ -225,6 +225,8 @@ static XRenderPictureAttributes	pa_no_repeat = { .repeat = 0 };
 /* convenience helper for creating a pixmap */
 static Pixmap create_pixmap(vwm_xserver_t *xserver, unsigned width, unsigned height, unsigned depth)
 {
+	assert(xserver);
+
 	return XCreatePixmap(xserver->display, XSERVER_XROOT(xserver), width, height, depth);
 }
 
@@ -232,9 +234,11 @@ static Pixmap create_pixmap(vwm_xserver_t *xserver, unsigned width, unsigned hei
 /* convenience helper for creating a picture, supply res_pixmap to keep a reference to the pixmap drawable. */
 static Picture create_picture(vwm_xserver_t *xserver, unsigned width, unsigned height, unsigned depth, unsigned long attr_mask, XRenderPictureAttributes *attr, Pixmap *res_pixmap)
 {
-	Pixmap		pixmap;
-	Picture		picture;
-	int		format;
+	Pixmap	pixmap;
+	Picture	picture;
+	int	format;
+
+	assert(xserver);
 
 	/* FIXME this pixmap->picture dance seems silly, investigate further. TODO */
 	switch (depth) {
@@ -264,7 +268,9 @@ static Picture create_picture(vwm_xserver_t *xserver, unsigned width, unsigned h
 /* convenience helper for creating a filled picture, supply res_pixmap to keep a reference to the pixmap drawable. */
 static Picture create_picture_fill(vwm_xserver_t *xserver, unsigned width, unsigned height, unsigned depth, unsigned long attrs_mask, XRenderPictureAttributes *attrs, const XRenderColor *color, Pixmap *res_pixmap)
 {
-	Picture		picture;
+	Picture	picture;
+
+	assert(xserver);
 
 	picture = create_picture(xserver, width, height, depth, attrs_mask, attrs, res_pixmap);
 	XRenderFillRectangle(xserver->display, PictOpSrc, picture, color, 0, 0, width, height);
@@ -414,6 +420,8 @@ int vcr_backend_get_dimensions(vcr_backend_t *vbe, int *res_width, int *res_heig
 int vcr_backend_poll(vcr_backend_t *vbe, int timeout_us)
 {
 	struct timespec	ts, *pto = NULL;
+
+	assert(vbe);
 
 	/* TODO: keep signals blocked outside of ppoll() */
 
@@ -820,6 +828,7 @@ vcr_t * vcr_free(vcr_t *vcr)
 int vcr_resize_visible(vcr_t *vcr, int width, int height)
 {
 	assert(vcr);
+	assert(vcr->backend);
 	assert(width > 0);
 	assert(height > 0);
 
@@ -1128,6 +1137,7 @@ void vcr_draw_ortho_line(vcr_t *vcr, vcr_layer_t layer, int x1, int y1, int x2, 
 void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row)
 {
 	assert(vcr);
+	assert(vcr->backend);
 	assert(row >= 0);
 	/* FIXME: the layers in backend/vcr etc should be in a layer-indexable array */
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
@@ -1190,6 +1200,7 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, double t, int min_heig
 	int	height, y = row * VCR_ROW_HEIGHT;
 
 	assert(vcr);
+	assert(vcr->backend);
 	assert(row >= 0);
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
 	assert(min_height >= 0 && min_height < (VCR_ROW_HEIGHT - 1));
@@ -1260,6 +1271,7 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, double t, int min_heig
 void vcr_clear_row(vcr_t *vcr, vcr_layer_t layer, int row, int x, int width)
 {
 	assert(vcr);
+	assert(vcr->backend);
 	assert(layer < VCR_LAYER_CNT);
 	assert(row >= 0);
 
@@ -1446,6 +1458,7 @@ void vcr_shift_below_row_down_one(vcr_t *vcr, int row)
 void vcr_shadow_row(vcr_t *vcr, vcr_layer_t layer, int row)
 {
 	assert(vcr);
+	assert(vcr->backend);
 	assert(layer == VCR_LAYER_TEXT);
 	assert(row >= 0);
 
@@ -2122,6 +2135,12 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 	png_bytepp		row_pointers;
 	uint8_t			*row_pixels;
 	size_t			row_stride = vcr->width >> 1;
+
+	assert(vcr);
+	assert(vcr->backend);
+	assert(vcr->backend->type == VCR_BACKEND_TYPE_MEM);
+	assert(dest);
+	assert(dest->type == VCR_DEST_TYPE_PNG);
 
 	row_pixels = malloc(VCR_ROW_HEIGHT * row_stride);
 	if (!row_pixels)
