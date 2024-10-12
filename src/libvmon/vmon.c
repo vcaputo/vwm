@@ -52,6 +52,8 @@ typedef enum _sample_ret_t {
 /* some private convenience functions */
 static void try_free(void **ptr)
 {
+	assert(ptr);
+
 	if ((*ptr)) {
 		free((*ptr));
 		(*ptr) = NULL;
@@ -61,6 +63,8 @@ static void try_free(void **ptr)
 
 static void try_close(int *fd)
 {
+	assert(fd);
+
 	if ((*fd) != -1) {
 		close((*fd));
 		(*fd) = -1;
@@ -70,6 +74,8 @@ static void try_close(int *fd)
 
 static void try_closedir(DIR **dir)
 {
+	assert(dir);
+
 	if ((*dir)) {
 		closedir((*dir));
 		(*dir) = NULL;
@@ -79,6 +85,8 @@ static void try_closedir(DIR **dir)
 
 static ssize_t try_pread(int fd, void *buf, size_t count, off_t offset)
 {
+	assert(buf);
+
 	if (fd != -1) {
 		return pread(fd, buf, count, offset);
 	} else {
@@ -90,9 +98,13 @@ static ssize_t try_pread(int fd, void *buf, size_t count, off_t offset)
 
 /* this does a copy from src to dest
  * sets the bit specified by changed_pos in the bitmap *changed if what was copied to src was different from what was already there */
-static void memcmpcpy(void *dest, const void *src, size_t n, char *changed, int changed_pos)
+static void memcmpcpy(void *dest, const void *src, size_t n, char *changed, unsigned changed_pos)
 {
 	size_t	i = 0;
+
+	assert(dest);
+	assert(src);
+	assert(changed);
 
 	/* if the changed bit is set on entry we don't execute the comparison-copy */
 	if (!BITTEST(changed, changed_pos)) {
@@ -120,10 +132,17 @@ typedef enum _vmon_load_flags_t {
 } vmon_load_flags_t;
 
 /* we enlarge *alloc if necessary, but never shrink it.  changed[changed_pos] bit is set if a difference is detected, supply LOAD_FLAGS_NOTRUNCATE if we don't want empty contents to truncate last-known data */
-static int load_contents_fd(vmon_t *vmon, vmon_char_array_t *array, int fd, vmon_load_flags_t flags, char *changed, int changed_pos)
+static int load_contents_fd(vmon_t *vmon, vmon_char_array_t *array, int fd, vmon_load_flags_t flags, char *changed, unsigned changed_pos)
 {
 	size_t	total = 0;
 	ssize_t	len;
+
+	assert(vmon);
+	assert(array);
+	assert(changed);
+
+	if (fd < 0) /* no use attempting the pread() on -1 fds */
+		return 0;
 
 	/* FIXME: this is used to read proc files, you can't actually read proc files iteratively
 	 * without race conditions; it needs to be all done as a single read.
@@ -167,6 +186,10 @@ static int openf(vmon_t *vmon, int flags, DIR *dir, char *fmt, ...)
 	va_list	va_arg;
 	char	buf[4096];
 
+	assert(vmon);
+	assert(dir);
+	assert(fmt);
+
 	va_start(va_arg, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, va_arg); /* XXX accepting the possibility of truncating the path */
 	va_end(va_arg);
@@ -184,6 +207,10 @@ static DIR * opendirf(vmon_t *vmon, DIR *dir, char *fmt, ...)
 	va_list	va_arg;
 	char	buf[4096];
 
+	assert(vmon);
+	assert(dir);
+	assert(fmt);
+
 	va_start(va_arg, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, va_arg); /* XXX accepting the possibility of truncating the path */
 	va_end(va_arg);
@@ -200,6 +227,8 @@ static DIR * opendirf(vmon_t *vmon, DIR *dir, char *fmt, ...)
 static int grow_array(vmon_char_array_t *array, size_t amount)
 {
 	char	*tmp;
+
+	assert(array);
 
 	tmp = realloc(array->array, array->alloc_len + amount);
 	if (!tmp)
@@ -220,6 +249,11 @@ static int readlinkf(vmon_t *vmon, vmon_char_array_t *array, DIR *dir, char *fmt
 	char	buf[4096];
 	va_list	va_arg;
 	ssize_t	len;
+
+	assert(vmon);
+	assert(array);
+	assert(dir);
+	assert(fmt);
 
 	va_start(va_arg, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, va_arg);
@@ -259,6 +293,9 @@ static sample_ret_t proc_sample_stat(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_
 	vmon_proc_stat_fsm_t	state = VMON_PARSER_STATE_PROC_STAT_PID;
 #define VMON_PREPARE_PARSER
 #include "defs/proc_stat.def"
+
+	assert(vmon);
+	assert(store);
 
 	if (!proc) { /* dtor */
 		try_close(&(*store)->comm_fd);
@@ -364,6 +401,9 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 	int		len, total = 0, i, child_pid = 0, found;
 	vmon_proc_t	*tmp, *_tmp;
 	list_head_t	*cur, *start;
+
+	assert(vmon);
+	assert(store);
 
 	if (!proc) { /* dtor */
 		try_close(&(*store)->children_fd);
@@ -471,6 +511,9 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 	vmon_proc_t	*tmp, *_tmp;
 	int		found;
 
+	assert(vmon);
+	assert(store);
+
 	if (!proc) { /* dtor */
 		try_closedir(&(*store)->task_dir);
 
@@ -546,8 +589,10 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 /* helper for maintaining reference counted global objects table */
 static vmon_fobject_t * fobject_lookup_hinted(vmon_t *vmon, const char *path, vmon_fobject_t *hint)
 {
-	vmon_fobject_t		*fobject = NULL, *tmp = NULL;
-	uint64_t		inum;
+	vmon_fobject_t	*fobject = NULL, *tmp = NULL;
+	uint64_t	inum;
+
+	assert(vmon);
 
 	/* TODO maintain the fobject hash tables, they should probably be isolated/scoped based on the string before the : */
 	/* in reality there needs to be a list somewhere of the  valid prefixes we wish to support, and that list should associate
@@ -592,6 +637,9 @@ static vmon_fobject_t * fobject_lookup_hinted(vmon_t *vmon, const char *path, vm
 /* add a reference to an fobject, fd_ref is optional (should be present if the reference is due to an open fd, which may not be the case) */
 static void fobject_ref(vmon_t *vmon, vmon_fobject_t *fobject, vmon_proc_fd_t *fd_ref)
 {
+	assert(vmon);
+	assert(fobject);
+
 	fobject->refcnt++;
 
 	if (fd_ref)
@@ -602,6 +650,9 @@ static void fobject_ref(vmon_t *vmon, vmon_fobject_t *fobject, vmon_proc_fd_t *f
 /* fobject is required and is the object being unrefereced,  fd_ref is optional but represents the per-process fd reference being used to access this fobject via */
 static int fobject_unref(vmon_t *vmon, vmon_fobject_t *fobject, vmon_proc_fd_t *fd_ref)
 {
+	assert(vmon);
+	assert(fobject);
+
 	if (fd_ref)
 		list_del(&fd_ref->ref_fds);
 
@@ -626,6 +677,9 @@ static int fobject_unref(vmon_t *vmon, vmon_fobject_t *fobject, vmon_proc_fd_t *
 /* helper for deleting an fd from the per-process fds list list */
 static void del_fd(vmon_t *vmon, vmon_proc_fd_t *fd)
 {
+	assert(vmon);
+	assert(fd);
+
 	list_del(&fd->fds);
 	if (fd->object)
 		fobject_unref(vmon, fd->object, fd); /* note we supply both the fobject ptr and proc_fd ptr (fd) */
@@ -643,6 +697,9 @@ static sample_ret_t proc_sample_files(vmon_t *vmon, vmon_proc_t *proc, vmon_proc
 	list_head_t	*cur, *start;
 	vmon_proc_fd_t	*fd, *_fd;
 	vmon_fobject_t	*cur_object = NULL;
+
+	assert(vmon);
+	assert(store);
 
 	if (!proc) {
 		/* dtor implementation */
@@ -765,6 +822,9 @@ static sample_ret_t proc_sample_vm(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_vm
 #define VMON_PREPARE_PARSER
 #include "defs/proc_vm.def"
 
+	assert(vmon);
+	assert(store);
+
 	if (!proc) { /* dtor */
 		try_close(&(*store)->statm_fd);
 
@@ -821,6 +881,9 @@ static sample_ret_t proc_sample_io(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_io
 	vmon_proc_io_fsm_t	state = VMON_PARSER_STATE_PROC_IO_RCHAR_LABEL;
 #define VMON_PREPARE_PARSER
 #include "defs/proc_io.def"
+
+	assert(vmon);
+	assert(store);
 
 	if (!proc) { /* dtor */
 		try_close(&(*store)->io_fd);
@@ -883,6 +946,8 @@ static sample_ret_t sys_sample_stat(vmon_t *vmon, vmon_sys_stat_t **store)
 #define VMON_PREPARE_PARSER
 #include "defs/sys_stat.def"
 
+	assert(store);
+
 	if (!vmon) { /* dtor */
 		try_close(&(*store)->stat_fd);
 		return DTOR_FREE;
@@ -942,6 +1007,8 @@ static sample_ret_t sys_sample_vm(vmon_t *vmon, vmon_sys_vm_t **store)
 #define VMON_PREPARE_PARSER
 #include "defs/sys_vm.def"
 
+	assert(store);
+
 	if (!vmon) { /* dtor */
 		try_close(&(*store)->meminfo_fd);
 		return DTOR_FREE;
@@ -984,6 +1051,8 @@ _out:
 int vmon_init(vmon_t *vmon, vmon_flags_t flags, vmon_sys_wants_t sys_wants, vmon_proc_wants_t proc_wants)
 {
 	int	i;
+
+	assert(vmon);
 
 	if ((flags & VMON_FLAG_PROC_ALL) && (proc_wants & VMON_WANT_PROC_FOLLOW_CHILDREN))
 		return 0;
@@ -1047,6 +1116,8 @@ static int find_proc_in_array(vmon_t *vmon, vmon_proc_t *proc, int hint)
 {
 	int	ret = -1;
 
+	assert(vmon);
+
 	if (hint >= 0 && hint < vmon->array_allocated_nr && vmon->array[hint] == proc) {
 		/* the hint was accurate, bypass the search */
 		ret = hint;
@@ -1083,6 +1154,10 @@ static int find_proc_in_array(vmon_t *vmon, vmon_proc_t *proc, int hint)
 /* will not install the same callback function & arg combination more than once, and will not install NULL-functioned callbacks at all! */
 static int maybe_install_proc_callback(vmon_t *vmon, list_head_t *callbacks, void (*func)(vmon_t *, void *, vmon_proc_t *, void *), void *arg)
 {
+	assert(vmon);
+	assert(callbacks);
+	assert(!arg || func);
+
 	if (func) {
 		vmon_proc_callback_t	*cb;
 
@@ -1114,6 +1189,9 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 	vmon_proc_t	*proc;
 	int		hash = (pid % VMON_HTAB_SIZE), i;
 	int		is_thread = (wants & VMON_INTERNAL_PROC_IS_THREAD) ? 1 : 0;
+
+	assert(vmon);
+	assert(!sample_cb_arg || sample_cb);
 
 	wants &= ~VMON_INTERNAL_PROC_IS_THREAD;
 
@@ -1215,6 +1293,10 @@ void vmon_proc_unmonitor(vmon_t *vmon, vmon_proc_t *proc, void (*sample_cb)(vmon
 	vmon_proc_t	*child, *_child;
 	int		i;
 
+	assert(vmon);
+	assert(proc);
+	assert(!sample_cb_arg || sample_cb);
+
 	if (sample_cb) { /* uninstall callback */
 		vmon_proc_callback_t	*cb, *_cb;
 
@@ -1300,6 +1382,9 @@ static void sample(vmon_t *vmon, vmon_proc_t *proc)
 {
 	int	i, wants, cur;
 
+	assert(vmon);
+	assert(proc);
+
 	proc->children_changed = proc->threads_changed = 0;
 
 	/* load this process monitors wants, or inherit the default */
@@ -1322,6 +1407,9 @@ static int sample_threads(vmon_t *vmon, list_head_t *threads)
 {
 	vmon_proc_t	*proc;
 
+	assert(vmon);
+	assert(threads);
+
 	list_for_each_entry(proc, threads, threads) {
 		sample(vmon, proc);
 
@@ -1342,6 +1430,9 @@ static int sample_threads(vmon_t *vmon, list_head_t *threads)
 static int sample_siblings_unipass(vmon_t *vmon, list_head_t *siblings)
 {
 	vmon_proc_t	*proc, *_proc;
+
+	assert(vmon);
+	assert(siblings);
 
 	list_for_each_entry_safe(proc, _proc, siblings, siblings) {
 		vmon_proc_callback_t	*cb;
@@ -1390,6 +1481,9 @@ static int sample_siblings_pass1(vmon_t *vmon, list_head_t *siblings)
 {
 	vmon_proc_t	*proc, *_proc;
 
+	assert(vmon);
+	assert(siblings);
+
 	/* invoke samplers */
 	list_for_each_entry_safe(proc, _proc, siblings, siblings) {
 		sample(vmon, proc);			/* invoke samplers for this node */
@@ -1425,6 +1519,9 @@ static int sample_siblings_pass2(vmon_t *vmon, list_head_t *siblings)
 {
 	vmon_proc_t	*proc;
 
+	assert(vmon);
+	assert(siblings);
+
 	/* invoke callbacks */
 	list_for_each_entry(proc, siblings, siblings) {
 		vmon_proc_callback_t	*cb;
@@ -1450,6 +1547,8 @@ static int sample_siblings_pass2(vmon_t *vmon, list_head_t *siblings)
 int vmon_sample(vmon_t *vmon)
 {
 	int	i, wants, cur, ret = 1;
+
+	assert(vmon);
 
 	vmon->generation++;
 
