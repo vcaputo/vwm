@@ -991,7 +991,7 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, int x, int row, const vcr_str_
 #endif /* USE_XLIB */
 
 	case VCR_BACKEND_TYPE_MEM: {
-		if (row >= 0 && row * VCR_ROW_HEIGHT < vcr->height) {
+		if (row >= 0 && (row + 1) * VCR_ROW_HEIGHT < vcr->height) {
 			int	y = row * VCR_ROW_HEIGHT + 3;
 			uint8_t	mask = (0x1 << layer);
 

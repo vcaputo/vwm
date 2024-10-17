@@ -798,6 +798,7 @@ static int vmon_snapshot(vmon_t *vmon)
 #endif
 }
 
+
 /* handle the next backend event, may block */
 static void vmon_process_event(vmon_t *vmon)
 {
