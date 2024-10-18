@@ -1347,10 +1347,7 @@ void vcr_clear_row(vcr_t *vcr, vcr_layer_t layer, int row, int x, int width)
 }
 
 
-/* copy what's below a given row up the specified amount across all the layers */
-/* XXX: note for now we expect (and assert) rows == 1, to simplify TYPE_MEM,
- * this is acceptable for all existing call sites
- */
+/* copy what's below a given row up by one row across all the layers */
 void vcr_shift_below_row_up_one(vcr_t *vcr, int row)
 {
 	assert(vcr);
@@ -1390,6 +1387,22 @@ void vcr_shift_below_row_up_one(vcr_t *vcr, int row)
 		uint8_t	*dest = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->mem.pitch];
 		uint8_t	*src = &vcr->mem.bits[(1 + row) * VCR_ROW_HEIGHT * vcr->mem.pitch];
 		size_t	len = ((1 + *(vcr->hierarchy_end_ptr)) - (1 + row)) * VCR_ROW_HEIGHT * vcr->mem.pitch;
+
+		assert(*(vcr->hierarchy_end_ptr) >= row);
+
+		/* (hierarchy_end * VCR_ROW_HEIGHT) may overflow vcr->height, as it's not kept clipped.
+		 * It more represents where the process hierarchy virtually ends - which may or may not stay within
+		 * the chart's allocated area.  So len must be clamped here to ensure we're not attempting
+		 * to copy out of bounds.
+		 */
+		len = MIN(len, &vcr->mem.bits[vcr->height * vcr->mem.pitch] - src);
+
+		assert(src + len <= vcr->mem.bits + vcr->mem.pitch * vcr->height);
+		assert(dest + len <= vcr->mem.bits + vcr->mem.pitch * vcr->height);
+
+		/* XXX the xlib backend enjoys some luxuries in dealing with clipping that must be dealt with manually here,
+		 * and that just hasn't been entirely fleshed out beyond "do enough to at least not segfault"
+		 */
 
 		memmove(dest, src, len);
 		break;
