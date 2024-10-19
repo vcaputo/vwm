@@ -48,6 +48,7 @@ typedef struct vmon_t {
 	time_t		start_time;
 	int		snapshots_interval;
 	int		snapshot;
+	int		marker_distance;
 	int		now_names;
 	int		headless;
 	int		hertz;
@@ -189,6 +190,7 @@ static void print_help(void)
 		" -h  --help        Show this help\n"
 		" -H  --height      Chart height\n"
 		" -l  --linger      Don't exit when top-level process exits\n"
+		" -m  --markers     Draw markers every N pixels in row borders (0 disables)\n"
 		" -n  --name        Name of chart, shows in window title and output filenames\n"
 		" -N  --now-names   Use current time in filenames instead of start time\n"
 		" -o  --output-dir  Directory to store saved output to (\".\" if unspecified)\n"
@@ -420,6 +422,11 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 				return 0;
 
 			last = ++argv;
+		} else if (is_flag(*argv, "-m", "--markers")) {
+			if (!parse_flag_int(argv, end, argv + 1, 0, INT_MAX, &vmon->marker_distance))
+				return 0;
+
+			last = ++argv;
 		} else if (is_flag(*argv, "-o", "--output-dir")) {
 			if (!parse_flag_str(argv, end, argv + 1, 1, &vmon->output_dir))
 				return 0;
@@ -621,6 +628,9 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 
 	if (vmon->hertz)
 		vwm_charts_rate_set(vmon->charts, vmon->hertz);
+
+	if (vmon->marker_distance)
+		vwm_charts_marker_distance_set(vmon->charts, vmon->marker_distance);
 
 	if (signal(SIGUSR1, handle_sigusr1) == SIG_ERR) {
 		VWM_PERROR("unable to set SIGUSR1 handler");
