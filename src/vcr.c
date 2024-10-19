@@ -1195,7 +1195,7 @@ void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row)
  *
  * the only layers supported right now are grapha/graphb
  */
-void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, double t, int min_height)
+void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, float t, int min_height)
 {
 	int	height, y = row * VCR_ROW_HEIGHT;
 
@@ -1208,7 +1208,7 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, double t, int min_heig
 	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
-	height = fabs(t) * (double)(VCR_ROW_HEIGHT - 1);
+	height = fabsf(t) * (float)(VCR_ROW_HEIGHT - 1);
 
 	if (height < min_height)
 		height = min_height;

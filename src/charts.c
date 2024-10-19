@@ -56,7 +56,7 @@ typedef struct _vwm_charts_t {
 	/* libvmon */
 	struct timespec				maybe_sample, last_sample, this_sample;
 	unsigned				this_sample_duration;
-	float					this_sample_adherence;	/* 0 = on time, (+) behind schedule, (-) ahead of schedule(TODO), units is fraction of .sampling_interval_secs */
+	float					this_sample_adherence;	/* 0 = on time, (+) behind schedule, (-) ahead of schedule, units is fraction of .sampling_interval_secs */
 	typeof(((vmon_sys_stat_t *)0)->user)	last_user_cpu;
 	typeof(((vmon_sys_stat_t *)0)->system)	last_system_cpu;
 	unsigned long long			last_total, this_total, total_delta;
@@ -210,7 +210,7 @@ vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 	if (flags & VWM_CHARTS_FLAG_DEFER_MAINTENANCE)
 		charts->defer_maintenance = 1;
 
-	charts->prev_sampling_interval_secs = charts->sampling_interval_secs = 0.1f;	/* default to 10Hz */
+	charts->prev_sampling_interval_secs = charts->sampling_interval_secs = .1f;	/* default to 10Hz */
 
 	if (!vmon_init(&charts->vmon, VMON_FLAG_2PASS, CHART_VMON_SYS_WANTS, CHART_VMON_PROC_WANTS)) {
 		VWM_ERROR("unable to initialize libvmon");
@@ -374,7 +374,7 @@ static int proc_hierarchy_changed(vmon_proc_t *proc)
 
 
 /* helper for drawing the vertical bars in the graph layers */
-static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, double mult, double a_fraction, double inv_a_total, double b_fraction, double inv_b_total)
+static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, float mult, float a_fraction, float inv_a_total, float b_fraction, float inv_b_total)
 {
 	float	a_t, b_t;
 
@@ -384,8 +384,8 @@ static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, double 
 
 	/* ensure at least 1 pixel when the scaled result is a fraction less than 1,
 	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
-	vcr_draw_bar(chart->vcr, VCR_LAYER_GRAPHA, row, a_t, a_fraction > 0 ? 1 : 0);
-	vcr_draw_bar(chart->vcr, VCR_LAYER_GRAPHB, row, b_t, b_fraction > 0 ? 1 : 0);
+	vcr_draw_bar(chart->vcr, VCR_LAYER_GRAPHA, row, a_t, a_fraction > 0 ? 1 : 0 /* min_height */);
+	vcr_draw_bar(chart->vcr, VCR_LAYER_GRAPHB, row, b_t, b_fraction > 0 ? 1 : 0 /* min_height */);
 }
 
 
@@ -829,7 +829,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 	vmon_proc_stat_t	*proc_stat = proc->stores[VMON_STORE_PROC_STAT];
 	vwm_perproc_ctxt_t	*proc_ctxt = proc->foo;
 	vmon_proc_t		*child;
-	double			utime_delta, stime_delta;
+	float			utime_delta, stime_delta;
 
 	/* Some parts of this we must do on every sample to maintain coherence in the graphs, since they're incrementally kept
 	 * in sync with the process hierarchy, allocating and shifting the rows as processes are created and destroyed.  Everything
@@ -955,10 +955,8 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 			utime_delta = proc_ctxt->utime_delta;
 		}
 
-		draw_bars(charts,
-			chart,
-			*row,
-			(proc->is_thread || !proc->is_threaded) ? charts->vmon.num_cpus : 1.0,
+		draw_bars(charts, chart, *row,
+			(proc->is_thread || !proc->is_threaded) ? charts->vmon.num_cpus : 1.f /* mult */,
 			stime_delta,
 			charts->inv_total_delta,
 			utime_delta,
@@ -992,9 +990,20 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	int	row = 0, depth = 0;
 
 	/* IOWait and Idle % @ row 0 */
-	draw_bars(charts, chart, row, 1.0, charts->iowait_delta, charts->inv_total_delta, charts->idle_delta, charts->inv_total_delta);
+	draw_bars(charts, chart, row,
+		1.f /* mult */,
+		charts->iowait_delta,
+		charts->inv_total_delta,
+		charts->idle_delta,
+		charts->inv_total_delta);
+
 	/* "adherence" @ row 1 */
-	draw_bars(charts, chart, row + 1, 1.0, charts->this_sample_adherence > 0.f ? charts->this_sample_adherence : 0.f /* a_fraction */, 1.f /* inv_a_total */, charts->this_sample_adherence < 0.f ? -charts->this_sample_adherence : 0.f /* b_fraction */, /* inv_b_total */ 1.f);
+	draw_bars(charts, chart, row + 1,
+		1.f /* mult */,
+		charts->this_sample_adherence > 0.f ? charts->this_sample_adherence : 0.f /* a_fraction */,
+		1.f /* inv_a_total */,
+		charts->this_sample_adherence < 0.f ? -charts->this_sample_adherence : 0.f /* b_fraction */,
+		1.f /* inv_b_total */);
 
 	/* only draw the column headings, \/\/\ and HZ if necessary */
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
@@ -1293,7 +1302,7 @@ void vwm_charts_rate_set(vwm_charts_t *charts, unsigned hertz)
 	assert(charts);
 
 	/* XXX: note floating point divide by 0 simply results in infinity */
-	charts->sampling_interval_secs = 1.0f / (float)hertz;
+	charts->sampling_interval_secs = 1.f / (float)hertz;
 }
 
 
@@ -1335,7 +1344,7 @@ static inline int delta_close_enough(vwm_charts_t *charts, float delta)
 int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 {
 	int	ret = 0, sampled = 0;
-	float	this_delta = 0.0f;
+	float	this_delta = 0.f;
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &charts->maybe_sample);
 	this_delta = delta(&charts->maybe_sample, &charts->this_sample);
@@ -1347,7 +1356,7 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 		/* automatically lower the sample rate if we can't keep up with the current sample rate */
 		if (charts->sampling_interval_secs < INFINITY &&
 		    charts->sampling_interval_secs <= charts->prev_sampling_interval_secs &&
-		    this_delta >= (charts->sampling_interval_secs * 1.5)) {
+		    this_delta >= (charts->sampling_interval_secs * 1.5f)) {
 
 			/* adjust charts->this_sample_duration as needed since we've missed our deadline.
 			 * This is more of an issue in headless mode, especially when run on slower/embedded
