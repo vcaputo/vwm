@@ -2,13 +2,21 @@
 
 Modifiers:
 
+  Mod1-               Mod1 is hard-coded as the XGrabKey modifier, which is
+                      Alt on my ThinkPads.  Super key has become the
+                      ubiquitous WM modifier since vwm was written, but vwm
+                      hasn't changed this, it's still Alt.  Mostly due to
+                      adding the other Alt while already pressing Alt
+                      having meaning (returns focus to origin for current
+                      Grab)
+
   Mod1-r-             Modifies some desktop/context/window switching
                       operations to be reversed.  By itself is effectively
                       a noop.
 
                       Unlike the other modifiers, I haven't bothered
                       explicitly documenting -r's applicability below.
-                      It's basically: Tab, Space, and `/Grave.
+                      It's basically: Tab, Space, and Grave(`).
 
   Mod1-Shift-         Modifies many operations into "Migrates".  A migrate
                       is a focused desktop/context changing operation which
@@ -28,7 +36,7 @@ Modifiers:
                       migrate, no actual switching occurs.
 
                       These also haven't been explicitly documented below,
-                      currently it's basically: `/Grave, and 0-9.
+                      currently it's basically: Grave(`), and 0-9.
 
 
 Built-in operations:
@@ -156,9 +164,8 @@ Built-in operations:
                       multihead configurations the next window selection is
                       further confined to within the current screen+desktop.
 
-  Mod1-Shift-Tab      Identical to Mod1-Tab except switches to the MRU
-                      window on another screen in a multihead
-                      configuration.
+  Mod1-\              Identical to Mod1-Tab except switches to the MRU
+                      window on another screen in a multihead configuration.
 
   Mod1-d              Request the client destroy the focused window, or
                       destroy the current virtual desktop when no windows
@@ -225,11 +232,11 @@ Built-in operations:
 Default launchers (configure by editing launchers.def and rebuild):
 
   Mod1-x              xterm
-  Mod1-b              iceweasel
-  Mod1-g              gimp
   Mod1-.              xlock
   Mod1--              xset -dpms s off
   Mod1-=              xset +dpms s on
+  Mod1-BackSpace      recordmydesktop --windowid %W
+  Mod1-Delete         recordmydesktop
 
 
 General:
