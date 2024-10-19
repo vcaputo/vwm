@@ -48,6 +48,7 @@
 #define CHART_MAX_COLUMNS		16
 #define CHART_DELTA_SECONDS_EPSILON	.001f				/* adherence errors smaller than this are treated as zero */
 #define CHART_NUM_FIXED_HEADER_ROWS	2				/* number of rows @ top before the hierarchy */
+#define CHART_DEFAULT_INTERVAL_SECS	.1f				/* default to 10Hz */
 
 /* the global charts state, supplied to vwm_chart_create() which keeps a reference for future use. */
 typedef struct _vwm_charts_t {
@@ -210,7 +211,7 @@ vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 	if (flags & VWM_CHARTS_FLAG_DEFER_MAINTENANCE)
 		charts->defer_maintenance = 1;
 
-	charts->prev_sampling_interval_secs = charts->sampling_interval_secs = .1f;	/* default to 10Hz */
+	charts->prev_sampling_interval_secs = charts->sampling_interval_secs = CHART_DEFAULT_INTERVAL_SECS;
 
 	if (!vmon_init(&charts->vmon, VMON_FLAG_2PASS, CHART_VMON_SYS_WANTS, CHART_VMON_PROC_WANTS)) {
 		VWM_ERROR("unable to initialize libvmon");
