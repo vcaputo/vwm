@@ -1171,7 +1171,7 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->hierarchy_end = CHART_NUM_FIXED_HEADER_ROWS + count_rows(chart->proc);
 	chart->gen_last_composed = -1;
 
-	chart->vcr = vcr_new(charts->vcr_backend, &chart->hierarchy_end, &chart->snowflakes_cnt);
+	chart->vcr = vcr_new(charts->vcr_backend, &chart->hierarchy_end, &chart->snowflakes_cnt, &charts->marker_distance);
 
 	if (!vwm_chart_set_visible_size(charts, chart, width, height)) {
 		VWM_ERROR("Unable to set initial chart size");

@@ -131,6 +131,7 @@ typedef struct vcr_t {
 	 */
 	int		*hierarchy_end_ptr;		/* pointer to row where the process hierarchy currently ends */
 	int		*snowflakes_cnt_ptr;		/* pointer to count of snowflaked rows (reset to zero to truncate snowflakes display) */
+	const unsigned	*marker_distance_ptr;		/* pointer to marker distance to use (0 disables markers, this is kind of silly but I don't want to add setters everywhere so sharing the instance in vwm_charts_t) */
 
 	union {
 #ifdef USE_XLIB
@@ -697,7 +698,7 @@ vcr_dest_t * vcr_dest_free(vcr_dest_t *dest)
  * uses where the priority is more lower frequency (1HZ) and more history (larger dimensions) with periodic
  * PNG presents on the order of minutes/hours for cloud uploading to facilitate investigations.
  */
-vcr_t * vcr_new(vcr_backend_t *vbe, int *hierarchy_end_ptr, int *snowflakes_cnt_ptr)
+vcr_t * vcr_new(vcr_backend_t *vbe, int *hierarchy_end_ptr, int *snowflakes_cnt_ptr, const unsigned *marker_distance_ptr)
 {
 	vcr_t	*vcr;
 
@@ -712,6 +713,7 @@ vcr_t * vcr_new(vcr_backend_t *vbe, int *hierarchy_end_ptr, int *snowflakes_cnt_
 	vcr->backend = vbe;
 	vcr->hierarchy_end_ptr = hierarchy_end_ptr;
 	vcr->snowflakes_cnt_ptr = snowflakes_cnt_ptr;
+	vcr->marker_distance_ptr = marker_distance_ptr;
 
 	return vcr;
 }

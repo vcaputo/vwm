@@ -63,7 +63,7 @@ vcr_dest_t * vcr_dest_png_new(vcr_backend_t *vbe, FILE *output);
 #endif /* USE_PNG */
 vcr_dest_t * vcr_dest_free(vcr_dest_t *dest);
 
-vcr_t * vcr_new(vcr_backend_t *vbe, int *hierarchy_end_ptr, int *snowflakes_cnt_ptr);
+vcr_t * vcr_new(vcr_backend_t *vbe, int *hierarchy_end_ptr, int *snowflakes_cnt_ptr, const unsigned *marker_distance_ptr);
 vcr_t * vcr_free(vcr_t *vcr);
 int vcr_resize_visible(vcr_t *vcr, int width, int height);
 void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, int x, int row, const vcr_str_t *strs, int n_strs, int *res_width);
