@@ -64,6 +64,7 @@ typedef struct _vwm_charts_t {
 	vmon_t					vmon;
 	float					prev_sampling_interval_secs, sampling_interval_secs;
 	int					sampling_paused, contiguous_drops, primed;
+	float					inv_ticks_per_sec, inv_total_delta;
 	unsigned				defer_maintenance:1;
 } vwm_charts_t;
 
@@ -169,6 +170,7 @@ static void sample_callback(vmon_t *vmon, void *arg)
 					sys_stat->softirq + sys_stat->steal + sys_stat->guest;
 
 	charts->total_delta = charts->this_total - charts->last_total;
+	charts->inv_total_delta = 1.f / (float)charts->total_delta;
 	charts->idle_delta = sys_stat->idle - charts->last_idle;
 	charts->iowait_delta = sys_stat->iowait - charts->last_iowait;
 }
@@ -220,6 +222,9 @@ vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 	charts->vmon.sample_cb = sample_callback;
 	charts->vmon.sample_cb_arg = charts;
 	clock_gettime(CLOCK_MONOTONIC_RAW, &charts->this_sample);
+
+	/* cache multiplicative inverse so we can multiply instead of divide constantly */
+	charts->inv_ticks_per_sec = 1.f / (float)charts->vmon.ticks_per_sec;
 
 	return charts;
 
@@ -369,13 +374,13 @@ static int proc_hierarchy_changed(vmon_proc_t *proc)
 
 
 /* helper for drawing the vertical bars in the graph layers */
-static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, double mult, double a_fraction, double a_total, double b_fraction, double b_total)
+static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, double mult, double a_fraction, double inv_a_total, double b_fraction, double inv_b_total)
 {
 	float	a_t, b_t;
 
 	/* compute the bar %ages for this sample */
-	a_t = a_fraction / a_total * mult; /* TODO: these divides could be turned into multiplies, since the totals are sys-wide uniforms throughout the sample */
-	b_t = b_fraction / b_total * mult;
+	a_t = a_fraction * inv_a_total * mult;
+	b_t = b_fraction * inv_b_total * mult;
 
 	/* ensure at least 1 pixel when the scaled result is a fraction less than 1,
 	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
@@ -583,7 +588,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 				str_len = snpf(str, sizeof(str), "User");
 			else
 				str_len = snpf(str, sizeof(str), "%.2fs",
-						(float)proc_stat->utime / (float)charts->vmon.ticks_per_sec);
+						(float)proc_stat->utime * charts->inv_ticks_per_sec);
 
 			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
@@ -593,7 +598,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 				str_len = snpf(str, sizeof(str), "Sys");
 			else
 				str_len = snpf(str, sizeof(str), "%.2fs",
-						(float)proc_stat->stime / (float)charts->vmon.ticks_per_sec);
+						(float)proc_stat->stime * charts->inv_ticks_per_sec);
 
 			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
@@ -605,7 +610,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 				str_len = snpf(str, sizeof(str), "??s");
 			else
 				str_len = snpf(str, sizeof(str), "%.2fs",
-						(float)(sys_stat->boottime - proc_stat->start) / (float)charts->vmon.ticks_per_sec);
+						(float)(sys_stat->boottime - proc_stat->start) * charts->inv_ticks_per_sec);
 
 			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
@@ -955,9 +960,9 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 			*row,
 			(proc->is_thread || !proc->is_threaded) ? charts->vmon.num_cpus : 1.0,
 			stime_delta,
-			charts->total_delta,
+			charts->inv_total_delta,
 			utime_delta,
-			charts->total_delta);
+			charts->inv_total_delta);
 	}
 
 	/* only try draw the overlay on the last draw within a duration */
@@ -987,9 +992,9 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	int	row = 0, depth = 0;
 
 	/* IOWait and Idle % @ row 0 */
-	draw_bars(charts, chart, row, 1.0, charts->iowait_delta, charts->total_delta, charts->idle_delta, charts->total_delta);
+	draw_bars(charts, chart, row, 1.0, charts->iowait_delta, charts->inv_total_delta, charts->idle_delta, charts->inv_total_delta);
 	/* "adherence" @ row 1 */
-	draw_bars(charts, chart, row + 1, 1.0, charts->this_sample_adherence > 0.f ? charts->this_sample_adherence : 0.f /* a_fraction */, 1.f /* a_total */, charts->this_sample_adherence < 0.f ? -charts->this_sample_adherence : 0.f /* b_fraction */, /* b_total */ 1.f);
+	draw_bars(charts, chart, row + 1, 1.0, charts->this_sample_adherence > 0.f ? charts->this_sample_adherence : 0.f /* a_fraction */, 1.f /* inv_a_total */, charts->this_sample_adherence < 0.f ? -charts->this_sample_adherence : 0.f /* b_fraction */, /* inv_b_total */ 1.f);
 
 	/* only draw the column headings, \/\/\ and HZ if necessary */
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
