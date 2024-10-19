@@ -288,13 +288,6 @@ static void allocate_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 }
 
 
-/* shadow a row from the text layer in the shadow layer */
-static void shadow_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
-{
-	vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
-}
-
-
 /* simple helper to map the vmon per-proc argv array into an XTextItem array, deals with threads vs. processes and the possibility of the comm field not getting read in before the process exited... */
 static void proc_argv2strs(const vmon_proc_t *proc, vcr_str_t *strs, int max_strs, int *res_n_strs)
 {
@@ -820,7 +813,7 @@ static void draw_overlay_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc
 		vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
 
 	draw_columns(charts, chart, chart->columns, 0 /* heading */, depth, row, proc);
-	shadow_row(charts, chart, row);
+	vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
 }
 
 
@@ -893,7 +886,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 
 				/* stamp the name (and whatever else we include) into chart.text_picture */
 				draw_columns(charts, chart, chart->snowflake_columns, 0 /* heading */, 0 /* depth */, chart->hierarchy_end, proc);
-				shadow_row(charts, chart, chart->hierarchy_end);
+				vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, chart->hierarchy_end);
 
 				chart->hierarchy_end--;
 
@@ -1011,11 +1004,11 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 		if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval_secs != charts->sampling_interval_secs))) {
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
 			draw_columns(charts, chart, chart->top_columns, 1 /* heading */, 0 /* depth */, row, proc);
-			shadow_row(charts, chart, row);
+			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
 
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 1, -1, -1);
 			draw_columns(charts, chart, chart->columns, 1 /* heading */, 0 /* depth */, row + 1, proc);
-			shadow_row(charts, chart, row + 1);
+			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row + 1);
 		}
 
 		if (!prev_redraw_needed)
