@@ -65,6 +65,7 @@ typedef struct _vwm_charts_t {
 	vmon_t					vmon;
 	float					prev_sampling_interval_secs, sampling_interval_secs;
 	int					sampling_paused, contiguous_drops, primed;
+	unsigned				marker_distance;
 	float					inv_ticks_per_sec, inv_total_delta;
 	unsigned				defer_maintenance:1;
 } vwm_charts_t;
@@ -1297,6 +1298,15 @@ void vwm_charts_rate_set(vwm_charts_t *charts, unsigned hertz)
 
 	/* XXX: note floating point divide by 0 simply results in infinity */
 	charts->sampling_interval_secs = 1.f / (float)hertz;
+}
+
+
+/* set an arbitrary marker spacing in pixels, 0 disables markers (default) */
+void vwm_charts_marker_distance_set(vwm_charts_t *charts, unsigned distance)
+{
+	assert(charts);
+
+	charts->marker_distance = distance;
 }
 
 

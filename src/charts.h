@@ -18,6 +18,7 @@ void vwm_charts_destroy(vwm_charts_t *charts);
 void vwm_charts_rate_increase(vwm_charts_t *charts);
 void vwm_charts_rate_decrease(vwm_charts_t *charts);
 void vwm_charts_rate_set(vwm_charts_t *charts, unsigned hertz);
+void vwm_charts_marker_distance_set(vwm_charts_t *charts, unsigned distance);
 int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us);
 
 vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int height, const char *name);
