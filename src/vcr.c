@@ -1804,6 +1804,7 @@ int vcr_compose(vcr_t *vcr)
 		assert(xserver);
 
 		/* fill the chart picture with the background */
+		/* FIXME TODO: this needs to apply vcr->marker_distance, which only mem_to_png actually does since it was added. */
 		XRenderComposite(xserver->display, PictOpSrc, vcr->backend->xlib.bg_fill, None, vcr->xlib.picture,
 			0, 0,
 			0, 0,
@@ -2018,12 +2019,16 @@ static int vcr_present_xlib_to_png(vcr_t *vcr, vcr_dest_t *dest)
 #define VCR_GRAPHAB			((0x1 << VCR_LAYER_GRAPHA) | (0x1 << VCR_LAYER_GRAPHB))
 /* These bits aren't stored in the vcr->mem.bits[] nibbles, but do get used as palette indices.
  * Their value is generated during the mem_to_png() process, derived from Y position within a row,
- * and row position within a snapshot.
+ * and row position within a snapshot, and X position within a row's separator (for markers).
  */
 #define VCR_SEP				(0x1 << VCR_LAYER_CNT)
 #define VCR_ODD				(0x1 << (VCR_LAYER_CNT + 1))
+#define VCR_MARKER			(0x1 << (VCR_LAYER_CNT + 2))
 
+#define VCR_SEP_MARKER			(VCR_SEP | VCR_MARKER)
+#define VCR_SEP_MARKER_ODD		(VCR_SEP | VCR_MARKER | VCR_ODD)
 #define VCR_SEP_ODD			(VCR_SEP | VCR_ODD)
+#define VCR_MARKER_ODD			(VCR_MARKER | VCR_ODD)
 #define VCR_GRAPHA_ODD			(VCR_GRAPHA | VCR_ODD)
 #define VCR_GRAPHB_ODD			(VCR_GRAPHB | VCR_ODD)
 #define VCR_GRAPHAB_ODD			(VCR_GRAPHAB | VCR_ODD)
@@ -2031,8 +2036,7 @@ static int vcr_present_xlib_to_png(vcr_t *vcr, vcr_dest_t *dest)
 
 /* text over anything is going to just be white */
 #define VCR_TEXT_SEP			(VCR_TEXT | VCR_SEP)
-#define VCR_TEXT_ODD			(VCR_TEXT | VCR_ODD)
-#define VCR_TEXT_SEP_ODD		(VCR_TEXT | VCR_SEP | VCR_ODD)
+#define VCR_TEXT_SEP_MARKER		(VCR_TEXT | VCR_SEP | VCR_MARKER)
 
 #define VCR_TEXT_GRAPHA			(VCR_TEXT | VCR_GRAPHA)
 #define VCR_TEXT_GRAPHB			(VCR_TEXT | VCR_GRAPHB)
@@ -2043,13 +2047,17 @@ static int vcr_present_xlib_to_png(vcr_t *vcr, vcr_dest_t *dest)
 #define VCR_TEXT_GRAPHAB_SHADOW		(VCR_TEXT | VCR_GRAPHAB | VCR_SHADOW)
 
 #define VCR_TEXT_SEP_SHADOW		(VCR_TEXT | VCR_SEP | VCR_SHADOW)
+#define VCR_TEXT_SEP_MARKER_SHADOW	(VCR_TEXT | VCR_SEP | VCR_MARKER | VCR_SHADOW)
 
-#define VCR_TEXT_ODD_SEP		(VCR_TEXT | VCR_SEP | VCR_ODD)
+#define VCR_TEXT_ODD			(VCR_TEXT | VCR_ODD)
+#define VCR_TEXT_ODD_SEP		(VCR_TEXT | VCR_ODD | VCR_SEP)
+#define VCR_TEXT_ODD_SEP_MARKER		(VCR_TEXT | VCR_ODD | VCR_SEP | VCR_MARKER)
 #define VCR_TEXT_ODD_GRAPHA		(VCR_TEXT | VCR_ODD | VCR_GRAPHA)
 #define VCR_TEXT_ODD_GRAPHB		(VCR_TEXT | VCR_ODD | VCR_GRAPHB)
 #define VCR_TEXT_ODD_GRAPHAB		(VCR_TEXT | VCR_ODD | VCR_GRAPHAB)
 #define VCR_TEXT_ODD_SHADOW		(VCR_TEXT | VCR_ODD | VCR_SHADOW)
 #define VCR_TEXT_ODD_SEP_SHADOW		(VCR_TEXT | VCR_ODD | VCR_SEP | VCR_SHADOW)
+#define VCR_TEXT_ODD_SEP_MARKER_SHADOW	(VCR_TEXT | VCR_ODD | VCR_SEP | VCR_MARKER | VCR_SHADOW)
 #define VCR_TEXT_ODD_GRAPHA_SHADOW	(VCR_TEXT | VCR_ODD | VCR_GRAPHA | VCR_SHADOW)
 #define VCR_TEXT_ODD_GRAPHB_SHADOW	(VCR_TEXT | VCR_ODD | VCR_GRAPHB | VCR_SHADOW)
 #define VCR_TEXT_ODD_GRAPHAB_SHADOW	(VCR_TEXT | VCR_ODD | VCR_GRAPHAB | VCR_SHADOW)
@@ -2066,6 +2074,7 @@ static int vcr_present_xlib_to_png(vcr_t *vcr, vcr_dest_t *dest)
 #define VCR_PNG_WHITE			{0xff, 0xff, 0xff}
 #define VCR_PNG_RED			{0xff, 0x00, 0x00}
 #define VCR_PNG_CYAN			{0x00, 0xff, 0xff}
+#define VCR_PNG_YELLOW			{0xc0, 0xc0, 0x00}
 #define VCR_PNG_DARK_GRAY		{0x30, 0x30, 0x30}	/* used for separator */
 #define VCR_PNG_DARKER_GRAY		{0x10, 0x10, 0x10}	/* used for odd rows background */
 
@@ -2079,6 +2088,7 @@ enum {
 	VCR_LUT_WHITE,
 	VCR_LUT_RED,
 	VCR_LUT_CYAN,
+	VCR_LUT_YELLOW,
 	VCR_LUT_DARK_GRAY,
 	VCR_LUT_DARKER_GRAY,
 	VCR_LUT_DARK_WHITE,
@@ -2094,6 +2104,7 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					[VCR_LUT_WHITE] = VCR_PNG_WHITE,
 					[VCR_LUT_RED] = VCR_PNG_RED,
 					[VCR_LUT_CYAN] = VCR_PNG_CYAN,
+					[VCR_LUT_YELLOW] = VCR_PNG_YELLOW,
 					[VCR_LUT_DARK_GRAY] = VCR_PNG_DARK_GRAY,
 					[VCR_LUT_DARKER_GRAY] = VCR_PNG_DARKER_GRAY,
 					[VCR_LUT_DARK_WHITE] = VCR_PNG_DARK_WHITE,
@@ -2106,7 +2117,9 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					/* text solid white above all layers */
 					[VCR_TEXT] = VCR_LUT_WHITE,
 					[VCR_TEXT_SEP] = VCR_LUT_WHITE,
+					[VCR_TEXT_SEP_MARKER] = VCR_LUT_WHITE,
 					[VCR_TEXT_SEP_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_SEP_MARKER_SHADOW] = VCR_LUT_WHITE,
 					[VCR_TEXT_GRAPHA] = VCR_LUT_WHITE,
 					[VCR_TEXT_GRAPHB] = VCR_LUT_WHITE,
 					[VCR_TEXT_GRAPHAB] = VCR_LUT_WHITE,
@@ -2116,7 +2129,9 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					[VCR_TEXT_GRAPHAB_SHADOW] = VCR_LUT_WHITE,
 					[VCR_TEXT_ODD] = VCR_LUT_WHITE,
 					[VCR_TEXT_ODD_SEP] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_SEP_MARKER] = VCR_LUT_WHITE,
 					[VCR_TEXT_ODD_SEP_SHADOW] = VCR_LUT_WHITE,
+					[VCR_TEXT_ODD_SEP_MARKER_SHADOW] = VCR_LUT_WHITE,
 					[VCR_TEXT_ODD_GRAPHA] = VCR_LUT_WHITE,
 					[VCR_TEXT_ODD_GRAPHB] = VCR_LUT_WHITE,
 					[VCR_TEXT_ODD_GRAPHAB] = VCR_LUT_WHITE,
@@ -2143,8 +2158,11 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 
 					/* the rest get defaulted to black, which is great. */
 					[VCR_SEP] = VCR_LUT_DARK_GRAY,
+					[VCR_MARKER] = VCR_LUT_YELLOW,
+					[VCR_SEP_MARKER] = VCR_LUT_YELLOW,
 					[VCR_ODD] = VCR_LUT_DARKER_GRAY,
 					[VCR_SEP_ODD] = VCR_LUT_DARK_GRAY,
+					[VCR_SEP_MARKER_ODD] = VCR_LUT_YELLOW,
 				};
 
 	png_bytepp		row_pointers;
@@ -2198,7 +2216,11 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 	 */
 	png_write_info(dest->png.png_ctx, dest->png.info_ctx);
 	{
-		int	n_rows = MIN(vcr_composed_rows(vcr), vcr->height / VCR_ROW_HEIGHT); /* prevent n_rows from overflowing the height */
+		int		n_rows = MIN(vcr_composed_rows(vcr), vcr->height / VCR_ROW_HEIGHT); /* prevent n_rows from overflowing the height */
+		unsigned	marker_distance = 0;
+
+		if (vcr->marker_distance_ptr)
+			marker_distance = *(vcr->marker_distance_ptr);
 
 		for (int i = 0; i < n_rows; i++) {
 			uint8_t	*d = row_pixels;
@@ -2218,10 +2240,15 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					unsigned phase_k_mod_width = ((vcr->phase + k) % vcr->width);
 					unsigned sg_shift = (phase_k_mod_width & 0x1) << 2;
 					uint8_t	*sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
+					uint8_t marker = 0;
 					uint8_t	pp;
 
+					/* FIXME TODO: be more clever/efficient about this (get rid of this conditional b.s. in the inner loop) */
+					if ((j == (VCR_ROW_HEIGHT - 1)) && marker_distance && !(k % marker_distance))
+						marker = VCR_MARKER;
+
 					/* pp will hold the png-appropriate indexed-color 4bpp packed pixel */
-					pp = lut[(*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd] << 4;
+					pp = lut[(*s & (~mask & 0xf)) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | marker | odd] << 4;
 
 					/* this copy pasta unrolls the loop to unpack two pixels from the nibbles at a time */
 					k++;
@@ -2230,10 +2257,15 @@ static int vcr_present_mem_to_png(vcr_t *vcr, vcr_dest_t *dest)
 					 * this can all be optimized later if we care.
 					 */
 
+					/* FIXME TODO: be more clever/efficient about this (get rid of this conditional b.s. in the inner loop) */
+					marker = 0;
+					if ((j == (VCR_ROW_HEIGHT - 1)) && marker_distance && !(k % marker_distance))
+						marker = VCR_MARKER;
+
 					phase_k_mod_width = ((vcr->phase + k) % vcr->width);
 					sg_shift = (phase_k_mod_width & 0x1) << 2;
 					sg = &vcr->mem.bits[(i * VCR_ROW_HEIGHT + j) * vcr->mem.pitch + (phase_k_mod_width >> 1)];
-					pp |= lut[((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | odd];
+					pp |= lut[((*s & ~(mask << 4)) >> 4) | ((*sg & (mask << sg_shift)) >> sg_shift) | border | marker | odd];
 
 					*d = pp;
 				}
