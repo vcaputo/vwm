@@ -958,9 +958,10 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 			charts->inv_total_delta);
 	}
 
-	/* only try draw the overlay on the last draw within a duration */
-	if (sample_duration_idx == (charts->this_sample_duration - 1))
+	/* unless a deferred pass, only try draw the overlay on the last draw within a duration */
+	if (deferred_pass || sample_duration_idx == (charts->this_sample_duration - 1))
 		draw_overlay_row(charts, chart, proc, *depth, *row, deferred_pass);
+
 	(*row)++;
 
 	/* recur any threads first, then any children processes */
