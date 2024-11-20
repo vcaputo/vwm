@@ -9,7 +9,7 @@
 #include "bitmap.h"
 #include "list.h"
 
-#define VMON_HTAB_SIZE		128				/* number of buckets in the processes hash table */
+#define VMON_HTAB_SIZE		1024				/* number of buckets in the processes hash table */
 #define VMON_ARRAY_GROWBY	5				/* number of elements to grow the processes array */
 
 typedef enum _vmon_flags_t {
