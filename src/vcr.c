@@ -74,6 +74,8 @@
 #include "util.h"
 #include "vcr.h"
 
+#define VCR_USECS_PER_SECOND	1000000
+
 /* backend is the root vcr object everything else here derives from,
  * for an X backend it encompasses the xserver/display connection.
  */
@@ -417,7 +419,7 @@ int vcr_backend_get_dimensions(vcr_backend_t *vbe, int *res_width, int *res_heig
 
 
 /* this is basically just needed by the vmon use case */
-/* returns 1 if the backend has events to process, 0 on timeout/error. */
+/* returns 1 if the backend has events to process, 0 on timeout, -1 on error. */
 int vcr_backend_poll(vcr_backend_t *vbe, int timeout_us)
 {
 	struct timespec	ts, *pto = NULL;
@@ -427,8 +429,8 @@ int vcr_backend_poll(vcr_backend_t *vbe, int timeout_us)
 	/* TODO: keep signals blocked outside of ppoll() */
 
 	if (timeout_us >= 0) {
-		ts.tv_sec = timeout_us / 10000000;
-		ts.tv_nsec = (timeout_us - (ts.tv_sec * 10000000)) * 1000;
+		ts.tv_sec = timeout_us / VCR_USECS_PER_SECOND;
+		ts.tv_nsec = (timeout_us - (ts.tv_sec * VCR_USECS_PER_SECOND)) * 1000;
 		pto = &ts;
 	}
 
