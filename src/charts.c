@@ -844,10 +844,10 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 		 * a repeated pass within the same sample - we can't realize these effects twice.
 		 */
 		if (sample_duration_idx == 0) { /* some things need to only be done once per sample duration, some at the start, some at the end */
+			static int	in_stale = 0;
 
 			if (proc->is_stale) { /* we "realize" stale processes only in the first draw within a sample duration */
 				/* what to do when a process (subtree) has gone away */
-				static int	in_stale = 0;
 				int		in_stale_entrypoint = 0;
 
 				/* I snowflake the stale processes from the leaves up for a more intuitive snowflake order...
@@ -857,6 +857,12 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 				if (!in_stale) {
 					VWM_TRACE("entered stale at chart=%p depth=%i row=%i", chart, *depth, *row);
 					in_stale_entrypoint = in_stale = 1;
+
+					/* this advances row to the last row of all descendants, the minus one is needed since we're
+					 * already at proc's row, and count_rows() includes it in the count.  Imagine there are no
+					 * descendants, count_rows returns 1, we turn that into 0, and (*row) stays unchanged, which
+					 * is correct - we snowflake ourself and that's that.
+					 */
 					(*row) += count_rows(proc) - 1;
 				}
 
@@ -897,7 +903,13 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 				}
 
 				return;
+			} else {
+				/* If we're not stale, assert we're not in_stale, because the count_rows() used above is indiscriminate.
+				 * if there's !is_stale descendents then we'll get confused as-is.
+				 */
+				assert(!in_stale);
 			}
+
 
 			/* use the generation number to avoid recomputing this stuff for callbacks recurring on the same process in the same sample */
 			if (proc_ctxt->generation != charts->vmon.generation) {
