@@ -548,6 +548,22 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 			vmon_proc_unmonitor(vmon, tmp, NULL, NULL);
 	}
 
+	/* If proc is stale, assume all the threads are stale as well.  In vwm/charts.c we assume all descendants of a stale node
+	 * are implicitly stale, so let's ensure that's a consistent assumumption WRT libvmon's maintenance of the hierarchy.
+	 * The readdir below seems like it would't find any threads of a stale process, but maybe there's some potential for a race there,
+	 * particularly since we reuse an open reference on the task_dir.
+	 * This reflects a similar implicit is_stale propagation in follow_children.
+	 */
+	if (proc->is_stale) {
+		list_for_each_entry(tmp, &proc->threads, threads)
+			tmp->is_stale = 1;
+
+		/* FIXME: the changes count seems to be unused here, so this currently always returns SAMPLE_UNCHANGED, and
+		 * it's unclear to me if that was intentional or just never finished.
+		 */
+		return SAMPLE_UNCHANGED;
+	}
+
 	start = &proc->threads;
 	while ((dentry = readdir((*store)->task_dir))) {
 		int	tid;
