@@ -1361,6 +1361,8 @@ void vcr_shift_below_row_up_one(vcr_t *vcr, int row)
 	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
+	assert(*(vcr->hierarchy_end_ptr) >= row);
+
 	switch (vcr->backend->type) {
 #ifdef USE_XLIB
 	case VCR_BACKEND_TYPE_XLIB: {
