@@ -467,9 +467,22 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 					}
 
 					if (found || (tmp = vmon_proc_monitor(vmon, proc, child_pid, proc->wants, NULL, NULL))) {
-						/* position the process in the siblings list, and update the start */
-						/* move to front breaks vwm, we rely on the stale processes maintaining their position! maybe make it an option to vmon_init() since it can be a useful optimization. */
-						start = &tmp->siblings;
+						/* There's an edge case where vmon_proc_monitor() finds child_pid existing as a child of something else,
+						 * in that case we're effectively migrating it to a new parent.  This occurs in the vmon use case where
+						 * it's monitoring PID1-down, and PID1 of course inherits orphans.  So some descendant proc is already
+						 * being monitored with its children monitored too, but that proc has exited, orphaning its children.
+						 * The kernel has since moved the orphaned children up to be children of PID1, and we could be performing
+						 * children following for PID1 here, discovering those newly inherited orphans whose exited parent hasn't
+						 * even been flagged as is_stale yet in libvmon, let alone been unreffed/removed from the htab.
+						 *
+						 * In such a scenario, we need to _not_ use its siblings node as a search start, because we'll be stepping
+						 * into the other parent's children list, which would be Very Broken.  What we instead do, is basically
+						 * nothing, so it can be handled in a future sample, after the exited parent can go through its is_stale=1
+						 * cycle and unlink itself from the orphaned descendants.  There are more complicated ways to handle this
+						 * which would technically be more accurate, but let's just do the simple and correct thing for now.
+						 */
+						if (tmp->parent == proc)
+							start = &tmp->siblings;
 					} /* else { vmon_proc_monitor failed just move on } */
 
 					child_pid = 0;
@@ -1221,26 +1234,46 @@ vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon
 				return NULL;
 
 			proc->wants = wants; /* we can alter wants this way, though it clearly needs more consideration XXX */
-			proc->refcnt++;
-			/* This is a predicament.  If the top-level (externally-established) process monitor wins the race, the process has no parent and is on the vmon->processes list.
-			 * Then the follow_children-established monitor comes along and wants to assign a parent, this isn't such a big deal, and we should be able to permit it, however,
-			 * we're in the process of iterating the top-level processes list when we run the follow_children() sampler of a descendant which happens to also be the parent.
-			 * We can't simply remove the process from the top-level processes list mid-iteration and stick it on the children list of the parent, the iterator could wind up
-			 * following the new pointer into the parents children.
-			 *
-			 * What I'm doing for now is allowing the assignment of a parent when there is no parent, but we don't perform the vmon->processes to parent->children migration
-			 * until the top-level sample_siblings() function sees the node with the parent.  At that point, the node will migrate to the parent's children list.
-			 */
-			if (parent && !proc->parent) {
-				/* if a parent was supplied, and there is no current parent, the process is a top-level currently by external callers, but now appears to be a child of something as well,
-				 * so in this scenario, we'll remove it from the top-level siblings list, and make it a child of the new parent.  I don't think there needs to be concern about its being a thread here. */
-				/* Note we can't simply move the process from its current processes list and add it to the supplied parent's children list, as that would break the iterator above us at the top-level, so
-				 * we must defer the migration until the processes iterator context can do it for us - but this is tricky because we're in the middle of traversing our hierarchy and this process may
-				 * be in a critical is_new state which must be realized this sample at its location in the hierarchy for correctness, there will be no reappearance of that critical state in the correct
-				 * tree position for users like vwm. */
-				/* the VMON_FLAG_2PASS flag has been introduced for users like vwm */
-				 proc->parent = parent;
-			} /* else if (parent && proc->parent) { XXX TODO: it shouldn't be possible to have conflicting parents, but may want to log an error if it happens. */
+
+			if (parent) {
+				/* This is a predicament.  If the top-level (externally-established) process monitor wins the race, the process has no parent and is on the vmon->processes list.
+				 * Then the follow_children-established monitor comes along and wants to assign a parent, this isn't such a big deal, and we should be able to permit it, however,
+				 * we're in the process of iterating the top-level processes list when we run the follow_children() sampler of a descendant which happens to also be the parent.
+				 * We can't simply remove the process from the top-level processes list mid-iteration and stick it on the children list of the parent, the iterator could wind up
+				 * following the new pointer into the parents children.
+				 *
+				 * What I'm doing for now is allowing the assignment of a parent when there is no parent, but we don't perform the vmon->processes to parent->children migration
+				 * until the top-level sample_siblings() function sees the node with the parent.  At that point, the node will migrate to the parent's children list.  Since
+				 * this particular migration happens immediately within the same sample, it
+				 */
+				if (!proc->parent) {
+					/* if a parent was supplied, and there is no current parent, the process is top-level currently by external callers, but now appears to be a child of something as well,
+					 * so in this scenario, we'll remove it from the top-level siblings list, and make it a child of the new parent.  I don't think there needs to be concern about its being a thread here. */
+					/* Note we can't simply move the process from its current processes list and add it to the supplied parent's children list, as that would break the iterator above us at the top-level, so
+					 * we must defer the migration until the processes iterator context can do it for us - but this is tricky because we're in the middle of traversing our hierarchy and this process may
+					 * be in a critical is_new state which must be realized this sample at its location in the hierarchy for correctness, there will be no reappearance of that critical state in the correct
+					 * tree position for users like vwm. */
+					/* the VMON_FLAG_2PASS flag has been introduced for users like vwm */
+					proc->parent = parent;
+					proc->refcnt++;
+				}
+#if 0
+				else if (parent != proc->parent) {
+					/* We're switching parents; this used to be considered unexpected, but then vmon happened and it monitors the whole tree from PID1 down.
+					 * PID1 is special in that it inherits orphans, so we can already be monitoring a child of an exited parent, and here PID1's children
+					 * following is looking up a newly inherited orphan, which reaches here finding proc with a non-NULL, but different parent.
+					 * Note the introduction of PR_SET_CHILD_SUBREAPER has made this no longer limited to PID1 either.
+					 */
+					/* now, we can't simply switch parents in a single step... since the is_stale=1 state must be seen by the front-end before we can
+					 * unlink it from the structure in a subsequent sample.  So instead, we should be queueing an adoption by the new parent, but
+					 * for the time being we can just suppress the refcnt bump and let the adoptive parent reestablish the monitor anew after 
+					 * runs its course under its current parent.
+					 */
+				}
+#endif
+			} else {
+				proc->refcnt++;
+			}
 
 			return proc;
 		}
