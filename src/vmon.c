@@ -45,6 +45,7 @@ typedef struct vmon_t {
 	int		pid;
 	int		done;
 	int		linger;
+	int		dump_procs;
 	time_t		start_time;
 	int		snapshots_interval;
 	int		snapshot;
@@ -199,6 +200,7 @@ static void print_help(void)
 		" -s  --snapshot    Save a PNG snapshot upon receiving SIG{CHLD,TERM,USR1}\n"
 		" -w  --wip-name    Name to use for work-in-progress snapshot filename\n"
 		" -v  --version     Print version\n"
+		" -D  --dump-procs  Dump libvmon internal processes table (debugging aid)\n"
 		" -W  --width       Chart width\n"
 		" -z  --hertz       Sample rate in hertz\n"
 		"-------------------------------------------------------------------------------"
@@ -486,6 +488,9 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 		} else if (is_flag(*argv, "-v", "--version")) {
 			print_version();
 			exit(EXIT_SUCCESS);
+		} else if (is_flag(*argv, "-D", "--dump-procs")) {
+			vmon->dump_procs = 1;
+			last = argv;
 		} else if ((*argv)[0] == '-') {
 			VWM_ERROR("Unrecognized argument: \"%s\", try --help\n", argv[0]);
 			exit(EXIT_FAILURE);
@@ -865,6 +870,11 @@ int main(int argc, const char * const *argv)
 			if (!vmon->headless) {
 				vwm_chart_compose(vmon->charts, vmon->chart);
 				vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, vmon->vcr_dest, -1, -1, -1, -1);
+			}
+
+			if (vmon->dump_procs) {
+				charts_vmon_dump_procs(vmon->charts, stdout);
+				fflush(stdout);
 			}
 		}
 
