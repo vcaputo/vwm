@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <stdint.h>
+#include <stdio.h>	/* just for vmon_dump_procs() */
 #include <string.h>	/* I use strcmp() in the type comparator definitions */
 
 #include "bitmap.h"
@@ -308,5 +309,6 @@ void vmon_destroy(vmon_t *);
 vmon_proc_t * vmon_proc_monitor(vmon_t *, vmon_proc_t *, int, vmon_proc_wants_t, void (*)(vmon_t *, void *, vmon_proc_t *, void *), void *);
 void vmon_proc_unmonitor(vmon_t *, vmon_proc_t *, void (*)(vmon_t *, void *, vmon_proc_t *, void *), void *);
 int vmon_sample(vmon_t *);
+void vmon_dump_procs(vmon_t *vmon, FILE *out);
 
 #endif

@@ -1689,3 +1689,21 @@ int vmon_sample(vmon_t *vmon)
 
 	return ret;
 }
+
+
+void vmon_dump_procs(vmon_t *vmon, FILE *out)
+{
+	assert(vmon);
+	assert(out);
+
+	fprintf(out, "generation=%i\n", vmon->generation);
+	for (int i = 0; i < VMON_HTAB_SIZE; i++) {
+		vmon_proc_t	*proc;
+
+		list_for_each_entry(proc, &vmon->htab[i], bucket) {
+			fprintf(out, "[%i] proc=%p parent=%p gen=%i pid=%i rc=%i is_threaded=%i is_thread=%i is_new=%u is_stale=%u\n",
+				i, proc, proc->parent, proc->generation, proc->pid, proc->refcnt, (unsigned)proc->is_threaded, (unsigned)proc->is_thread, (unsigned)proc->is_new, (unsigned)proc->is_stale);
+
+		}
+	}
+}
