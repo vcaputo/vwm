@@ -278,119 +278,197 @@ static int readlinkf(vmon_t *vmon, vmon_char_array_t *array, DIR *dir, char *fmt
 
 /* here starts private per-process samplers and other things like following children implementation etc. */
 
-/* sample stat process stats */
-typedef enum _vmon_proc_stat_fsm_t {
-#define VMON_ENUM_PARSER_STATES
-#include "defs/proc_stat.def"
-} vmon_proc_stat_fsm_t;
-
-static sample_ret_t proc_sample_stat(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_stat_t **store)
+/* simple helper for installing callbacks on the callback lists, currently only used for the per-process sample callbacks */
+/* will not install the same callback function & arg combination more than once, and will not install NULL-functioned callbacks at all! */
+static int maybe_install_proc_callback(vmon_t *vmon, list_head_t *callbacks, void (*func)(vmon_t *, void *, vmon_proc_t *, void *), void *arg)
 {
-	int			changes = 0;
-	int			i, len, total = 0;
-	char			*arg;
-	int			argn, prev_argc;
-	vmon_proc_stat_fsm_t	state = VMON_PARSER_STATE_PROC_STAT_PID;
-#define VMON_PREPARE_PARSER
-#include "defs/proc_stat.def"
+	assert(vmon);
+	assert(callbacks);
+	assert(!arg || func);
+
+	if (func) {
+		vmon_proc_callback_t	*cb;
+
+		list_for_each_entry(cb, callbacks, callbacks) {
+			if (cb->func == func && cb->arg == arg)
+				break;
+		}
+
+		if (&cb->callbacks == callbacks) {
+			cb = calloc(1, sizeof(vmon_proc_callback_t));
+			if (!cb)
+				return 0;
+
+			cb->func = func;
+			cb->arg = arg;
+			list_add_tail(&cb->callbacks, callbacks);
+		}
+	}
+
+	return 1;
+}
+
+
+/* helper for searching for the process in the process array, specify NULL to find a free slot */
+static int find_proc_in_array(vmon_t *vmon, vmon_proc_t *proc, int hint)
+{
+	int	ret = -1;
 
 	assert(vmon);
-	assert(store);
 
-	if (!proc) { /* dtor */
-		try_close(&(*store)->comm_fd);
-		try_free((void **)&(*store)->comm.array);
-		try_close(&(*store)->cmdline_fd);
-		try_free((void **)&(*store)->cmdline.array);
-		try_free((void **)&(*store)->argv);
-		try_close(&(*store)->wchan_fd);
-		try_free((void **)&(*store)->wchan.array);
-		try_close(&(*store)->stat_fd);
-		try_free((void **)&(*store)->exe.array);
-
-		return DTOR_FREE;
-	}
-
-/* _retry: */
-	if (!(*store)) { /* ctor */
-
-		*store = calloc(1, sizeof(vmon_proc_stat_t));
-
-		if (proc->is_thread) {
-			(*store)->comm_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/comm", proc->pid, proc->pid);
-			(*store)->cmdline_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/cmdline", proc->pid, proc->pid);
-			(*store)->wchan_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/wchan", proc->pid, proc->pid);
-			(*store)->stat_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/stat", proc->pid, proc->pid);
-		} else {
-			(*store)->comm_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/comm", proc->pid);
-			(*store)->cmdline_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/cmdline", proc->pid);
-			(*store)->wchan_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/wchan", proc->pid);
-			(*store)->stat_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/stat", proc->pid);
-		}
-
-		/* initially everything is considered changed */
-		memset((*store)->changed, 0xff, sizeof((*store)->changed));
+	if (hint >= 0 && hint < vmon->array_allocated_nr && vmon->array[hint] == proc) {
+		/* the hint was accurate, bypass the search */
+		ret = hint;
 	} else {
-		/* clear the entire changed bitmap */
-		memset((*store)->changed, 0, sizeof((*store)->changed));
-	}
+		int	i;
 
-	/* XXX TODO: integrate load_contents_fd() calls into changes++ maintenance */
-	/* /proc/$pid/comm */
-	load_contents_fd(vmon, &(*store)->comm, (*store)->comm_fd, LOAD_FLAGS_NOTRUNCATE, (*store)->changed, VMON_PROC_STAT_COMM);
-
-	/* /proc/$pid/cmdline */
-	load_contents_fd(vmon, &(*store)->cmdline, (*store)->cmdline_fd, LOAD_FLAGS_NOTRUNCATE, (*store)->changed, VMON_PROC_STAT_CMDLINE);
-	for (prev_argc = (*store)->argc, (*store)->argc = 0, i = 0; i < (*store)->cmdline.len; i++) {
-		if (!(*store)->cmdline.array[i])
-			(*store)->argc++;
-	}
-
-	/* if the cmdline has changed, allocate argv array and store ptrs to the fields within it */
-	if (BITTEST((*store)->changed, VMON_PROC_STAT_CMDLINE)) {
-		if (prev_argc != (*store)->argc) {
-			try_free((void **)&(*store)->argv); /* XXX could realloc */
-			(*store)->argv = calloc(1, (*store)->argc * sizeof(char *));
-		}
-
-		for (argn = 0, arg = (*store)->cmdline.array, i = 0; i < (*store)->cmdline.len; i++) {
-			if (!(*store)->cmdline.array[i]) {
-				(*store)->argv[argn++] = arg;
-				arg = &(*store)->cmdline.array[i + 1];
+		/* search for the entry in the array */
+		for (i = 0; i < vmon->array_allocated_nr; i++) {
+			if (vmon->array[i] == proc) {
+				ret = i;
+				break;
 			}
 		}
 	}
 
-	/* /proc/$pid/wchan */
-	load_contents_fd(vmon, &(*store)->wchan, (*store)->wchan_fd, LOAD_FLAGS_NOTRUNCATE, (*store)->changed, VMON_PROC_STAT_WCHAN);
+	if (!proc && ret == -1) {
+		vmon_proc_t	**tmp;
 
-	/* /proc/$pid/exe */
-	if ((*store)->cmdline.len) /* kernel threads have no cmdline, and always fail readlinkf() on exe, skip readlinking the exe for them using this heuristic */
-		readlinkf(vmon, &(*store)->exe, vmon->proc_dir, "%i/exe", proc->pid);
+		/* enlarge the array */
+		tmp = realloc(vmon->array, (vmon->array_allocated_nr + VMON_ARRAY_GROWBY) * sizeof(vmon_proc_t *));
+		if (tmp) {
+			memset(&tmp[vmon->array_allocated_nr], 0, VMON_ARRAY_GROWBY * sizeof(vmon_proc_t *));
+			ret = vmon->array_hint_free = vmon->array_allocated_nr;
+			vmon->array_allocated_nr += VMON_ARRAY_GROWBY;
+			vmon->array = tmp;
+		} /* XXX TODO: handle realloc failure */
+	}
 
-	/* XXX TODO: there's a race between discovering comm_len from /proc/$pid/comm and applying it in the parsing of /proc/$pid/stat, detect the race
-	 * scenario and retry the sample when detected by goto _retry (see commented _retry label above) */
+	return ret;
+}
 
-	/* read in stat and parse it assigning the stat members accordingly */
-	while ((len = try_pread((*store)->stat_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
-		total += len;
 
-		for (i = 0; i < len; i++) {
-			/* parse the fields from the file, stepping through... */
-			_p.input = vmon->buf[i];
-			switch (state) {
-#define VMON_PARSER_DELIM ' '	/* TODO XXX eliminate the need for this, I want the .def's to include all the data format knowledge */
-#define VMON_IMPLEMENT_PARSER
-#include "defs/proc_stat.def"
-				default:
-					/* we're finished parsing once we've fallen off the end of the symbols */
-					goto _out; /* this saves us the EOF read syscall */
+/* this is the private variant that allows providing a parent, which libvmon needs for constructing hierarchies, but callers shouldn't be doing themselves */
+static vmon_proc_t * proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon_proc_wants_t wants, void (*sample_cb)(vmon_t *, void *, vmon_proc_t *, void *), void *sample_cb_arg)
+{
+	vmon_proc_t	*proc;
+	int		hash = (pid % VMON_HTAB_SIZE), i;
+	int		is_thread = (wants & VMON_INTERNAL_PROC_IS_THREAD) ? 1 : 0;
+
+	assert(vmon);
+	assert(!sample_cb_arg || sample_cb);
+
+	wants &= ~VMON_INTERNAL_PROC_IS_THREAD;
+
+	if (pid < 0)
+		return NULL;
+
+	list_for_each_entry(proc, &vmon->htab[hash], bucket) {
+		/* search for the process to see if it's already monitored, we allow threads to exist with the same pid hence the additional is_thread comparison */
+		if (proc->pid == pid && proc->is_thread == is_thread) {
+			if (!maybe_install_proc_callback(vmon, &proc->sample_callbacks, sample_cb, sample_cb_arg))
+				return NULL;
+
+			proc->wants = wants; /* we can alter wants this way, though it clearly needs more consideration XXX */
+
+			if (parent) {
+				/* This is a predicament.  If the top-level (externally-established) process monitor wins the race, the process has no parent and is on the vmon->processes list.
+				 * Then the follow_children-established monitor comes along and wants to assign a parent, this isn't such a big deal, and we should be able to permit it, however,
+				 * we're in the process of iterating the top-level processes list when we run the follow_children() sampler of a descendant which happens to also be the parent.
+				 * We can't simply remove the process from the top-level processes list mid-iteration and stick it on the children list of the parent, the iterator could wind up
+				 * following the new pointer into the parents children.
+				 *
+				 * What I'm doing for now is allowing the assignment of a parent when there is no parent, but we don't perform the vmon->processes to parent->children migration
+				 * until the top-level sample_siblings() function sees the node with the parent.  At that point, the node will migrate to the parent's children list.  Since
+				 * this particular migration happens immediately within the same sample, it
+				 */
+				if (!proc->parent) {
+					/* if a parent was supplied, and there is no current parent, the process is top-level currently by external callers, but now appears to be a child of something as well,
+					 * so in this scenario, we'll remove it from the top-level siblings list, and make it a child of the new parent.  I don't think there needs to be concern about its being a thread here. */
+					/* Note we can't simply move the process from its current processes list and add it to the supplied parent's children list, as that would break the iterator above us at the top-level, so
+					 * we must defer the migration until the processes iterator context can do it for us - but this is tricky because we're in the middle of traversing our hierarchy and this process may
+					 * be in a critical is_new state which must be realized this sample at its location in the hierarchy for correctness, there will be no reappearance of that critical state in the correct
+					 * tree position for users like vwm. */
+					/* the VMON_FLAG_2PASS flag has been introduced for users like vwm */
+					proc->parent = parent;
+					proc->refcnt++;
+				}
+#if 0
+				else if (parent != proc->parent) {
+					/* We're switching parents; this used to be considered unexpected, but then vmon happened and it monitors the whole tree from PID1 down.
+					 * PID1 is special in that it inherits orphans, so we can already be monitoring a child of an exited parent, and here PID1's children
+					 * following is looking up a newly inherited orphan, which reaches here finding proc with a non-NULL, but different parent.
+					 * Note the introduction of PR_SET_CHILD_SUBREAPER has made this no longer limited to PID1 either.
+					 */
+					/* now, we can't simply switch parents in a single step... since the is_stale=1 state must be seen by the front-end before we can
+					 * unlink it from the structure in a subsequent sample.  So instead, we should be queueing an adoption by the new parent, but
+					 * for the time being we can just suppress the refcnt bump and let the adoptive parent reestablish the monitor anew after
+					 * runs its course under its current parent.
+					 */
+				}
+#endif
+			} else {
+				proc->refcnt++;
 			}
+
+			return proc;
 		}
 	}
 
-_out:
-	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
+	proc = (vmon_proc_t *)calloc(1, sizeof(vmon_proc_t));
+	if (proc == NULL)
+		return NULL; /* TODO: report an error */
+
+	proc->pid = pid;
+	proc->wants = wants;
+	proc->generation = vmon->generation;
+	proc->refcnt = 1;
+	proc->is_new = 1; /* newly created process */
+	proc->is_thread = is_thread;
+	proc->parent = parent;
+	INIT_LIST_HEAD(&proc->sample_callbacks);
+	INIT_LIST_HEAD(&proc->children);
+	INIT_LIST_HEAD(&proc->siblings);
+	INIT_LIST_HEAD(&proc->threads);
+
+	if (!maybe_install_proc_callback(vmon, &proc->sample_callbacks, sample_cb, sample_cb_arg)) {
+		free(proc);
+		return NULL;
+	}
+
+	if (parent) {
+		/* if a parent is specified, attach this process to the parent's children or threads with its siblings */
+		if (is_thread) {
+			list_add_tail(&proc->threads, &parent->threads);
+			parent->threads_changed = 1;
+			parent->is_threaded = 1;
+		} else {
+			list_add_tail(&proc->siblings, &parent->children);
+			parent->children_changed = 1;
+		}
+	} else {
+		/* if no parent is specified, this is a toplevel process, attach it to the vmon->processes list with its siblings */
+		/* XXX ignoring is_thread if no parent is specified, it shouldn't occur, unless I want to support external callers monitoring specific threads explicitly, maybe...  */
+		list_add_tail(&proc->siblings, &vmon->processes);
+		vmon->processes_changed = 1;
+	}
+
+	/* add this process to the hash table */
+	list_add_tail(&proc->bucket, &vmon->htab[hash]);
+
+	/* if process table maintenance is enabled acquire a free slot for this process */
+	if ((vmon->flags & VMON_FLAG_PROC_ARRAY) && (i = find_proc_in_array(vmon, NULL, vmon->array_hint_free)) != -1) {
+		vmon->array[i] = proc;
+
+		/* cache where we get inserted into the array */
+		proc->array_hint_pos = i;
+	}
+
+	/* invoke ctor callback if set, note it's only called when a new vmon_proc_t has been instantiated */
+	if (vmon->proc_ctor_cb)
+		vmon->proc_ctor_cb(vmon, proc);
+
+	return proc;
 }
 
 
@@ -466,7 +544,7 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 						}
 					}
 
-					if (found || (tmp = vmon_proc_monitor(vmon, proc, child_pid, proc->wants, NULL, NULL))) {
+					if (found || (tmp = proc_monitor(vmon, proc, child_pid, proc->wants, NULL, NULL))) {
 						/* There's an edge case where vmon_proc_monitor() finds child_pid existing as a child of something else,
 						 * in that case we're effectively migrating it to a new parent.  This occurs in the vmon use case where
 						 * it's monitoring PID1-down, and PID1 of course inherits orphans.  So some descendant proc is already
@@ -483,7 +561,7 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 						 */
 						if (tmp->parent == proc)
 							start = &tmp->siblings;
-					} /* else { vmon_proc_monitor failed just move on } */
+					} /* else { proc_monitor failed just move on } */
 
 					child_pid = 0;
 					break;
@@ -601,7 +679,7 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 			}
 		}
 
-		if (found || (tmp = vmon_proc_monitor(vmon, proc, tid, (proc->wants | VMON_INTERNAL_PROC_IS_THREAD), NULL, NULL)))
+		if (found || (tmp = proc_monitor(vmon, proc, tid, (proc->wants | VMON_INTERNAL_PROC_IS_THREAD), NULL, NULL)))
 			start = &tmp->threads;
 	}
 
@@ -613,6 +691,124 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
 }
+
+
+/* sample stat process stats */
+typedef enum _vmon_proc_stat_fsm_t {
+#define VMON_ENUM_PARSER_STATES
+#include "defs/proc_stat.def"
+} vmon_proc_stat_fsm_t;
+
+static sample_ret_t proc_sample_stat(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_stat_t **store)
+{
+	int			changes = 0;
+	int			i, len, total = 0;
+	char			*arg;
+	int			argn, prev_argc;
+	vmon_proc_stat_fsm_t	state = VMON_PARSER_STATE_PROC_STAT_PID;
+#define VMON_PREPARE_PARSER
+#include "defs/proc_stat.def"
+
+	assert(vmon);
+	assert(store);
+
+	if (!proc) { /* dtor */
+		try_close(&(*store)->comm_fd);
+		try_free((void **)&(*store)->comm.array);
+		try_close(&(*store)->cmdline_fd);
+		try_free((void **)&(*store)->cmdline.array);
+		try_free((void **)&(*store)->argv);
+		try_close(&(*store)->wchan_fd);
+		try_free((void **)&(*store)->wchan.array);
+		try_close(&(*store)->stat_fd);
+		try_free((void **)&(*store)->exe.array);
+
+		return DTOR_FREE;
+	}
+
+/* _retry: */
+	if (!(*store)) { /* ctor */
+
+		*store = calloc(1, sizeof(vmon_proc_stat_t));
+
+		if (proc->is_thread) {
+			(*store)->comm_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/comm", proc->pid, proc->pid);
+			(*store)->cmdline_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/cmdline", proc->pid, proc->pid);
+			(*store)->wchan_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/wchan", proc->pid, proc->pid);
+			(*store)->stat_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/task/%i/stat", proc->pid, proc->pid);
+		} else {
+			(*store)->comm_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/comm", proc->pid);
+			(*store)->cmdline_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/cmdline", proc->pid);
+			(*store)->wchan_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/wchan", proc->pid);
+			(*store)->stat_fd = openf(vmon, O_RDONLY, vmon->proc_dir, "%i/stat", proc->pid);
+		}
+
+		/* initially everything is considered changed */
+		memset((*store)->changed, 0xff, sizeof((*store)->changed));
+	} else {
+		/* clear the entire changed bitmap */
+		memset((*store)->changed, 0, sizeof((*store)->changed));
+	}
+
+	/* XXX TODO: integrate load_contents_fd() calls into changes++ maintenance */
+	/* /proc/$pid/comm */
+	load_contents_fd(vmon, &(*store)->comm, (*store)->comm_fd, LOAD_FLAGS_NOTRUNCATE, (*store)->changed, VMON_PROC_STAT_COMM);
+
+	/* /proc/$pid/cmdline */
+	load_contents_fd(vmon, &(*store)->cmdline, (*store)->cmdline_fd, LOAD_FLAGS_NOTRUNCATE, (*store)->changed, VMON_PROC_STAT_CMDLINE);
+	for (prev_argc = (*store)->argc, (*store)->argc = 0, i = 0; i < (*store)->cmdline.len; i++) {
+		if (!(*store)->cmdline.array[i])
+			(*store)->argc++;
+	}
+
+	/* if the cmdline has changed, allocate argv array and store ptrs to the fields within it */
+	if (BITTEST((*store)->changed, VMON_PROC_STAT_CMDLINE)) {
+		if (prev_argc != (*store)->argc) {
+			try_free((void **)&(*store)->argv); /* XXX could realloc */
+			(*store)->argv = calloc(1, (*store)->argc * sizeof(char *));
+		}
+
+		for (argn = 0, arg = (*store)->cmdline.array, i = 0; i < (*store)->cmdline.len; i++) {
+			if (!(*store)->cmdline.array[i]) {
+				(*store)->argv[argn++] = arg;
+				arg = &(*store)->cmdline.array[i + 1];
+			}
+		}
+	}
+
+	/* /proc/$pid/wchan */
+	load_contents_fd(vmon, &(*store)->wchan, (*store)->wchan_fd, LOAD_FLAGS_NOTRUNCATE, (*store)->changed, VMON_PROC_STAT_WCHAN);
+
+	/* /proc/$pid/exe */
+	if ((*store)->cmdline.len) /* kernel threads have no cmdline, and always fail readlinkf() on exe, skip readlinking the exe for them using this heuristic */
+		readlinkf(vmon, &(*store)->exe, vmon->proc_dir, "%i/exe", proc->pid);
+
+	/* XXX TODO: there's a race between discovering comm_len from /proc/$pid/comm and applying it in the parsing of /proc/$pid/stat, detect the race
+	 * scenario and retry the sample when detected by goto _retry (see commented _retry label above) */
+
+	/* read in stat and parse it assigning the stat members accordingly */
+	while ((len = try_pread((*store)->stat_fd, vmon->buf, sizeof(vmon->buf), total)) > 0) {
+		total += len;
+
+		for (i = 0; i < len; i++) {
+			/* parse the fields from the file, stepping through... */
+			_p.input = vmon->buf[i];
+			switch (state) {
+#define VMON_PARSER_DELIM ' '	/* TODO XXX eliminate the need for this, I want the .def's to include all the data format knowledge */
+#define VMON_IMPLEMENT_PARSER
+#include "defs/proc_stat.def"
+				default:
+					/* we're finished parsing once we've fallen off the end of the symbols */
+					goto _out; /* this saves us the EOF read syscall */
+			}
+		}
+	}
+
+_out:
+	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;
+}
+
+
 
 
 /* helper for maintaining reference counted global objects table */
@@ -1140,199 +1336,12 @@ void vmon_destroy(vmon_t *vmon)
 }
 
 
-/* helper for searching for the process in the process array, specify NULL to find a free slot */
-static int find_proc_in_array(vmon_t *vmon, vmon_proc_t *proc, int hint)
-{
-	int	ret = -1;
-
-	assert(vmon);
-
-	if (hint >= 0 && hint < vmon->array_allocated_nr && vmon->array[hint] == proc) {
-		/* the hint was accurate, bypass the search */
-		ret = hint;
-	} else {
-		int	i;
-
-		/* search for the entry in the array */
-		for (i = 0; i < vmon->array_allocated_nr; i++) {
-			if (vmon->array[i] == proc) {
-				ret = i;
-				break;
-			}
-		}
-	}
-
-	if (!proc && ret == -1) {
-		vmon_proc_t	**tmp;
-
-		/* enlarge the array */
-		tmp = realloc(vmon->array, (vmon->array_allocated_nr + VMON_ARRAY_GROWBY) * sizeof(vmon_proc_t *));
-		if (tmp) {
-			memset(&tmp[vmon->array_allocated_nr], 0, VMON_ARRAY_GROWBY * sizeof(vmon_proc_t *));
-			ret = vmon->array_hint_free = vmon->array_allocated_nr;
-			vmon->array_allocated_nr += VMON_ARRAY_GROWBY;
-			vmon->array = tmp;
-		} /* XXX TODO: handle realloc failure */
-	}
-
-	return ret;
-}
-
-
-/* simple helper for installing callbacks on the callback lists, currently only used for the per-process sample callbacks */
-/* will not install the same callback function & arg combination more than once, and will not install NULL-functioned callbacks at all! */
-static int maybe_install_proc_callback(vmon_t *vmon, list_head_t *callbacks, void (*func)(vmon_t *, void *, vmon_proc_t *, void *), void *arg)
-{
-	assert(vmon);
-	assert(callbacks);
-	assert(!arg || func);
-
-	if (func) {
-		vmon_proc_callback_t	*cb;
-
-		list_for_each_entry(cb, callbacks, callbacks) {
-			if (cb->func == func && cb->arg == arg)
-				break;
-		}
-
-		if (&cb->callbacks == callbacks) {
-			cb = calloc(1, sizeof(vmon_proc_callback_t));
-			if (!cb)
-				return 0;
-
-			cb->func = func;
-			cb->arg = arg;
-			list_add_tail(&cb->callbacks, callbacks);
-		}
-	}
-
-	return 1;
-}
-
-
 /* monitor a process under a given vmon instance, the public interface.
  * XXX note it's impossible to say "none" for wants per-process, just "inherit", if vmon_init() was told a proc_wants of "inherit" then it's like having "none"
  * proc_wants for all proceses, perhaps improve this if there's a pressure to support this use case */
-vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vmon_proc_wants_t wants, void (*sample_cb)(vmon_t *, void *, vmon_proc_t *, void *), void *sample_cb_arg)
+vmon_proc_t * vmon_proc_monitor(vmon_t *vmon, int pid, vmon_proc_wants_t wants, void (*sample_cb)(vmon_t *, void *, vmon_proc_t *, void *), void *sample_cb_arg)
 {
-	vmon_proc_t	*proc;
-	int		hash = (pid % VMON_HTAB_SIZE), i;
-	int		is_thread = (wants & VMON_INTERNAL_PROC_IS_THREAD) ? 1 : 0;
-
-	assert(vmon);
-	assert(!sample_cb_arg || sample_cb);
-
-	wants &= ~VMON_INTERNAL_PROC_IS_THREAD;
-
-	if (pid < 0)
-		return NULL;
-
-	list_for_each_entry(proc, &vmon->htab[hash], bucket) {
-		/* search for the process to see if it's already monitored, we allow threads to exist with the same pid hence the additional is_thread comparison */
-		if (proc->pid == pid && proc->is_thread == is_thread) {
-			if (!maybe_install_proc_callback(vmon, &proc->sample_callbacks, sample_cb, sample_cb_arg))
-				return NULL;
-
-			proc->wants = wants; /* we can alter wants this way, though it clearly needs more consideration XXX */
-
-			if (parent) {
-				/* This is a predicament.  If the top-level (externally-established) process monitor wins the race, the process has no parent and is on the vmon->processes list.
-				 * Then the follow_children-established monitor comes along and wants to assign a parent, this isn't such a big deal, and we should be able to permit it, however,
-				 * we're in the process of iterating the top-level processes list when we run the follow_children() sampler of a descendant which happens to also be the parent.
-				 * We can't simply remove the process from the top-level processes list mid-iteration and stick it on the children list of the parent, the iterator could wind up
-				 * following the new pointer into the parents children.
-				 *
-				 * What I'm doing for now is allowing the assignment of a parent when there is no parent, but we don't perform the vmon->processes to parent->children migration
-				 * until the top-level sample_siblings() function sees the node with the parent.  At that point, the node will migrate to the parent's children list.  Since
-				 * this particular migration happens immediately within the same sample, it
-				 */
-				if (!proc->parent) {
-					/* if a parent was supplied, and there is no current parent, the process is top-level currently by external callers, but now appears to be a child of something as well,
-					 * so in this scenario, we'll remove it from the top-level siblings list, and make it a child of the new parent.  I don't think there needs to be concern about its being a thread here. */
-					/* Note we can't simply move the process from its current processes list and add it to the supplied parent's children list, as that would break the iterator above us at the top-level, so
-					 * we must defer the migration until the processes iterator context can do it for us - but this is tricky because we're in the middle of traversing our hierarchy and this process may
-					 * be in a critical is_new state which must be realized this sample at its location in the hierarchy for correctness, there will be no reappearance of that critical state in the correct
-					 * tree position for users like vwm. */
-					/* the VMON_FLAG_2PASS flag has been introduced for users like vwm */
-					proc->parent = parent;
-					proc->refcnt++;
-				}
-#if 0
-				else if (parent != proc->parent) {
-					/* We're switching parents; this used to be considered unexpected, but then vmon happened and it monitors the whole tree from PID1 down.
-					 * PID1 is special in that it inherits orphans, so we can already be monitoring a child of an exited parent, and here PID1's children
-					 * following is looking up a newly inherited orphan, which reaches here finding proc with a non-NULL, but different parent.
-					 * Note the introduction of PR_SET_CHILD_SUBREAPER has made this no longer limited to PID1 either.
-					 */
-					/* now, we can't simply switch parents in a single step... since the is_stale=1 state must be seen by the front-end before we can
-					 * unlink it from the structure in a subsequent sample.  So instead, we should be queueing an adoption by the new parent, but
-					 * for the time being we can just suppress the refcnt bump and let the adoptive parent reestablish the monitor anew after 
-					 * runs its course under its current parent.
-					 */
-				}
-#endif
-			} else {
-				proc->refcnt++;
-			}
-
-			return proc;
-		}
-	}
-
-	proc = (vmon_proc_t *)calloc(1, sizeof(vmon_proc_t));
-	if (proc == NULL)
-		return NULL; /* TODO: report an error */
-
-	proc->pid = pid;
-	proc->wants = wants;
-	proc->generation = vmon->generation;
-	proc->refcnt = 1;
-	proc->is_new = 1; /* newly created process */
-	proc->is_thread = is_thread;
-	proc->parent = parent;
-	INIT_LIST_HEAD(&proc->sample_callbacks);
-	INIT_LIST_HEAD(&proc->children);
-	INIT_LIST_HEAD(&proc->siblings);
-	INIT_LIST_HEAD(&proc->threads);
-
-	if (!maybe_install_proc_callback(vmon, &proc->sample_callbacks, sample_cb, sample_cb_arg)) {
-		free(proc);
-		return NULL;
-	}
-
-	if (parent) {
-		/* if a parent is specified, attach this process to the parent's children or threads with its siblings */
-		if (is_thread) {
-			list_add_tail(&proc->threads, &parent->threads);
-			parent->threads_changed = 1;
-			parent->is_threaded = 1;
-		} else {
-			list_add_tail(&proc->siblings, &parent->children);
-			parent->children_changed = 1;
-		}
-	} else {
-		/* if no parent is specified, this is a toplevel process, attach it to the vmon->processes list with its siblings */
-		/* XXX ignoring is_thread if no parent is specified, it shouldn't occur, unless I want to support external callers monitoring specific threads explicitly, maybe...  */
-		list_add_tail(&proc->siblings, &vmon->processes);
-		vmon->processes_changed = 1;
-	}
-
-	/* add this process to the hash table */
-	list_add_tail(&proc->bucket, &vmon->htab[hash]);
-
-	/* if process table maintenance is enabled acquire a free slot for this process */
-	if ((vmon->flags & VMON_FLAG_PROC_ARRAY) && (i = find_proc_in_array(vmon, NULL, vmon->array_hint_free)) != -1) {
-		vmon->array[i] = proc;
-
-		/* cache where we get inserted into the array */
-		proc->array_hint_pos = i;
-	}
-
-	/* invoke ctor callback if set, note it's only called when a new vmon_proc_t has been instantiated */
-	if (vmon->proc_ctor_cb)
-		vmon->proc_ctor_cb(vmon, proc);
-
-	return proc;
+	return proc_monitor(vmon, NULL, pid, wants, sample_cb, sample_cb_arg);
 }
 
 
@@ -1632,7 +1641,7 @@ int vmon_sample(vmon_t *vmon)
 
 			if (!found) {
 				/* monitor the process */
-				vmon_proc_t	*proc = vmon_proc_monitor(vmon, NULL, pid, vmon->proc_wants, NULL, NULL);
+				vmon_proc_t	*proc = proc_monitor(vmon, NULL, pid, vmon->proc_wants, NULL, NULL);
 
 				if (!proc)
 					continue; /* TODO error */

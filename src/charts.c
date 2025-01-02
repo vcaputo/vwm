@@ -1173,7 +1173,7 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 
 	/* add the client process to the monitoring hierarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
-	chart->proc = vmon_proc_monitor(&charts->vmon, NULL, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
+	chart->proc = vmon_proc_monitor(&charts->vmon, pid, VMON_WANT_PROC_INHERIT, (void (*)(vmon_t *, void *, vmon_proc_t *, void *))proc_sample_callback, chart);
 	if (!chart->proc) {
 		VWM_ERROR("Unable to establish proc monitor");
 		goto _err_free;
