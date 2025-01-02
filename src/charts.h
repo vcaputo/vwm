@@ -1,6 +1,8 @@
 #ifndef _CHARTS_H
 #define _CHARTS_H
 
+#include <stdio.h> /* just for charts_vmon_dump_procs() */
+
 #ifdef USE_XLIB
 #include <X11/extensions/Xfixes.h> /* this is just for XserverRegion/vwm_chart_compose_xdamage() */
 #include "xserver.h"
@@ -20,6 +22,7 @@ void vwm_charts_rate_decrease(vwm_charts_t *charts);
 void vwm_charts_rate_set(vwm_charts_t *charts, unsigned hertz);
 void vwm_charts_marker_distance_set(vwm_charts_t *charts, unsigned distance);
 int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us);
+void charts_vmon_dump_procs(vwm_charts_t *charts, FILE *out);
 
 vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int height, const char *name);
 void vwm_chart_destroy(vwm_charts_t *charts, vwm_chart_t *chart);

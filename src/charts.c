@@ -1454,3 +1454,9 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 
 	return ret;
 }
+
+
+void charts_vmon_dump_procs(vwm_charts_t *charts, FILE *out)
+{
+	vmon_dump_procs(&charts->vmon, out);
+}
