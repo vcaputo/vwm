@@ -17,11 +17,13 @@
  */
 
 #include <assert.h>
+#include <errno.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/prctl.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -46,6 +48,7 @@ typedef struct vmon_t {
 	int		done;
 	int		linger;
 	int		dump_procs;
+	int		mem_locked;
 	time_t		start_time;
 	int		snapshots_interval;
 	int		snapshot;
@@ -201,6 +204,7 @@ static void print_help(void)
 		" -w  --wip-name    Name to use for work-in-progress snapshot filename\n"
 		" -v  --version     Print version\n"
 		" -D  --dump-procs  Dump libvmon internal processes table (debugging aid)\n"
+		" -L  --mem-locked  Lock in memory using mlockall(MCL_CURRENT|MCL_FUTURE)\n"
 		" -W  --width       Chart width\n"
 		" -z  --hertz       Sample rate in hertz\n"
 		"-------------------------------------------------------------------------------"
@@ -491,6 +495,9 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 		} else if (is_flag(*argv, "-D", "--dump-procs")) {
 			vmon->dump_procs = 1;
 			last = argv;
+		} else if (is_flag(*argv, "-L", "--mem-locked")) {
+			vmon->mem_locked = 1;
+			last = argv;
 		} else if ((*argv)[0] == '-') {
 			VWM_ERROR("Unrecognized argument: \"%s\", try --help\n", argv[0]);
 			exit(EXIT_FAILURE);
@@ -690,6 +697,13 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 	if (!vmon->chart) {
 		VWM_ERROR("unable to create chart");
 		goto _err_win;
+	}
+
+	if (vmon->mem_locked) {
+		if (mlockall(MCL_CURRENT|MCL_FUTURE) < 0) {
+			VWM_ERROR("unable to lock in memory: %s", strerror(errno));
+			goto _err_win;
+		}
 	}
 
 	return vmon;
