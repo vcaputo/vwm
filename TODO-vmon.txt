@@ -1,0 +1,126 @@
+vmon is being used internally at my $dayjob, as such I can justify paying some
+bounties to anyone willing to work on these items for some cash.
+
+Payment is predicated on successful merging of the work, which means it must
+get through review by yours truly.  We're not rewriting everything, we're not
+changing languages, we're making minimal changes to deliver what's asked.
+
+Before beginning any work listed here, please email <vcaputo@pengaru.com> to
+verify nobody else has started work on the same item, as well as to clarify
+what your intentions are and discuss any implementation details.  Dollar
+amounts listed below are estimates, we will arrive at a firmer number in
+email.  If you don't communicate with me before working on these things, be
+prepared for disappointment.
+
+There is no commitment being made here to merge anything you deliver, but
+should the work get merged, you will be paid.
+
+--------------------------------------------------------------------------------
+
+- vmon needs a generalized mechanism for runtime-defined static rows introduced
+  into the charts.  Stuff like WiFi signal:noise levels, or
+  hwmon/thermal_zone_device temperature values vs.  related throttles to plot
+  temperature in red with the related throttling action in cyan.
+
+  I'm leaning towards there being a CLI argument for introducing
+  a static row, with a syntax like:
+
+  --source "TYPE:label" "[TYPE-specific-args...]"
+
+  where the "--source source-args" position in argv influences its relative
+  order within the chart when appropriate, but --source+TYPE branches into
+  TYPE-specific cli handling of the rest which may or may not expect more
+  explicit positional/layout information regarding where to put this source in
+  the charts.
+
+  Beyond that, what happens in the TYPE-specific-args is entirely polymorphic
+  in the sense that the TYPE-specific code does whatever's needed there.
+
+  The first source to add should be some generic static single row wiring up
+  two sampled sources like /sys/ nodes producing a single stringified integer
+  when each read from.  Targeting temperature values... with a float multiplier
+  to scale what's read into the row's height linearly, like a %age.
+
+  e.g. --source "therm:radio0" "/sys/class/thermal_zone_device10/temp,min,max;/sys/class/cooling_device/throttle,min,max"
+
+  where "therm" maps to a "therm" handler that knows how to parse and apply:
+  "/sys/class/thermal_zone_device10/temp,min,max;/sys/class/cooling_device/throttle,min,max"
+
+  the "radio0" part after therm: would be what gets drawn over the row as a
+  label, the "therm" handler just needs to do the sampling and draw the meters
+  for the row.
+
+  this must be done in a generalized manner where "therm" can be
+  easily replaced with "bar" for plugging in a new "bar" handler,
+  as there will be additional static rows to add -  like the
+  aforementioned signal:noise row.
+
+  Proposed bounty upon successful merge upstream: $400
+
+
+- Processes should have a memory row accompanying the user+sys cpu row.  It's
+  only appropriate per-process, as threads share their process' address space.
+
+  It's unclear to me how to determine the scale to use for the memory rows, if
+  it should be a %age of the total system physical memory, or something else.
+  Maybe it would be better as a relative growth/shrinkage plot where the red
+  indicates %age RSS increased from the bottom up (inverted vs. cpu) and cyan
+  %age RSS decreased from top down (also inverted vs. cpu)
+
+  If the relative movement approach is used, it'd have to rely on a numberic
+  overlay to capture the current absolute RSS value.
+
+  This would be desirable to capture in the snowflakes when a process exits,
+  alongside the cpu utilization graphs.
+
+  A significant part of the work required to add memory rows to just the
+  processes will likely be breaking the assumption that it's a single row of
+  pixels per thread and process, uniformly.  Instead it'll be double height for
+  only the processes.
+
+  libvmon doesn't currently collect memory stats, so this will require libvmon
+  work adding that without introducing a bunch of undue overhead, in addition
+  to likely invasive changes to charts.c/vcr.c to deal with existing
+  assumptions surrounding the per-process/per-thread row height being a uniform
+  thing... since processes would now have another row for memory, while threads
+  would continue containing only cpu.
+
+  Proposed bounty upon successful merge upstream: $1000
+
+
+- A CLI flag for turning vmon into a subreaper would be handy.  It's fairly
+  trivial but does mean vmon would have to become more robust in its child
+  reaping to not accumulate zombies.  This is regarding the
+  PR_SET_CHILD_SUBREAPER prctl... when you run a command under vmon in an
+  strace-like fashion, being a subreaper would capture orphaned descendents
+  like daemons so they don't leave vmon's scope upon becoming orphans inherited
+  by some ancestor subreaper, likely pid1.
+
+  Proposed bounty upon successful merge upstream: $100
+
+
+- charts.c should do the non-zero level detection in the integer domain, to
+  ensure no floating point precision/rounding errors can result in 0-height
+  bars in the graph for non-zero but well below 1 pixel when scaled levels.
+
+  Proposed bounty upon successful merge upstream: $50
+
+
+- I've noticed that when testing vmon in embedded devices experiencing large
+  scheduling delays, enough that the Adherence row becomes solid red, vmon
+  still tends to produce an inconsistent duration in the bar graph.  So
+  there's still some work to be done here in terms of not losing/adding time
+  in the long run when Adherence consistently slips.
+
+  The cases where I've observed this use 8000 width graphs with 1Hz sample
+  rates, combined with a heavly loaded system suffering from memory pressure
+  thrashing and scheduler contention.  The snapshots are being saved every 25
+  minutes, but the actual time passed in the graph's X axis varies as much as
+  several minutes.  This almost certainly has to do with the Adherence
+  handling and sample repeating done to fill in the missed samples.  It'd be
+  nice to firm this area up such that the X axis distance traveled accurately
+  reflects the time passed.  It might require maintaining a cumulative
+  fractional error value across samples to compensate for, since cumulative
+  error is what's causing this.
+
+  Proposed bounty upon successful merge upstream: $100
