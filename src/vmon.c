@@ -711,6 +711,13 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 		}
 	}
 
+	if (vmon->reaper) {
+		if (prctl(PR_SET_CHILD_SUBREAPER, (unsigned long)1) < 0) {
+			VWM_ERROR("unable become child subreaper: %s", strerror(errno));
+			goto _err_win;
+		}
+	}
+
 	return vmon;
 
 _err_win:
@@ -919,20 +926,36 @@ int main(int argc, const char * const *argv)
 			vmon->done = 1;
 		}
 
-		if (got_sigchld) {
-			int	status, r;
-
-			if (vmon->snapshot && (r = vmon_snapshot(vmon)) < 0)
-				VWM_ERROR("error saving snapshot: %s", strerror(-r));
+		while (got_sigchld) {
+			int	status;
+			pid_t	reaped;
 
 			got_sigchld = 0;
-			wait(&status);
+			/* exhaustively collect statuses for all the exited children, if another
+			 * sigchld gets delivered while we're doing this, we'll do it again, until
+			 * that stops.
+			 */
+			while ((reaped = waitpid(-1, &status, WNOHANG)) > 0) {
+				int	r;
 
-			if (WIFEXITED(status)) {
-				ret = WEXITSTATUS(status);
+				/* potential exited orphans if we're being subreaper, ignore those */
+				if (reaped != vmon->pid)
+					continue;
 
-				if (!vmon->linger)
-					vmon->done = 1;
+				if (WIFEXITED(status) || WIFSIGNALED(status)) {
+					if (vmon->snapshot && (r = vmon_snapshot(vmon)) < 0)
+						VWM_ERROR("error saving snapshot: %s", strerror(-r));
+
+					ret = WEXITSTATUS(status);
+
+					if (!vmon->linger)
+						vmon->done = 1;
+				}
+			}
+
+			if (reaped < 0) {
+				VWM_ERROR("failed to waitpid on SIGCHLD: %s", strerror(errno));
+				vmon->done = 1;
 			}
 		}
 
