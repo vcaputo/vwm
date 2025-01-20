@@ -731,6 +731,14 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 		}
 	}
 
+	/* lets do some sanity checks; don't fail, but speak up, since I'm not interested */
+	if (vmon->headless && vmon->linger)
+		VWM_ERROR("FYI: combining --headless and --linger likely doesn't make sense");
+
+	if (vmon->reaper && !vmon->execv)
+		VWM_ERROR("FYI: using --reaper without a command (e.g. w/--pid or the default '--pid 1' equiv) likely doesn't make sense");
+
+
 	return vmon;
 
 _err_win:
