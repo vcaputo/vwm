@@ -698,10 +698,23 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 			goto _err_win;
 	}
 
-	vmon->chart = vwm_chart_create(vmon->charts, vmon->pid ? : 1, vmon->width, vmon->height, vmon->name);
-	if (!vmon->chart) {
-		VWM_ERROR("unable to create chart");
-		goto _err_win;
+	{
+		pid_t	root_pid = 1;
+
+		if (vmon->pid)
+			root_pid = vmon->pid;
+
+		/* If vmon is executing the command and being the reaper, make vmon itself the monitored root.
+		 * This way we get to see any orphans.
+		 */
+		if (vmon->execv && vmon->reaper)
+			root_pid = getpid();
+
+		vmon->chart = vwm_chart_create(vmon->charts, root_pid, vmon->width, vmon->height, vmon->name);
+		if (!vmon->chart) {
+			VWM_ERROR("unable to create chart");
+			goto _err_win;
+		}
 	}
 
 	if (vmon->mem_locked) {
