@@ -88,17 +88,6 @@ should the work get merged, you will be paid.
   Proposed bounty upon successful merge upstream: $1000
 
 
-- A CLI flag for turning vmon into a subreaper would be handy.  It's fairly
-  trivial but does mean vmon would have to become more robust in its child
-  reaping to not accumulate zombies.  This is regarding the
-  PR_SET_CHILD_SUBREAPER prctl... when you run a command under vmon in an
-  strace-like fashion, being a subreaper would capture orphaned descendents
-  like daemons so they don't leave vmon's scope upon becoming orphans inherited
-  by some ancestor subreaper, likely pid1.
-
-  Proposed bounty upon successful merge upstream: $100
-
-
 - charts.c should do the non-zero level detection in the integer domain, to
   ensure no floating point precision/rounding errors can result in 0-height
   bars in the graph for non-zero but well below 1 pixel when scaled levels.
