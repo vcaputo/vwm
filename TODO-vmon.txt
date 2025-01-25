@@ -112,4 +112,12 @@ should the work get merged, you will be paid.
   fractional error value across samples to compensate for, since cumulative
   error is what's causing this.
 
+  Proposed bounty upon successful merge upstream: $200
+
+
+- When the process hierarchy extends to/beyond the bottom of the chart, if it
+  retracts to again fit well within the chart's bounds, the blank padding rows
+  aren't restored.  Instead, whatever residual contents leftover from when the
+  hierarchy went to the edge and beyond gets retained as the padding rows.
+
   Proposed bounty upon successful merge upstream: $100
