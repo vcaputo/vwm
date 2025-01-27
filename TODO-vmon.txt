@@ -67,7 +67,7 @@ should the work get merged, you will be paid.
   indicates %age RSS increased from the bottom up (inverted vs. cpu) and cyan
   %age RSS decreased from top down (also inverted vs. cpu)
 
-  If the relative movement approach is used, it'd have to rely on a numberic
+  If the relative movement approach is used, it'd have to rely on a numeric
   overlay to capture the current absolute RSS value.
 
   This would be desirable to capture in the snowflakes when a process exits,
