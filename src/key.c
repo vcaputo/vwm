@@ -32,6 +32,7 @@
 static int		key_is_grabbed;				/* flag for tracking keyboard grab state */
 static vwm_direction_t	direction = VWM_DIRECTION_FORWARD;	/* flag for reversing directional actions */
 static int		send_it;				/* flag for "sending" a migration operation without following it */
+static int		chase_it;				/* flag for "chasing" a focus operation with the pointer */
 
 /* Poll the keyboard state to see if _any_ keys are pressed */
 static int keys_pressed(vwm_t *vwm)
@@ -79,6 +80,12 @@ void vwm_key_released(vwm_t *vwm, Window win, XKeyReleasedEvent *keyrelease)
 			vwm_desktop_mru(vwm, vwm->focused_desktop);
 
 			break;
+
+		case XK_m:
+			VWM_TRACE("XK_m released with chase_it=%i", chase_it);
+			chase_it = 0;
+			break;
+
 
 		case XK_r:
 			VWM_TRACE("XK_r released with direction=%i", direction);
@@ -142,6 +149,11 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 				key_is_grabbed++;
 
 			VWM_TRACE("aborting with origin %p", vwm->focused_origin);
+			break;
+
+		case XK_m: /* "chase" focus actions with pointer */
+			VWM_TRACE("XK_r pressed with chase_it=%i", chase_it);
+			chase_it = 1;
 			break;
 
 		case XK_r: /* reverse directional actions */
