@@ -29,9 +29,9 @@
 #include "window.h"
 #include "xwindow.h"
 
-static int		key_is_grabbed;	/* flag for tracking keyboard grab state */
+static int		key_is_grabbed;				/* flag for tracking keyboard grab state */
 static vwm_direction_t	direction = VWM_DIRECTION_FORWARD;	/* flag for reversing directional actions */
-static int		send_it; /* flag for "sending" a migration operation without following it */
+static int		send_it;				/* flag for "sending" a migration operation without following it */
 
 /* Poll the keyboard state to see if _any_ keys are pressed */
 static int keys_pressed(vwm_t *vwm)
