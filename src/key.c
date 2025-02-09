@@ -492,6 +492,22 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			break;
 	}
 
+	/* if we're chasing focus with the pointer, center the pointer in the focused window */
+	if (chase_it) {
+		/* We have to get the latest window attrs for this to always do the right thing,
+		 * otherwise it's kind of racy as we've often _just_ changed window attrs,
+		 * and want to query them to warp the pointer to the current configuration.
+		 */
+		XSync(VWM_XDISPLAY(vwm), False);
+		vwin = vwm_win_get_focused(vwm);
+		if (vwin) {
+			XWindowAttributes	attrs;
+
+			XGetWindowAttributes(VWM_XDISPLAY(vwm), vwin->xwindow->id, &attrs);
+			XWarpPointer(VWM_XDISPLAY(vwm), None, vwin->xwindow->id, 0, 0, 0, 0, attrs.width / 2, attrs.height / 2);
+		}
+	}
+
 	/* if what we're doing requests a grab, if not already grabbed, grab keyboard */
 	if (!key_is_grabbed && do_grab) {
 		VWM_TRACE("saving focused_origin of %p", vwin);
