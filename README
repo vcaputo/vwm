@@ -38,6 +38,11 @@ Modifiers:
                       These also haven't been explicitly documented below,
                       currently it's basically: Grave(`), and 0-9.
 
+  Mod1-m-             Modifies window configuring / focus-changing events to
+                      behave in a mouse-follows-focus manner.  Composes with
+                      the above as well, and may be used independently to simply
+                      center the pointer in the currently focused window.
+
 
 Built-in operations:
 
