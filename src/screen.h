@@ -6,7 +6,7 @@
 typedef struct _vwm_t vwm_t;
 typedef struct _vwm_xwindow_t vwm_xwindow_t;
 
-typedef XineramaScreenInfo vwm_screen_t;					/* conveniently reuse the xinerama type for describing screens */
+typedef XineramaScreenInfo vwm_screen_t;	/* conveniently reuse the xinerama type for describing screens */
 
 typedef enum _vwm_screen_rel_t {
 	VWM_SCREEN_REL_RECT,		/* return the screen the supplied rectangle x,y,w,h most resides in */
