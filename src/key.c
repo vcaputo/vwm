@@ -16,6 +16,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <stdlib.h>
@@ -228,9 +229,22 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 					 * of the current desktop which map to displays.
 					 */
 				} else if (keypress->state & ShiftMask) {
+					vwm_screen_rel_t	rel;
+
 					/* "migrate" the focused window to the next screen */
-					vwm_win_autoconf(vwm, vwin, VWM_SCREEN_REL_XWIN_NEXT, vwin->autoconfigured, vwin->autoconfigured_param);
-					/* TODO reverse via VWM_SCREEN_REL_XWIN_PREV */
+
+					switch (direction) {
+					case VWM_DIRECTION_FORWARD:
+						rel = VWM_SCREEN_REL_XWIN_NEXT;
+						break;
+					case VWM_DIRECTION_REVERSE:
+						rel = VWM_SCREEN_REL_XWIN_PREV;
+						break;
+					default:
+						assert(0);
+					}
+
+					vwm_win_autoconf(vwm, vwin, rel, vwin->autoconfigured, vwin->autoconfigured_param);
 				} else {
 					/* focus the MRU window on the next screen */
 					vwm_win_focus_next(vwm, vwin, direction, VWM_FENCE_MASKED_VIOLATE);
