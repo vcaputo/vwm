@@ -215,20 +215,7 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 			 */
 
 			if (vwin) {
-				if (send_it) {
-					/* "send" the focused window to the next screen */
-					 VWM_TRACE("send window to screen not implemented yet");
-					/* TODO: this is identical to "migrate" below, but needs to focus
-					 * the next window within the origin screen if there is one.
-					 * It's unclear to me what should happen when you "send" the only
-					 * window in the current scren to another screen - should it just
-					 * turn into a migrate effectively? I don't think there's a situation
-					 * currently where no window is focused in the curent desktop, it's
-					 * one of those things that's prevented from happening, until there's
-					 * no windows left in the desktop.  The screens are just subregions
-					 * of the current desktop which map to displays.
-					 */
-				} else if (keypress->state & ShiftMask) {
+				if (send_it || (keypress->state & ShiftMask)) {
 					vwm_screen_rel_t	rel;
 
 					/* "migrate" the focused window to the next screen */
@@ -242,6 +229,15 @@ void vwm_key_pressed(vwm_t *vwm, Window win, XKeyPressedEvent *keypress)
 						break;
 					default:
 						assert(0);
+					}
+
+					if (send_it) {
+						/* "sending" only differs in that we try to focus the next window before migrating,
+						 * if vwin is the only window, it stays focused, and this degrades gracefully into
+						 * a migrate.  This is done because we never leave a situation without any window
+						 * focused in a desktop.
+						 */
+						vwm_win_focus_next(vwm, vwin, direction, VWM_FENCE_RESPECT);
 					}
 
 					vwm_win_autoconf(vwm, vwin, rel, vwin->autoconfigured, vwin->autoconfigured_param);
