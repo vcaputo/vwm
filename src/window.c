@@ -126,12 +126,18 @@ void vwm_win_autoconf_magic(vwm_t *vwm, vwm_window_t *vwin, const vwm_screen_t *
 /* "autoconfigure" windows (configuration shortcuts like fullscreen/halfscreen/quarterscreen) and restoring the window */
 void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_win_autoconf_t conf, ...)
 {
+	XWindowChanges		changes = { .border_width = WINDOW_BORDER_WIDTH };
 	const vwm_screen_t	*scr;
 	va_list			ap;
-	XWindowChanges		changes = { .border_width = WINDOW_BORDER_WIDTH };
 
 	/* remember the current configuration as the "client" configuration if it's not an autoconfigured one. */
-	if (vwin->autoconfigured == VWM_WIN_AUTOCONF_NONE)
+	/* XXX: this isn't perfect, and makes me wonder if there should be two slots you can restore back to:
+	 * 1. the OG window configuration from the X client, or
+	 * 2. the last non-autoconf configuration, which may or may not reflect the OG one
+	 * Right now, the OG one gets overwritten by #2, so you can only restore back to the last
+	 * explicit window configuration with Mod1-Enter.
+	 */
+	if (conf != VWM_WIN_AUTOCONF_NONE && vwin->autoconfigured == VWM_WIN_AUTOCONF_NONE)
 		vwin->client = vwin->xwindow->attrs;
 
 	scr = vwm_screen_find(vwm, rel, vwin->xwindow); /* XXX FIXME: this becomes a bug when vwm_screen_find() uses non-xwin va_args */
@@ -217,10 +223,30 @@ void vwm_win_autoconf(vwm_t *vwm, vwm_window_t *vwin, vwm_screen_rel_t rel, vwm_
 			break;
 
 		case VWM_WIN_AUTOCONF_NONE: /* restore window if autoconfigured */
-			changes.width = vwin->client.width;
-			changes.height = vwin->client.height;
-			changes.x = vwin->client.x;
-			changes.y = vwin->client.y;
+			if (vwin->autoconfigured == VWM_WIN_AUTOCONF_NONE) {
+				if (rel != VWM_SCREEN_REL_XWIN) {
+					const vwm_screen_t	*from_scr;
+
+					/* For now let's just try adjusting the x/y to scr,
+					 * which may or may not change anything at all, but
+					 * it /appears/ we might be trying to switch screens.
+					 */
+					from_scr = vwm_screen_find(vwm, VWM_SCREEN_REL_XWIN, vwin->xwindow);
+					if (from_scr != scr) {
+						changes.x = vwin->xwindow->attrs.x - from_scr->x_org + scr->x_org;
+						changes.y = vwin->xwindow->attrs.y - from_scr->y_org + scr->y_org;
+						/* XXX: undecided on if w/h should get scaled proportionally, leaving alone for now */
+						changes.width = vwin->xwindow->attrs.width;
+						changes.height = vwin->xwindow->attrs.height;
+					}
+				}
+			} else {
+				changes.width = vwin->client.width;
+				changes.height = vwin->client.height;
+				changes.x = vwin->client.x;
+				changes.y = vwin->client.y;
+			}
+
 			break;
 	}
 	va_end(ap);
