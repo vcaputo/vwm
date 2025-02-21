@@ -1283,17 +1283,29 @@ void vwm_chart_render(vwm_charts_t *charts, vwm_chart_t *chart, vcr_present_op_t
 }
 
 
+static void set_sampling_interval(vwm_charts_t *charts, float interval)
+{
+	assert(charts);
+	assert(interval > 0.f);
+
+	/* if we're unpausing, make this_sample current so we don't have some
+	 * potentially huge time delta to then try fill in with nonsense
+	 */
+	if (charts->sampling_interval_secs == INFINITY)
+		clock_gettime(CLOCK_MONOTONIC_RAW, &charts->this_sample);
+
+	charts->sampling_interval_secs = interval;
+}
+
+
 /* increase the sample rate relative to current using the table of intervals */
 void vwm_charts_rate_increase(vwm_charts_t *charts)
 {
-	int	i;
-
 	assert(charts);
 
-	for (i = 0; i < NELEMS(sampling_intervals); i++) {
+	for (int i = 0; i < NELEMS(sampling_intervals); i++) {
 		if (sampling_intervals[i] < charts->sampling_interval_secs) {
-			charts->sampling_interval_secs = sampling_intervals[i];
-			break;
+			return set_sampling_interval(charts, sampling_intervals[i]);
 		}
 	}
 }
@@ -1302,14 +1314,11 @@ void vwm_charts_rate_increase(vwm_charts_t *charts)
 /* decrease the sample rate relative to current using the table of intervals */
 void vwm_charts_rate_decrease(vwm_charts_t *charts)
 {
-	int	i;
-
 	assert(charts);
 
-	for (i = NELEMS(sampling_intervals) - 1; i >= 0; i--) {
+	for (int i = NELEMS(sampling_intervals) - 1; i >= 0; i--) {
 		if (sampling_intervals[i] > charts->sampling_interval_secs) {
-			charts->sampling_interval_secs = sampling_intervals[i];
-			break;
+			return set_sampling_interval(charts, sampling_intervals[i]);
 		}
 	}
 }
@@ -1321,7 +1330,7 @@ void vwm_charts_rate_set(vwm_charts_t *charts, unsigned hertz)
 	assert(charts);
 
 	/* XXX: note floating point divide by 0 simply results in infinity */
-	charts->sampling_interval_secs = 1.f / (float)hertz;
+	set_sampling_interval(charts, 1.f / (float)hertz);
 }
 
 
