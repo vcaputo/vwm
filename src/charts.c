@@ -437,94 +437,95 @@ static unsigned interval_as_hz(vwm_charts_t *charts)
 /* draw a process' row slice of a process tree */
 static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int depth, int row, const vmon_proc_t *proc, int *res_width)
 {
+	vmon_proc_t	*child, *ancestor, *sibling, *last_sibling = NULL;
+	int		bar_x = 0, bar_y = (row + 1) * VCR_ROW_HEIGHT;
+	int		sub;
+
 	/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
-	if (proc != chart->proc) {
-		vmon_proc_t	*child, *ancestor, *sibling, *last_sibling = NULL;
-		int		bar_x = 0, bar_y = (row + 1) * VCR_ROW_HEIGHT;
-		int		sub;
+	if (proc == chart->proc)
+		return;
 
-		/* XXX: everything done in this code block only dirties _this_ process' row in the rendered chart output */
+	/* XXX: everything done in this code block only dirties _this_ process' row in the rendered chart output */
 
-		/* walk up the ancestors until reaching chart->proc, any ancestors we encounter which have more siblings we draw a vertical bar for */
-		/* this draws the |'s in something like:  | |   |    | comm */
-		for (sub = 1, ancestor = proc->parent; ancestor && ancestor != chart->proc; ancestor = ancestor->parent, sub++) {
-			bar_x = ((depth - 1) - sub) * (VCR_ROW_HEIGHT / 2) + 4;
+	/* walk up the ancestors until reaching chart->proc, any ancestors we encounter which have more siblings we draw a vertical bar for */
+	/* this draws the |'s in something like:  | |   |    | comm */
+	for (sub = 1, ancestor = proc->parent; ancestor && ancestor != chart->proc; ancestor = ancestor->parent, sub++) {
+		bar_x = ((depth - 1) - sub) * (VCR_ROW_HEIGHT / 2) + 4;
 
-			assert(depth > 0);
+		assert(depth > 0);
 
-			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
-			if (proc_has_subsequent_siblings(&charts->vmon, ancestor))
-				vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
-					  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
-					  x + bar_x, bar_y);			/* dst x2, y2 (vertical line) */
+		/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
+		if (proc_has_subsequent_siblings(&charts->vmon, ancestor))
+			vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
+				  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
+				  x + bar_x, bar_y);			/* dst x2, y2 (vertical line) */
+	}
+
+	/* determine if _any_ of our siblings have children requiring us to draw a tee immediately before our comm string.
+	 * The only sibling which doesn't cause this to happen is the last one in the children list, if it has children it has no impact on its remaining
+	 * siblings, as there are none.
+	 *
+	 * This draws the + in something like:  | |    |  |    +comm
+	 */
+
+	/* find the last sibling (this has to be done due to the potential for stale siblings at the tail, and we'd rather not repeatedly check for it) */
+	list_for_each_entry(sibling, &proc->parent->children, siblings) {
+		if (!sibling->is_stale)
+			last_sibling = sibling;
+	}
+
+	/* now look for siblings with non-stale children to determine if a tee is needed, ignoring the last sibling */
+	list_for_each_entry(sibling, &proc->parent->children, siblings) {
+		int	needs_tee = 0;
+
+		/* skip stale siblings, they aren't interesting as they're invisible, and the last sibling has no bearing on wether we tee or not. */
+		if (sibling->is_stale || sibling == last_sibling)
+			continue;
+
+		/* if any of the other siblings have children which are not stale, put a tee in front of our name, but ignore stale children */
+		list_for_each_entry(child, &sibling->children, siblings) {
+			if (!child->is_stale) {
+				needs_tee = 1;
+				break;
+			}
 		}
 
-		/* determine if _any_ of our siblings have children requiring us to draw a tee immediately before our comm string.
-		 * The only sibling which doesn't cause this to happen is the last one in the children list, if it has children it has no impact on its remaining
-		 * siblings, as there are none.
-		 *
-		 * This draws the + in something like:  | |    |  |    +comm
-		 */
-
-		/* find the last sibling (this has to be done due to the potential for stale siblings at the tail, and we'd rather not repeatedly check for it) */
-		list_for_each_entry(sibling, &proc->parent->children, siblings) {
-			if (!sibling->is_stale)
-				last_sibling = sibling;
-		}
-
-		/* now look for siblings with non-stale children to determine if a tee is needed, ignoring the last sibling */
-		list_for_each_entry(sibling, &proc->parent->children, siblings) {
-			int	needs_tee = 0;
-
-			/* skip stale siblings, they aren't interesting as they're invisible, and the last sibling has no bearing on wether we tee or not. */
-			if (sibling->is_stale || sibling == last_sibling)
-				continue;
-
-			/* if any of the other siblings have children which are not stale, put a tee in front of our name, but ignore stale children */
-			list_for_each_entry(child, &sibling->children, siblings) {
+		/* if we still don't think we need a tee, check if there are threads */
+		if (!needs_tee) {
+			list_for_each_entry(child, &sibling->threads, threads) {
 				if (!child->is_stale) {
 					needs_tee = 1;
 					break;
 				}
 			}
-
-			/* if we still don't think we need a tee, check if there are threads */
-			if (!needs_tee) {
-				list_for_each_entry(child, &sibling->threads, threads) {
-					if (!child->is_stale) {
-						needs_tee = 1;
-						break;
-					}
-				}
-			}
-
-			/* found a tee is necessary, all that's left is to determine if the tee is a corner and draw it accordingly, stopping the search. */
-			if (needs_tee) {
-				bar_x = (depth - 1) * (VCR_ROW_HEIGHT / 2) + 4;
-
-				/* if we're the last sibling, corner the tee by shortening the vbar */
-				if (proc == last_sibling) {
-					vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
-						  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
-						  x + bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
-				} else {
-					vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
-						  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
-						  x + bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
-				}
-
-				vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
-					  x + bar_x, bar_y - 4,				/* dst x1, y1 */
-					  x + bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
-
-				/* terminate the outer sibling loop upon drawing the tee... */
-				break;
-			}
 		}
 
-		if (res_width)
-			*res_width = depth * (VCR_ROW_HEIGHT / 2);
+		/* found a tee is necessary, all that's left is to determine if the tee is a corner and draw it accordingly, stopping the search. */
+		if (needs_tee) {
+			bar_x = (depth - 1) * (VCR_ROW_HEIGHT / 2) + 4;
+
+			/* if we're the last sibling, corner the tee by shortening the vbar */
+			if (proc == last_sibling) {
+				vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
+					  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
+					  x + bar_x, bar_y - 4);			/* dst x2, y2 (vertical bar) */
+			} else {
+				vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
+					  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
+					  x + bar_x, bar_y);			/* dst x2, y2 (vertical bar) */
+			}
+
+			vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
+				  x + bar_x, bar_y - 4,				/* dst x1, y1 */
+				  x + bar_x + 2, bar_y - 4);			/* dst x2, y2 (horizontal bar) */
+
+			/* terminate the outer sibling loop upon drawing the tee... */
+			break;
+		}
 	}
+
+	if (res_width)
+		*res_width = depth * (VCR_ROW_HEIGHT / 2);
 }
 
 
@@ -851,7 +852,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 
 			if (proc->is_stale) { /* we "realize" stale processes only in the first draw within a sample duration */
 				/* what to do when a process (subtree) has gone away */
-				int		in_stale_entrypoint = 0;
+				int	in_stale_entrypoint = 0;
 
 				/* I snowflake the stale processes from the leaves up for a more intuitive snowflake order...
 				 * (I expect the command at the root of the subtree to appear at the top of the snowflakes...) */
