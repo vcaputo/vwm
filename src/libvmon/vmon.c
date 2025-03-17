@@ -489,12 +489,6 @@ static int proc_follow_children(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follo
 		return DTOR_FREE;
 	}
 
-	if (proc->is_thread) { /* don't follow children of threads */
-		assert(!(*store));
-
-		return SAMPLE_UNCHANGED;
-	}
-
 	if (!(*store)) { /* implicit ctor on first sample */
 		*store = calloc(1, sizeof(vmon_proc_follow_children_t));
 
@@ -1379,7 +1373,7 @@ void vmon_proc_unmonitor(vmon_t *vmon, vmon_proc_t *proc, void (*sample_cb)(vmon
 		vmon_proc_unmonitor(vmon, child, NULL, NULL);
 	}
 
-	/* unmonitor all threads being monitored, suppressed if this process is a thread itself, as threads don't have children */
+	/* unmonitor all threads being monitored, suppressed if this process is a thread itself */
 	if (!proc->is_thread) {
 		list_for_each_entry_safe(child, _child, &proc->threads, threads)
 			vmon_proc_unmonitor(vmon, child, NULL, NULL);
@@ -1460,8 +1454,12 @@ static void sample(vmon_t *vmon, vmon_proc_t *proc)
 }
 
 
+static int sample_siblings_unipass(vmon_t *vmon, list_head_t *siblings);
+static int sample_siblings_pass1(vmon_t *vmon, list_head_t *siblings);
+static int sample_siblings_pass2(vmon_t *vmon, list_head_t *siblings);
+
 /* internal sampling helper, perform sampling for all sibling processes in the provided siblings list */
-static int sample_threads(vmon_t *vmon, list_head_t *threads)
+static int sample_threads_unipass(vmon_t *vmon, list_head_t *threads)
 {
 	vmon_proc_t	*proc;
 
@@ -1470,14 +1468,39 @@ static int sample_threads(vmon_t *vmon, list_head_t *threads)
 
 	list_for_each_entry(proc, threads, threads) {
 		sample(vmon, proc);
+		sample_siblings_unipass(vmon, &proc->children); /* invoke samplers for this thread's children (which strangely is a thing) */
+	}
 
-#if 0
-		/* callbacks can't be installed currently on threads */
-		vmon_proc_callback_t	*cb;
+	return 1;
+}
 
-		list_for_each_entry(cb, &proc->sample_callbacks, callbacks)
-			cb->func(vmon, vmon->sample_cb_arg, proc, cb->arg);
-#endif
+
+/* internal sampling helper, perform sampling for all sibling processes in the provided siblings list */
+static int sample_threads_pass1(vmon_t *vmon, list_head_t *threads)
+{
+	vmon_proc_t	*proc;
+
+	assert(vmon);
+	assert(threads);
+
+	list_for_each_entry(proc, threads, threads) {
+		sample(vmon, proc);
+		sample_siblings_pass1(vmon, &proc->children); /* invoke samplers for this thread's children (which strangely is a thing) */
+	}
+
+	return 1;
+}
+
+
+static int sample_threads_pass2(vmon_t *vmon, list_head_t *threads)
+{
+	vmon_proc_t	*proc;
+
+	assert(vmon);
+	assert(threads);
+
+	list_for_each_entry(proc, threads, threads) {
+		sample_siblings_pass2(vmon, &proc->children); /* invoke samplers for this thread's children (which strangely is a thing) */
 	}
 
 	return 1;
@@ -1500,9 +1523,9 @@ static int sample_siblings_unipass(vmon_t *vmon, list_head_t *siblings)
 		if (proc->is_new)
 			entered_new = 1;
 
-		sample(vmon, proc);			/* invoke samplers for this node */
-		sample_threads(vmon, &proc->threads);	/* invoke samplers for this node's threads */
-		sample_siblings_unipass(vmon, &proc->children); /* invoke samplers for this node's children, and their callbacks, by recursing into this function */
+		sample(vmon, proc);				/* invoke samplers for this node */
+		sample_threads_unipass(vmon, &proc->threads);	/* invoke samplers for this node's threads */
+		sample_siblings_unipass(vmon, &proc->children);	/* invoke samplers for this node's children, and their callbacks, by recursing into this function */
 							/* XXX TODO: error returns */
 
 		/* if this is the top-level processes list, and proc has found a parent through the above sampling, migrate it to the parent's children list */
@@ -1544,9 +1567,9 @@ static int sample_siblings_pass1(vmon_t *vmon, list_head_t *siblings)
 
 	/* invoke samplers */
 	list_for_each_entry_safe(proc, _proc, siblings, siblings) {
-		sample(vmon, proc);			/* invoke samplers for this node */
-		sample_threads(vmon, &proc->threads);	/* invoke samplers for this node's threads */
-		sample_siblings_pass1(vmon, &proc->children); /* invoke samplers for this node's children, by recursing into this function */
+		sample(vmon, proc);				/* invoke samplers for this node */
+		sample_threads_pass1(vmon, &proc->threads);	/* invoke samplers for this node's threads */
+		sample_siblings_pass1(vmon, &proc->children);	/* invoke samplers for this node's children, by recursing into this function */
 							/* XXX TODO: error returns */
 
 		/* if this is the top-level processes list, and proc has found a parent through the above sampling, migrate it to the parent's children list */
@@ -1584,6 +1607,7 @@ static int sample_siblings_pass2(vmon_t *vmon, list_head_t *siblings)
 	list_for_each_entry(proc, siblings, siblings) {
 		vmon_proc_callback_t	*cb;
 
+		sample_threads_pass2(vmon, &proc->threads);	/* recurse into any children of the threads, invoking callbacks as encountered from the leaves up */
 		sample_siblings_pass2(vmon, &proc->children);	/* recurse into children, we invoke callbacks as encountered on nodes from the leaves up */
 
 		list_for_each_entry(cb, &proc->sample_callbacks, callbacks)
