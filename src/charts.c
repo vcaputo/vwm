@@ -413,6 +413,19 @@ static inline int proc_has_subsequent_siblings(vmon_t *vmon, vmon_proc_t *proc)
 {
 	struct list_head	*sib, *head = &vmon->processes;
 
+	if (proc->is_thread) {
+		/* Supporting threads having children arrived late in vwm's existence,
+		 * but it indeed is a thing. */
+		assert(proc->parent && proc->parent->is_threaded);
+		head = &proc->parent->threads;
+		for (sib = proc->threads.next; sib != head; sib = sib->next) {
+			if (!(list_entry(sib, vmon_proc_t, threads)->is_stale))
+				return 1;
+		}
+
+		return 0;
+	}
+
 	if (proc->parent)
 		head = &proc->parent->children;
 
@@ -469,9 +482,29 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 	 */
 
 	/* find the last sibling (this has to be done due to the potential for stale siblings at the tail, and we'd rather not repeatedly check for it) */
-	list_for_each_entry(sibling, &proc->parent->children, siblings) {
-		if (!sibling->is_stale)
-			last_sibling = sibling;
+	if (!proc->is_thread) {
+		list_for_each_entry(sibling, &proc->parent->children, siblings) {
+			if (!sibling->is_stale)
+				last_sibling = sibling;
+		}
+	} else {
+		list_for_each_entry(sibling, &proc->parent->threads, threads) {
+			if (!sibling->is_stale)
+				last_sibling = sibling;
+		}
+
+		/* now look for sibling threads with non-stale children to determine if a tee is needed, ignoring the last sibling */
+		list_for_each_entry(sibling, &proc->parent->threads, threads) {
+			/* skip stale siblings, they aren't interesting as they're invisible, and the last sibling has no bearing on wether we tee or not. */
+			if (sibling->is_stale || sibling == last_sibling)
+				continue;
+
+			/* if any of the other siblings have children which are not stale, put a tee in front of our name, but ignore stale children */
+			list_for_each_entry(child, &sibling->children, siblings) {
+				if (!child->is_stale)
+					goto needs_tee;
+			}
+		}
 	}
 
 	/* now look for siblings with non-stale children to determine if a tee is needed, ignoring the last sibling */
@@ -502,6 +535,7 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 
 		/* found a tee is necessary, all that's left is to determine if the tee is a corner and draw it accordingly, stopping the search. */
 		if (needs_tee) {
+needs_tee:
 			bar_x = (depth - 1) * (VCR_ROW_HEIGHT / 2) + 4;
 
 			/* if we're the last sibling, corner the tee by shortening the vbar */
