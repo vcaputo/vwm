@@ -2,6 +2,10 @@
 
 /* the available per-process wants, the order here matters, put wants which affect the sampling hierarchy first */
 /* otherwise they will change the hierarchy after samples have been collected, leaving newly introduced nodes with uninitialized sample stores after return from vmon_sample() */
+/* also PROC_FOLLOW_THREADS must be the last thing before the sampling wants, because those get skipped
+ * if VMON_FLAG_NEGLECT_THREADS is set even when following threaads, and that's done by skipping wants
+ * greater than VMON_FLAG_NEGLECT_THREADS for threads at sample time.
+ */
 
 /*	  sym,				name,				internal fulfilllment function */
 vmon_want(PROC_FOLLOW_CHILDREN,		proc_follow_children,		proc_follow_children)

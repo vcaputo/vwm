@@ -18,6 +18,9 @@ typedef enum _vmon_flags_t {
 	VMON_FLAG_PROC_ARRAY		= 1L,			/* maintain a process array (useful if you need to do things like implement top(1) */
 	VMON_FLAG_PROC_ALL		= 1L << 1,		/* monitor all the processes in the system (XXX this has some follow_children implications...)  */
 	VMON_FLAG_2PASS			= 1L << 2,		/* perform all sampling/wants in a first pass, then invoke all callbacks in second in vmon_sample(), important if your callbacks are layout-sensitive (vwm) */
+	VMON_FLAG_NEGLECT_THREADS	= 1L << 3,		/* only actually sample processes, even if we're following threads
+								 * (for situations where you still want to monitor children of threads, but don't care about per-thread monitoring)
+								 */
 } vmon_flags_t;
 
 /* store ids, used as indices into the stores array, and shift offsets for the wants mask */

@@ -1445,8 +1445,14 @@ static void sample(vmon_t *vmon, vmon_proc_t *proc)
 	proc->activity = 0;
 	for (i = 0, cur = 1; wants; cur <<= 1, i++) {
 		if (wants & cur) {
-			if (vmon->proc_funcs[i](vmon, proc, &proc->stores[i]) == SAMPLE_CHANGED)
-				proc->activity |= cur;
+			/* XXX: this is a bit awkward, but in constrained environments you might want to only follow threads while
+			 * suppressing their sampling of the other WANT_PROC* data.  To achieve that you specify VMON_FLAG_NEGLECT_THREADS
+			 * in combination with VMON_WANT_PROC_FOLLOW_THREADS.  The following line is what makes that actually work.
+			 * This also adds another ordering dependency in proc_wants.def
+			 */
+			if (!proc->is_thread || !(vmon->flags & VMON_FLAG_NEGLECT_THREADS) || cur <= VMON_WANT_PROC_FOLLOW_THREADS)
+				if (vmon->proc_funcs[i](vmon, proc, &proc->stores[i]) == SAMPLE_CHANGED)
+					proc->activity |= cur;
 
 			wants &= ~cur;
 		}
