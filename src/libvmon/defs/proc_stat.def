@@ -60,7 +60,7 @@ vmon_datum_ulonglong(		start,		PROC_STAT_START,	"StartTime",	"start time relativ
 vmon_omit_run(			' ',		PROC_STAT_VSIZE_SP)
 vmon_datum_ulonglong(		vsize,		PROC_STAT_VSIZE,	"VirtSize",	"virtual memory size (bytes)")
 vmon_omit_run(			' ',		PROC_STAT_RSS_SP)
-vmon_datum_ulonglong(		rss,		PROC_STAT_RSS,		"ResSize",	"resident set size (bytes)")
+vmon_datum_ulonglong(		rss,		PROC_STAT_RSS,		"ResSize",	"resident set size (pages)")
 vmon_omit_run(			' ',		PROC_STAT_RSSLIM_SP)
 vmon_datum_ulonglong(		rsslim,		PROC_STAT_RSSLIM,	"ResSizeLimit",	"resident set size ulimit")
 vmon_omit_run(			' ',		PROC_STAT_STARTCODE_SP)
