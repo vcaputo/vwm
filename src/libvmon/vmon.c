@@ -442,6 +442,7 @@ static vmon_proc_t * proc_monitor(vmon_t *vmon, vmon_proc_t *parent, int pid, vm
 			list_add_tail(&proc->threads, &parent->threads);
 			parent->threads_changed = 1;
 			parent->is_threaded = 1;
+			parent->n_current_threads++;
 		} else {
 			list_add_tail(&proc->siblings, &parent->children);
 			parent->children_changed = 1;
@@ -643,6 +644,8 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 		list_for_each_entry(tmp, &proc->threads, threads)
 			tmp->is_stale = 1;
 
+		proc->n_current_threads = 0;
+
 		/* FIXME: the changes count seems to be unused here, so this currently always returns SAMPLE_UNCHANGED, and
 		 * it's unclear to me if that was intentional or just never finished.
 		 */
@@ -679,8 +682,11 @@ static int proc_follow_threads(vmon_t *vmon, vmon_proc_t *proc, vmon_proc_follow
 
 	list_for_each_entry_safe(tmp, _tmp, &proc->threads, threads) {
 		/* set children not found to stale status so the caller can respond and on our next sample invocation we will unmonitor them */
-		if (tmp->generation != vmon->generation)
+		if (tmp->generation != vmon->generation) {
 			tmp->is_stale = 1;
+			assert(proc->n_current_threads);
+			proc->n_current_threads--;
+		}
 	}
 
 	return changes ? SAMPLE_CHANGED : SAMPLE_UNCHANGED;

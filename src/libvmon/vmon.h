@@ -232,6 +232,7 @@ typedef struct _vmon_proc_t {
 	list_head_t		children;			/* head of the children of this process, empty when no children */
 	list_head_t		siblings;			/* node in siblings list */
 	list_head_t		threads;			/* head or node for the threads list, empty when process has no threads */
+	unsigned		n_current_threads;		/* count of non-stale nodes in the threads list */
 
 	struct _vmon_proc_t	*parent;			/* reference to the parent */
 
