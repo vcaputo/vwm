@@ -23,4 +23,7 @@
 #define MAX(_a, _b)			((_a) > (_b) ? (_a) : (_b))
 #define NELEMS(_a)			(sizeof(_a) / sizeof(_a[0]))
 
+#define _STRINGIFY(_a)			#_a
+#define STRINGIFY(_a)			_STRINGIFY(_a)
+
 #endif
