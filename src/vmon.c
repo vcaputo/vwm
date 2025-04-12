@@ -599,6 +599,7 @@ int vmon_execv(vmon_t *vmon)
 /* parse argv, init charts/vcr_backend/vcr_dest, attach libvmon to monitored process via vwm_chart_create() */
 static vmon_t * vmon_startup(int argc, const char * const *argv)
 {
+	unsigned		charts_flags = VWM_CHARTS_FLAG_DEFER_MAINTENANCE;
 	vcr_backend_type_t	backend_type;
 	vmon_t			*vmon;
 
@@ -642,7 +643,10 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 		goto _err_free;
 	}
 
-	vmon->charts = vwm_charts_create(vmon->vcr_backend, VWM_CHARTS_FLAG_DEFER_MAINTENANCE);
+	if (vmon->no_threads)
+		charts_flags |= VWM_CHARTS_NO_THREADS;
+
+	vmon->charts = vwm_charts_create(vmon->vcr_backend, charts_flags);
 	if (!vmon->charts) {
 		VWM_ERROR("unable to create charts instance");
 		goto _err_vcr;
