@@ -111,22 +111,22 @@ typedef struct _vwm_column_t {
 
 /* everything needed by the per-window chart's context */
 typedef struct _vwm_chart_t {
-	vmon_proc_t	*proc;					/* vmon process monitor handle */
+	vmon_proc_t	*proc;						/* vmon process monitor handle */
 	vcr_t		*vcr;
 
-	int		hierarchy_end;				/* row where the process hierarchy currently ends */
+	int		hierarchy_end;					/* row where the process hierarchy currently ends */
 
 	/* FIXME TODO: this is redundant with the same things in vcr_t now, dedupe them */
-	int		visible_width;				/* currently visible width of the chart */
-	int		visible_height;				/* currently visible height of the chart */
+	int		visible_width;					/* currently visible width of the chart */
+	int		visible_height;					/* currently visible height of the chart */
 
-	int		snowflakes_cnt;				/* count of snowflaked rows (reset to zero to truncate snowflakes display) */
-	int		gen_last_composed;			/* the last composed vmon generation */
-	int		redraw_needed;				/* if a redraw is required (like when the window is resized...) */
-	char		*name;					/* name if provided, included in chart by the \/\/\ */
-	vwm_column_t	top_columns[CHART_MAX_COLUMNS];		/* "top" columns in the chart (vwm logo, hz) */
-	vwm_column_t	columns[CHART_MAX_COLUMNS];		/* columns in the chart TODO, for now just stowing the real/user/sys width here */
-	vwm_column_t	snowflake_columns[CHART_MAX_COLUMNS];	/* columns in the snowflaked rows */
+	int		snowflakes_cnt;					/* count of snowflaked rows (reset to zero to truncate snowflakes display) */
+	int		gen_last_composed;				/* the last composed vmon generation */
+	int		redraw_needed;					/* if a redraw is required (like when the window is resized...) */
+	char		*name;						/* name if provided, included in chart by the \/\/\ */
+	vwm_column_t	top_columns[CHART_MAX_COLUMNS];			/* "top" columns in the chart (vwm logo, hz) */
+	vwm_column_t	proc_cpu_columns[CHART_MAX_COLUMNS];		/* per-proc+thread CPU columns in the chart TODO, for now just stowing the widths here */
+	vwm_column_t	snowflake_cpu_columns[CHART_MAX_COLUMNS];	/* per-proc+thread CPU columns in the snowflaked rows */
 } vwm_chart_t;
 
 /* space we need for every process being monitored */
@@ -875,13 +875,14 @@ static void draw_overlay_row(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc
 		return;
 
 	/* skip if obviously unnecessary (this can be further improved, but this makes a big difference as-is) */
-	if (!deferred_pass && !chart->redraw_needed && !columns_changed(charts, chart, chart->columns, row, proc))
+	if (!deferred_pass && !chart->redraw_needed &&
+	    !columns_changed(charts, chart, chart->proc_cpu_columns, row, proc))
 		return;
 
 	if (!proc->is_new) /* XXX for now always clear the row, this should be capable of being optimized in the future (if the datums driving the text haven't changed...) */
 		vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
 
-	draw_columns(charts, chart, chart->columns, 0 /* heading */, depth, row, proc);
+	draw_columns(charts, chart, chart->proc_cpu_columns, 0 /* heading */, depth, row, proc);
 	vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
 }
 
@@ -973,7 +974,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 					chart->snowflakes_cnt++;
 
 					/* stamp the name (and whatever else we include) into chart.text_picture */
-					draw_columns(charts, chart, chart->snowflake_columns, 0 /* heading */, 0 /* depth */, chart->hierarchy_end, proc);
+					draw_columns(charts, chart, chart->snowflake_cpu_columns, 0 /* heading */, 0 /* depth */, chart->hierarchy_end, proc);
 					vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, chart->hierarchy_end);
 
 					chart->hierarchy_end--;
@@ -1114,7 +1115,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
 
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 1, -1, -1);
-			draw_columns(charts, chart, chart->columns, 1 /* heading */, 0 /* depth */, row + 2, proc);
+			draw_columns(charts, chart, chart->proc_cpu_columns, 1 /* heading */, 0 /* depth */, row + 2, proc);
 			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row + 1);
 		}
 
@@ -1248,21 +1249,21 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->top_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM, .side = VWM_SIDE_RIGHT };
 
 	/* TODO: make the columns interactively configurable @ runtime */
-	chart->columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_ROW, .side = VWM_SIDE_LEFT };
-	chart->columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
-	chart->columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
-	chart->columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
-	chart->columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_TREE, .side = VWM_SIDE_LEFT };
-	chart->columns[5] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
-	chart->columns[6] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_STATE, .side = VWM_SIDE_RIGHT };
-	chart->columns[7] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_RIGHT };
-	chart->columns[8] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WCHAN, .side = VWM_SIDE_RIGHT };
+	chart->proc_cpu_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_ROW, .side = VWM_SIDE_LEFT };
+	chart->proc_cpu_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
+	chart->proc_cpu_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
+	chart->proc_cpu_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
+	chart->proc_cpu_columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_TREE, .side = VWM_SIDE_LEFT };
+	chart->proc_cpu_columns[5] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
+	chart->proc_cpu_columns[6] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_STATE, .side = VWM_SIDE_RIGHT };
+	chart->proc_cpu_columns[7] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_RIGHT };
+	chart->proc_cpu_columns[8] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WCHAN, .side = VWM_SIDE_RIGHT };
 
-	chart->snowflake_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_LEFT };
-	chart->snowflake_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
-	chart->snowflake_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
-	chart->snowflake_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
-	chart->snowflake_columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
+	chart->snowflake_cpu_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID, .side = VWM_SIDE_LEFT };
+	chart->snowflake_cpu_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER, .side = VWM_SIDE_LEFT };
+	chart->snowflake_cpu_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS, .side = VWM_SIDE_LEFT };
+	chart->snowflake_cpu_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL, .side = VWM_SIDE_LEFT };
+	chart->snowflake_cpu_columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV, .side = VWM_SIDE_LEFT };
 
 	/* add the client process to the monitoring hierarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
