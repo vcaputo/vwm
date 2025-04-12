@@ -10,7 +10,8 @@
 
 #include "vcr.h"
 
-#define VWM_CHARTS_FLAG_DEFER_MAINTENANCE 0x1
+#define VWM_CHARTS_FLAG_DEFER_MAINTENANCE	0x1
+#define VWM_CHARTS_NO_THREADS			0x2
 
 typedef struct _vwm_charts_t vwm_charts_t;
 typedef struct _vwm_chart_t vwm_chart_t;

@@ -69,6 +69,7 @@ typedef struct _vwm_charts_t {
 	unsigned				marker_distance;
 	float					inv_ticks_per_sec, inv_total_delta;
 	unsigned				defer_maintenance:1;
+	unsigned				no_threads:1;
 } vwm_charts_t;
 
 typedef enum _vwm_column_type_t {
@@ -214,6 +215,9 @@ vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 
 	if (flags & VWM_CHARTS_FLAG_DEFER_MAINTENANCE)
 		charts->defer_maintenance = 1;
+
+	if (flags & VWM_CHARTS_NO_THREADS)
+		charts->no_threads = 1;
 
 	charts->prev_sampling_interval_secs = charts->sampling_interval_secs = CHART_DEFAULT_INTERVAL_SECS;
 
