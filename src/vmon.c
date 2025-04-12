@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
+#include <locale.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -605,6 +606,7 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 
 	assert(argv);
 
+	setlocale(LC_ALL, "");
 	print_copyright();
 
 	vmon = calloc(1, sizeof(vmon_t));
