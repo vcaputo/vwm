@@ -203,6 +203,7 @@ static void vmon_dtor_cb(vmon_t *vmon, vmon_proc_t *proc)
 /* initialize charts system */
 vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 {
+	vmon_flags_t	vmon_flags = VMON_FLAG_2PASS;
 	vwm_charts_t	*charts;
 
 	charts = calloc(1, sizeof(vwm_charts_t));
@@ -216,12 +217,14 @@ vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 	if (flags & VWM_CHARTS_FLAG_DEFER_MAINTENANCE)
 		charts->defer_maintenance = 1;
 
-	if (flags & VWM_CHARTS_NO_THREADS)
+	if (flags & VWM_CHARTS_NO_THREADS) {
 		charts->no_threads = 1;
+		vmon_flags |= VMON_FLAG_NEGLECT_THREADS;
+	}
 
 	charts->prev_sampling_interval_secs = charts->sampling_interval_secs = CHART_DEFAULT_INTERVAL_SECS;
 
-	if (!vmon_init(&charts->vmon, VMON_FLAG_2PASS, CHART_VMON_SYS_WANTS, CHART_VMON_PROC_WANTS)) {
+	if (!vmon_init(&charts->vmon, vmon_flags, CHART_VMON_SYS_WANTS, CHART_VMON_PROC_WANTS)) {
 		VWM_ERROR("unable to initialize libvmon");
 		goto _err_charts;
 	}
@@ -334,18 +337,18 @@ static void proc_argv2strs(const vmon_proc_t *proc, vcr_str_t *strs, int max_str
 
 
 /* helper for counting number of existing descendants subtrees */
-static int count_rows(vmon_proc_t *proc)
+static int count_rows(vmon_proc_t *proc, unsigned no_threads)
 {
-	int		count = 1; /* XXX maybe suppress proc->is_new? */
+	int		count = no_threads ? !proc->is_thread : 1; /* XXX maybe suppress proc->is_new? */
 	vmon_proc_t	*child;
 
 	if (!proc->is_thread) {
 		list_for_each_entry(child, &proc->threads, threads)
-			count += count_rows(child);
+			count += count_rows(child, no_threads);
 	}
 
 	list_for_each_entry(child, &proc->children, siblings)
-		count += count_rows(child);
+		count += count_rows(child, no_threads);
 
 	return count;
 }
@@ -413,18 +416,20 @@ static void print_argv(const vwm_charts_t *charts, const vwm_chart_t *chart, int
 
 
 /* determine if a given process has subsequent siblings in the hierarchy */
-static inline int proc_has_subsequent_siblings(vmon_t *vmon, vmon_proc_t *proc)
+static inline int proc_has_subsequent_siblings(vwm_charts_t *charts, vmon_proc_t *proc)
 {
-	struct list_head	*sib, *head = &vmon->processes;
+	struct list_head	*sib, *head = &charts->vmon.processes;
 
 	if (proc->is_thread) {
-		/* Supporting threads having children arrived late in vwm's existence,
-		 * but it indeed is a thing. */
-		assert(proc->parent && proc->parent->is_threaded);
-		head = &proc->parent->threads;
-		for (sib = proc->threads.next; sib != head; sib = sib->next) {
-			if (!(list_entry(sib, vmon_proc_t, threads)->is_stale))
-				return 1;
+		if (!charts->no_threads) {
+			/* Supporting threads having children arrived late in vwm's existence,
+			 * but it indeed is a thing. */
+			assert(proc->parent && proc->parent->is_threaded);
+			head = &proc->parent->threads;
+			for (sib = proc->threads.next; sib != head; sib = sib->next) {
+				if (!(list_entry(sib, vmon_proc_t, threads)->is_stale))
+					return 1;
+			}
 		}
 
 		return 0;
@@ -454,9 +459,8 @@ static unsigned interval_as_hz(vwm_charts_t *charts)
 /* draw a process' row slice of a process tree */
 static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int depth, int row, const vmon_proc_t *proc, int *res_width)
 {
-	vmon_proc_t	*child, *ancestor, *sibling, *last_sibling = NULL;
 	int		bar_x = 0, bar_y = (row + 1) * VCR_ROW_HEIGHT;
-	int		sub;
+	vmon_proc_t	*child, *sibling, *last_sibling = NULL;
 
 	/* only if this process isn't the root process @ the window shall we consider all relational drawing conditions */
 	if (proc == chart->proc)
@@ -464,18 +468,27 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 
 	/* XXX: everything done in this code block only dirties _this_ process' row in the rendered chart output */
 
-	/* walk up the ancestors until reaching chart->proc, any ancestors we encounter which have more siblings we draw a vertical bar for */
-	/* this draws the |'s in something like:  | |   |    | comm */
-	for (sub = 1, ancestor = proc->parent; ancestor && ancestor != chart->proc; ancestor = ancestor->parent, sub++) {
-		bar_x = ((depth - 1) - sub) * (VCR_ROW_HEIGHT / 2) + 4;
+	if (proc->parent) {
+		int	sub = 1;
 
-		assert(depth > 0);
+		/* walk up the ancestors until reaching chart->proc, any ancestors we encounter which have more siblings we draw a vertical bar for */
+		/* this draws the |'s in something like:  | |   |    | comm */
+		for (vmon_proc_t *ancestor = proc->parent; ancestor != chart->proc; ancestor = ancestor->parent) {
+			bar_x = ((depth - 1) - sub) * (VCR_ROW_HEIGHT / 2) + 4;
 
-		/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
-		if (proc_has_subsequent_siblings(&charts->vmon, ancestor))
-			vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
-				  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
-				  x + bar_x, bar_y);			/* dst x2, y2 (vertical line) */
+			assert(depth > 0);
+
+			/* determine if the ancestor has remaining siblings which are not stale, if so, draw a connecting bar at its depth */
+			if (proc_has_subsequent_siblings(charts, ancestor))
+				vcr_draw_ortho_line(chart->vcr, VCR_LAYER_TEXT,
+					  x + bar_x, bar_y - VCR_ROW_HEIGHT,	/* dst x1, y1 */
+					  x + bar_x, bar_y);			/* dst x2, y2 (vertical line) */
+
+			sub += (!charts->no_threads || !ancestor->is_thread);
+
+			/* it shouldn't be possible to run out of parents, we should always arrive at chart->proc */
+			assert(ancestor->parent);
+		}
 	}
 
 	/* determine if _any_ of our siblings have children requiring us to draw a tee immediately before our comm string.
@@ -697,8 +710,10 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 				str_len = snpf(str, sizeof(str), "WChan");
 			else {
 
-				/* don't show wchan for processes with threads, since their main thread will show it. */
-				if (!proc->is_thread && !list_empty(&proc->threads))
+				/* don't show wchan for processes with threads, since their main thread will show it,
+				 * unless we're in --no-threads mode.
+				 */
+				if (!proc->is_thread && !list_empty(&proc->threads) && !charts->no_threads)
 					break;
 
 				str_len = snpf(str, sizeof(str), "%.*s",
@@ -713,8 +728,10 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			if (heading)
 				str_len = snpf(str, sizeof(str), "State");
 			else {
-				/* don't show process state for processes with threads, since their main thread will show it. */
-				if (!proc->is_thread && !list_empty(&proc->threads))
+				/* don't show process state for processes with threads, since their main thread will show it.
+				 * unless we're in --no-threads mode.
+				 */
+				if (!proc->is_thread && !list_empty(&proc->threads) && !charts->no_threads)
 					break;
 
 				str_len = snpf(str, sizeof(str), "%c", proc_stat->state);
@@ -881,145 +898,160 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 	if (deferred_pass && proc->is_stale)
 		return;
 
-	if (!deferred_pass) {
-		/* These incremental/structural aspects can't be repeated in the final defer_maintenance pass since it's
-		 * a repeated pass within the same sample - we can't realize these effects twice.
-		 */
-		if (sample_duration_idx == 0) { /* some things need to only be done once per sample duration, some at the start, some at the end */
-			static int	in_stale = 0;
+	/* Don't render and don't allocate/snowflake thread rows in --no-threads mode */
+	if (!proc->is_thread || !charts->no_threads) {
+		if (!deferred_pass) {
+			/* These incremental/structural aspects can't be repeated in the final defer_maintenance pass since it's
+			 * a repeated pass within the same sample - we can't realize these effects twice.
+			 */
+			if (sample_duration_idx == 0) { /* some things need to only be done once per sample duration, some at the start, some at the end */
+				static int	in_stale = 0;
 
-			if (proc->is_stale) { /* we "realize" stale processes only in the first draw within a sample duration */
-				/* what to do when a process (subtree) has gone away */
-				int	in_stale_entrypoint = 0;
+				if (proc->is_stale) { /* we "realize" stale processes only in the first draw within a sample duration */
+					/* what to do when a process (subtree) has gone away */
+					int	in_stale_entrypoint = 0;
 
-				/* I snowflake the stale processes from the leaves up for a more intuitive snowflake order...
-				 * (I expect the command at the root of the subtree to appear at the top of the snowflakes...) */
-				/* This does require that I do a separate forward recursion to determine the number of rows
-				 * so I can correctly snowflake in reverse */
-				if (!in_stale) {
-					VWM_TRACE("entered stale at chart=%p depth=%i row=%i", chart, *depth, *row);
-					in_stale_entrypoint = in_stale = 1;
+					/* I snowflake the stale processes from the leaves up for a more intuitive snowflake order...
+					 * (I expect the command at the root of the subtree to appear at the top of the snowflakes...) */
+					/* This does require that I do a separate forward recursion to determine the number of rows
+					 * so I can correctly snowflake in reverse */
+					if (!in_stale) {
+						VWM_TRACE("entered stale at chart=%p depth=%i row=%i", chart, *depth, *row);
+						in_stale_entrypoint = in_stale = 1;
 
-					/* this advances row to the last row of all descendants, the minus one is needed since we're
-					 * already at proc's row, and count_rows() includes it in the count.  Imagine there are no
-					 * descendants, count_rows returns 1, we turn that into 0, and (*row) stays unchanged, which
-					 * is correct - we snowflake ourself and that's that.
-					 */
-					(*row) += count_rows(proc) - 1;
-				}
+						/* this advances row to the last row of all descendants, the minus one is needed since we're
+						 * already at proc's row, and count_rows() includes it in the count.  Imagine there are no
+						 * descendants, count_rows returns 1, we turn that into 0, and (*row) stays unchanged, which
+						 * is correct - we snowflake ourself and that's that.
+						 */
+						(*row) += count_rows(proc, charts->no_threads) - 1;
+					}
 
-				(*depth)++;
-				list_for_each_entry_prev(child, &proc->children, siblings) {
-					draw_chart_rest(charts, chart, child, depth, row, deferred_pass, sample_duration_idx);
-					(*row)--;
-				}
-
-				if (!proc->is_thread) {
-					list_for_each_entry_prev(child, &proc->threads, threads) {
+					(*depth)++;
+					list_for_each_entry_prev(child, &proc->children, siblings) {
 						draw_chart_rest(charts, chart, child, depth, row, deferred_pass, sample_duration_idx);
 						(*row)--;
 					}
+
+					if (!proc->is_thread) {
+						/* In --no-threads mode we hide the spatial effects of the followed threads,
+						 * which amounts to messing with the depth and row variables.  This could be
+						 * done better.
+						 */
+						if (charts->no_threads)
+							(*depth)--;
+
+						list_for_each_entry_prev(child, &proc->threads, threads) {
+							draw_chart_rest(charts, chart, child, depth, row, deferred_pass, sample_duration_idx);
+							if (!charts->no_threads)
+								(*row)--;
+						}
+
+						if (charts->no_threads)
+							(*depth)++;
+					}
+					(*depth)--;
+
+					VWM_TRACE("%i (%.*s) is stale @ depth %i row %i is_thread=%i", proc->pid,
+						((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len - 1,
+						((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.array,
+						(*depth), (*row), proc->is_thread);
+
+					mark_finish(charts, chart, (*row));
+
+					/* extract the row from the various layers */
+					snowflake_row(charts, chart, (*row));
+					chart->snowflakes_cnt++;
+
+					/* stamp the name (and whatever else we include) into chart.text_picture */
+					draw_columns(charts, chart, chart->snowflake_columns, 0 /* heading */, 0 /* depth */, chart->hierarchy_end, proc);
+					vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, chart->hierarchy_end);
+
+					chart->hierarchy_end--;
+
+					if (in_stale_entrypoint) {
+						VWM_TRACE("exited stale at chart=%p depth=%i row=%i", chart, *depth, *row);
+						in_stale = 0;
+					}
+
+					return;
+				} else {
+					/* If we're not stale, assert we're not in_stale, because the count_rows() used above is indiscriminate.
+					 * if there's !is_stale descendents then we'll get confused as-is.
+					 */
+					assert(!in_stale);
 				}
-				(*depth)--;
 
-				VWM_TRACE("%i (%.*s) is stale @ depth %i row %i is_thread=%i", proc->pid,
-					((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.len - 1,
-					((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->comm.array,
-					(*depth), (*row), proc->is_thread);
 
-				mark_finish(charts, chart, (*row));
+				/* use the generation number to avoid recomputing this stuff for callbacks recurring on the same process in the same sample */
+				if (proc_ctxt->generation != charts->vmon.generation) {
+					proc_ctxt->stime_delta = proc_stat->stime - proc_ctxt->last_stime;
+					proc_ctxt->utime_delta = proc_stat->utime - proc_ctxt->last_utime;
+					proc_ctxt->last_utime = proc_stat->utime;
+					proc_ctxt->last_stime = proc_stat->stime;
 
-				/* extract the row from the various layers */
-				snowflake_row(charts, chart, (*row));
-				chart->snowflakes_cnt++;
-
-				/* stamp the name (and whatever else we include) into chart.text_picture */
-				draw_columns(charts, chart, chart->snowflake_columns, 0 /* heading */, 0 /* depth */, chart->hierarchy_end, proc);
-				vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, chart->hierarchy_end);
-
-				chart->hierarchy_end--;
-
-				if (in_stale_entrypoint) {
-					VWM_TRACE("exited stale at chart=%p depth=%i row=%i", chart, *depth, *row);
-					in_stale = 0;
+					proc_ctxt->generation = charts->vmon.generation;
 				}
+			}
 
-				return;
+			if (proc->is_stale)
+				return;	/* is_stale is already handled on the first sample_diration_idx */
+
+			/* we "realize" new processes on the last draw within a duration.
+			 * FIXME TODO: this could be placed more accurately in time by referencing the process's
+			 * PROC_STAT_START time and allocating the row at that point within a duration.
+			 * but for now it's still an improvement over losing time to simply place it at the end of
+			 * the duration.  We don't have two samples to compute cpu utilizations for it anyways, so
+			 * even if we were to place it accurately on the timeline, there wouldn't be data to put
+			 * in the intervening space between the start line and the end anyways, which would be less
+			 * accurate/potentially misleading - basically the start line would have to be repeated to
+			 * fill in the space where we have no data so as to still indicate "hey, the process started
+			 * back here, but this filled white region is where we couldn't collect anything about it
+			 * since its start point.  This raises an interesting issue in general surrounding start lines
+			 * in general; many processes tend to already exist when vmon starts up, and we draw the start
+			 * lines when we begin monitoring a given process... and that is misleading if the process was
+			 * preexisting.  In such caes, when the start time is way in the past, we should either suppress
+			 * the start line, or be willing to place it out of phase - if the graph covers that moment.  If
+			 * we were to place it out of phase, we'd have another situation where we can't leave the space
+			 * between then and the current sample empty, it would have to all be filled with start line.
+			 */
+			if (proc->is_new) {
+				if (sample_duration_idx != (charts->this_sample_duration - 1))
+					return; /* suppress doing anything aboout new processes until the last draw within the duration */
+
+				/* what to do when a process has been introduced */
+				VWM_TRACE("%i is new", proc->pid);
+
+				allocate_row(charts, chart, (*row));
+
+				chart->hierarchy_end++;
+
+				/* we need a minimum of two samples before we can compute a delta to plot,
+				 * so we suppress that and instead mark the start of monitoring with an impossible 100% of both graph contexts, a starting line. */
+				stime_delta = utime_delta = charts->total_delta;
 			} else {
-				/* If we're not stale, assert we're not in_stale, because the count_rows() used above is indiscriminate.
-				 * if there's !is_stale descendents then we'll get confused as-is.
-				 */
-				assert(!in_stale);
+				stime_delta = proc_ctxt->stime_delta;
+				utime_delta = proc_ctxt->utime_delta;
 			}
 
-
-			/* use the generation number to avoid recomputing this stuff for callbacks recurring on the same process in the same sample */
-			if (proc_ctxt->generation != charts->vmon.generation) {
-				proc_ctxt->stime_delta = proc_stat->stime - proc_ctxt->last_stime;
-				proc_ctxt->utime_delta = proc_stat->utime - proc_ctxt->last_utime;
-				proc_ctxt->last_utime = proc_stat->utime;
-				proc_ctxt->last_stime = proc_stat->stime;
-
-				proc_ctxt->generation = charts->vmon.generation;
-			}
+			draw_bars(charts, chart, *row,
+				(proc->is_thread || !proc->is_threaded) ? charts->vmon.num_cpus : 1.f /* mult */,
+				stime_delta,
+				charts->inv_total_delta,
+				utime_delta,
+				charts->inv_total_delta);
 		}
 
-		if (proc->is_stale)
-			return;	/* is_stale is already handled on the first sample_diration_idx */
+		/* unless a deferred pass, only try draw the overlay on the last draw within a duration */
+		if (deferred_pass || sample_duration_idx == (charts->this_sample_duration - 1))
+			draw_overlay_row(charts, chart, proc, *depth, *row, deferred_pass);
 
-		/* we "realize" new processes on the last draw within a duration.
-		 * FIXME TODO: this could be placed more accurately in time by referencing the process's
-		 * PROC_STAT_START time and allocating the row at that point within a duration.
-		 * but for now it's still an improvement over losing time to simply place it at the end of
-		 * the duration.  We don't have two samples to compute cpu utilizations for it anyways, so
-		 * even if we were to place it accurately on the timeline, there wouldn't be data to put
-		 * in the intervening space between the start line and the end anyways, which would be less
-		 * accurate/potentially misleading - basically the start line would have to be repeated to
-		 * fill in the space where we have no data so as to still indicate "hey, the process started
-		 * back here, but this filled white region is where we couldn't collect anything about it
-		 * since its start point.  This raises an interesting issue in general surrounding start lines
-		 * in general; many processes tend to already exist when vmon starts up, and we draw the start
-		 * lines when we begin monitoring a given process... and that is misleading if the process was
-		 * preexisting.  In such caes, when the start time is way in the past, we should either suppress
-		 * the start line, or be willing to place it out of phase - if the graph covers that moment.  If
-		 * we were to place it out of phase, we'd have another situation where we can't leave the space
-		 * between then and the current sample empty, it would have to all be filled with start line.
-		 */
-		if (proc->is_new) {
-			if (sample_duration_idx != (charts->this_sample_duration - 1))
-				return; /* suppress doing anything aboout new processes until the last draw within the duration */
-
-			/* what to do when a process has been introduced */
-			VWM_TRACE("%i is new", proc->pid);
-
-			allocate_row(charts, chart, (*row));
-
-			chart->hierarchy_end++;
-
-			/* we need a minimum of two samples before we can compute a delta to plot,
-			 * so we suppress that and instead mark the start of monitoring with an impossible 100% of both graph contexts, a starting line. */
-			stime_delta = utime_delta = charts->total_delta;
-		} else {
-			stime_delta = proc_ctxt->stime_delta;
-			utime_delta = proc_ctxt->utime_delta;
-		}
-
-		draw_bars(charts, chart, *row,
-			(proc->is_thread || !proc->is_threaded) ? charts->vmon.num_cpus : 1.f /* mult */,
-			stime_delta,
-			charts->inv_total_delta,
-			utime_delta,
-			charts->inv_total_delta);
+		/* note these are suppressed for --no-threads */
+		(*row)++;
+		(*depth)++;
 	}
 
-	/* unless a deferred pass, only try draw the overlay on the last draw within a duration */
-	if (deferred_pass || sample_duration_idx == (charts->this_sample_duration - 1))
-		draw_overlay_row(charts, chart, proc, *depth, *row, deferred_pass);
-
-	(*row)++;
-
 	/* recur any threads first, then any children processes */
-	(*depth)++;
 	if (!proc->is_thread) {	/* XXX: the threads member serves as the list head only when not a thread */
 		list_for_each_entry(child, &proc->threads, threads) {
 			draw_chart_rest(charts, chart, child, depth, row, deferred_pass, sample_duration_idx);
@@ -1029,7 +1061,9 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 	list_for_each_entry(child, &proc->children, siblings) {
 		draw_chart_rest(charts, chart, child, depth, row, deferred_pass, sample_duration_idx);
 	}
-	(*depth)--;
+
+	if (!proc->is_thread || !charts->no_threads)
+		(*depth)--;
 }
 
 
@@ -1231,7 +1265,7 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 
 	 /* FIXME: count_rows() isn't returning the right count sometimes (off by ~1), it seems to be related to racing with the automatic child monitoring */
 	 /* the result is an extra row sometimes appearing below the process hierarchy */
-	chart->hierarchy_end = CHART_NUM_FIXED_HEADER_ROWS + count_rows(chart->proc);
+	chart->hierarchy_end = CHART_NUM_FIXED_HEADER_ROWS + count_rows(chart->proc, charts->no_threads);
 	chart->gen_last_composed = -1;
 
 	chart->vcr = vcr_new(charts->vcr_backend, &chart->hierarchy_end, &chart->snowflakes_cnt, &charts->marker_distance);
