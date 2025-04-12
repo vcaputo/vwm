@@ -302,7 +302,8 @@ static void allocate_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 /* simple helper to map the vmon per-proc argv array into an XTextItem array, deals with threads vs. processes and the possibility of the comm field not getting read in before the process exited... */
 static void proc_argv2strs(const vmon_proc_t *proc, vcr_str_t *strs, int max_strs, int *res_n_strs)
 {
-	int	nr = 0;
+	static char	n_threads_str[sizeof(STRINGIFY(UINT_MAX)) + sizeof("[]")];
+	int		nr = 0;
 
 	assert(proc);
 	assert(strs);
@@ -312,6 +313,13 @@ static void proc_argv2strs(const vmon_proc_t *proc, vcr_str_t *strs, int max_str
 	if (proc->is_thread) {	/* stick the thread marker at the start of threads */
 		strs[0].str = CHART_ISTHREAD_ARGV;
 		strs[0].len = sizeof(CHART_ISTHREAD_ARGV) - 1;
+		nr++;
+	} else if (!proc->is_stale) {
+		strs[0].str = n_threads_str;
+		if (proc->is_threaded)
+			strs[0].len = snprintf(n_threads_str, sizeof(n_threads_str), "[%u]", proc->n_current_threads);
+		else
+			strs[0].len = snprintf(n_threads_str, sizeof(n_threads_str), "[]");
 		nr++;
 	}
 
@@ -682,7 +690,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 
 		case VWM_COLUMN_PROC_ARGV: { /* print the process' argv */
 			if (heading) {
-				str_len = snpf(str, sizeof(str), "ArgV/~ThreadName");
+				str_len = snpf(str, sizeof(str), "[NThreads] ArgV/~ThreadName");
 				str_justify = VWM_JUSTIFY_LEFT;
 			} else {
 				int	width;
