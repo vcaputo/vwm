@@ -634,7 +634,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			if (heading)
 				str_len = snpf(str, sizeof(str), "Row");
 			else
-				str_len = snpf(str, sizeof(str), "%i", row - CHART_NUM_FIXED_HEADER_ROWS);
+				str_len = snpf(str, sizeof(str), "%'i", row - CHART_NUM_FIXED_HEADER_ROWS);
 
 			str_justify = VWM_JUSTIFY_LEFT;
 			/* this is kind of hacky, but libvmon doesn't monitor our row, it's implicitly "sampled" when we draw */
@@ -645,7 +645,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			if (heading)
 				str_len = snpf(str, sizeof(str), "User");
 			else
-				str_len = snpf(str, sizeof(str), "%.2fs",
+				str_len = snpf(str, sizeof(str), "%'.2fs",
 						(float)proc_stat->utime * charts->inv_ticks_per_sec);
 
 			str_justify = VWM_JUSTIFY_RIGHT;
@@ -655,7 +655,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			if (heading)
 				str_len = snpf(str, sizeof(str), "Sys");
 			else
-				str_len = snpf(str, sizeof(str), "%.2fs",
+				str_len = snpf(str, sizeof(str), "%'.2fs",
 						(float)proc_stat->stime * charts->inv_ticks_per_sec);
 
 			str_justify = VWM_JUSTIFY_RIGHT;
@@ -667,7 +667,7 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 			else if (!proc_stat->start || proc_stat->start > sys_stat->boottime)
 				str_len = snpf(str, sizeof(str), "??s");
 			else
-				str_len = snpf(str, sizeof(str), "%.2fs",
+				str_len = snpf(str, sizeof(str), "%'.2fs",
 						(float)(sys_stat->boottime - proc_stat->start) * charts->inv_ticks_per_sec);
 
 			str_justify = VWM_JUSTIFY_RIGHT;
