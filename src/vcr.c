@@ -1221,6 +1221,10 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, float t, int min_heigh
 	if (height > (VCR_ROW_HEIGHT - 1))
 		height = (VCR_ROW_HEIGHT - 1);
 
+	/* negative values project down from the top, positive up from bottom */
+	if (t > 0.f)
+		y += VCR_ROW_HEIGHT - height - 1;
+
 	switch (vcr->backend->type) {
 #ifdef USE_XLIB
 	case VCR_BACKEND_TYPE_XLIB: {
@@ -1233,7 +1237,6 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, float t, int min_heigh
 			break;
 		case VCR_LAYER_GRAPHB:
 			dest = &vcr->xlib.graphb_picture;
-			y += VCR_ROW_HEIGHT - height - 1;
 			break;
 		default:
 			assert(0);
@@ -1252,9 +1255,6 @@ void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, float t, int min_heigh
 	case VCR_BACKEND_TYPE_MEM: {
 		uint8_t	mask = (0x1 << layer) << ((vcr->phase & 0x1) << 2);
 		uint8_t	*p;
-
-		if (layer == VCR_LAYER_GRAPHB)
-			y += VCR_ROW_HEIGHT - height - 1;
 
 		p = &vcr->mem.bits[y * vcr->mem.pitch + (vcr->phase >> 1)];
 		for (int i = 0; i < height; i++, p += vcr->mem.pitch)
