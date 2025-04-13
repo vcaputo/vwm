@@ -83,6 +83,7 @@ typedef enum _vwm_column_type_t {
 	VWM_COLUMN_PROC_PID,
 	VWM_COLUMN_PROC_WCHAN,
 	VWM_COLUMN_PROC_STATE,
+	VWM_COLUMN_PROC_RSS,
 	VWM_COLUMN_CNT
 } vwm_column_type_t;
 
@@ -755,6 +756,17 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 			}
 
 			break;
+
+		case VWM_COLUMN_PROC_RSS: { /* print the process' RSS in kb */
+			if (heading)	/* RSS doesn't get a heading currently, as it's always below the process row and considered obvious with a units suffix */
+				break;
+
+			assert(!proc->is_thread);	/* why are we printing RSS for threads? */
+
+			str_len = snpf(str, sizeof(str), "%'u KiB ^", proc_stat->rss * (4096 / 1024));
+
+			break;
+		}
 
 		default:
 			assert(0);
