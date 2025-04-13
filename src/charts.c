@@ -95,9 +95,9 @@ typedef enum _vwm_side_t {
 
 /* how to horizontally justify contents within a given column's area */
 typedef enum _vwm_justify_t {
+	VWM_JUSTIFY_CENTER,
 	VWM_JUSTIFY_LEFT,
 	VWM_JUSTIFY_RIGHT,
-	VWM_JUSTIFY_CENTER,
 	VWM_JUSTIFY_CNT
 } vwm_justify_t;
 
