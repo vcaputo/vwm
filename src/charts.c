@@ -117,6 +117,7 @@ typedef struct _vwm_column_t {
 typedef struct _vwm_row_column_t {
 	vwm_column_t	*column;
 	vwm_side_t	side;
+	vwm_justify_t	justify;
 } vwm_row_column_t;
 
 /* everything needed by the per-window chart's context */
@@ -615,7 +616,7 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 	for (int i = 0, left = 0, right = 0; i < CHART_MAX_COLUMNS; i++) {
 		vwm_row_column_t	*rc = &row_columns[i];
 		vwm_column_t		*c = rc->column;
-		vwm_justify_t		str_justify = VWM_JUSTIFY_CENTER;
+		vwm_justify_t		str_justify = rc->justify;
 		int			str_len = 0, uniform = 1, advance = 1;
 
 		if (!c || !c->enabled)
@@ -642,7 +643,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 					interval_as_hz(charts));
 
 			uniform = 0; /* XXX this suppresses the c->width assignment so the column can be absent outside the heading */
-			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
 
 		case VWM_COLUMN_ROW: /* row in the chart */
@@ -651,7 +651,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 			else
 				str_len = snpf(str, sizeof(str), "%'i", row - CHART_NUM_FIXED_HEADER_ROWS);
 
-			str_justify = VWM_JUSTIFY_LEFT;
 			/* this is kind of hacky, but libvmon doesn't monitor our row, it's implicitly "sampled" when we draw */
 			proc_ctxt->row = row;
 			break;
@@ -663,7 +662,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 				str_len = snpf(str, sizeof(str), "%'.2fs",
 						(float)proc_stat->utime * charts->inv_ticks_per_sec);
 
-			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
 
 		case VWM_COLUMN_PROC_SYS: /* Sys CPU time */
@@ -673,7 +671,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 				str_len = snpf(str, sizeof(str), "%'.2fs",
 						(float)proc_stat->stime * charts->inv_ticks_per_sec);
 
-			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
 
 		case VWM_COLUMN_PROC_WALL: /* User Sys Wall times */
@@ -685,7 +682,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 				str_len = snpf(str, sizeof(str), "%'.2fs",
 						(float)(sys_stat->boottime - proc_stat->start) * charts->inv_ticks_per_sec);
 
-			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
 
 		case VWM_COLUMN_PROC_TREE: { /* print a row of the process hierarchy tree */
@@ -707,7 +703,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 			if (heading) {
 				str_len = snpf(str, sizeof(str), "[NThreads] ArgV%s",
 						charts->no_threads ? "" : "/~ThreadName");
-				str_justify = VWM_JUSTIFY_LEFT;
 			} else {
 				int	width;
 
@@ -726,7 +721,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 			else
 				str_len = snpf(str, sizeof(str), "%5i", proc->pid);
 
-			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
 
 		case VWM_COLUMN_PROC_WCHAN: /* print the process' wchan */
@@ -745,7 +739,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 						proc_stat->wchan.len == 1 && proc_stat->wchan.array[0] == '0' ? "-" : proc_stat->wchan.array);
 			}
 
-			str_justify = VWM_JUSTIFY_RIGHT;
 			break;
 
 		case VWM_COLUMN_PROC_STATE: /* print the process' state */
@@ -761,7 +754,6 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 				str_len = snpf(str, sizeof(str), "%c", proc_stat->state);
 			}
 
-			str_justify = VWM_JUSTIFY_CENTER;
 			break;
 
 		default:
@@ -1281,23 +1273,23 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->snowflake_cpu_columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV };
 
 
-	chart->top_row_columns[0] = (vwm_row_column_t){ .column = &chart->top_columns[0], .side = VWM_SIDE_RIGHT };
+	chart->top_row_columns[0] = (vwm_row_column_t){ .column = &chart->top_columns[0], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
 
-	chart->proc_cpu_row_columns[0] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[0], .side = VWM_SIDE_LEFT };
-	chart->proc_cpu_row_columns[1] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[1], .side = VWM_SIDE_LEFT };
-	chart->proc_cpu_row_columns[2] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[2], .side = VWM_SIDE_LEFT };
-	chart->proc_cpu_row_columns[3] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[3], .side = VWM_SIDE_LEFT };
+	chart->proc_cpu_row_columns[0] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[0], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
+	chart->proc_cpu_row_columns[1] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[1], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->proc_cpu_row_columns[2] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[2], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT  };
+	chart->proc_cpu_row_columns[3] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[3], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT  };
 	chart->proc_cpu_row_columns[4] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[4], .side = VWM_SIDE_LEFT };
-	chart->proc_cpu_row_columns[5] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[5], .side = VWM_SIDE_LEFT };
-	chart->proc_cpu_row_columns[6] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[6], .side = VWM_SIDE_RIGHT };
-	chart->proc_cpu_row_columns[7] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[7], .side = VWM_SIDE_RIGHT };
-	chart->proc_cpu_row_columns[8] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[8], .side = VWM_SIDE_RIGHT };
+	chart->proc_cpu_row_columns[5] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[5], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
+	chart->proc_cpu_row_columns[6] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[6], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_CENTER };
+	chart->proc_cpu_row_columns[7] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[7], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->proc_cpu_row_columns[8] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[8], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
 
-	chart->snowflake_cpu_row_columns[0] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[0], .side = VWM_SIDE_LEFT };
-	chart->snowflake_cpu_row_columns[1] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[1], .side = VWM_SIDE_LEFT };
-	chart->snowflake_cpu_row_columns[2] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[2], .side = VWM_SIDE_LEFT };
-	chart->snowflake_cpu_row_columns[3] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[3], .side = VWM_SIDE_LEFT };
-	chart->snowflake_cpu_row_columns[4] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[4], .side = VWM_SIDE_LEFT };
+	chart->snowflake_cpu_row_columns[0] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[0], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->snowflake_cpu_row_columns[1] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[1], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->snowflake_cpu_row_columns[2] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[2], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->snowflake_cpu_row_columns[3] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[3], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->snowflake_cpu_row_columns[4] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[4], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
 
 	/* add the client process to the monitoring hierarchy */
 	/* XXX note libvmon here maintains a unique callback for each unique callback+xwin pair, so multi-window processes work */
