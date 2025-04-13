@@ -1293,9 +1293,10 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->proc_cpu_row_columns[3] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[3], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT  };
 	chart->proc_cpu_row_columns[4] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[4], .side = VWM_SIDE_LEFT };
 	chart->proc_cpu_row_columns[5] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[5], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
-	chart->proc_cpu_row_columns[6] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[6], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_CENTER };
-	chart->proc_cpu_row_columns[7] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[7], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
-	chart->proc_cpu_row_columns[8] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[8], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->proc_cpu_row_columns[6] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[0], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->proc_cpu_row_columns[7] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[6], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_CENTER };
+	chart->proc_cpu_row_columns[8] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[7], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->proc_cpu_row_columns[9] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[8], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
 
 	chart->snowflake_cpu_row_columns[0] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[0], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
 	chart->snowflake_cpu_row_columns[1] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[1], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
