@@ -690,7 +690,8 @@ static void draw_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_column_t 
 
 		case VWM_COLUMN_PROC_ARGV: { /* print the process' argv */
 			if (heading) {
-				str_len = snpf(str, sizeof(str), "[NThreads] ArgV/~ThreadName");
+				str_len = snpf(str, sizeof(str), "[NThreads] ArgV%s",
+						charts->no_threads ? "" : "/~ThreadName");
 				str_justify = VWM_JUSTIFY_LEFT;
 			} else {
 				int	width;
