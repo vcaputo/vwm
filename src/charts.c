@@ -1145,6 +1145,8 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 			draw_row_columns(charts, chart, chart->top_row_columns, 1 /* heading */, 0 /* depth */, row, proc);
 			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
 
+			/* XXX: note at this time there's no overlay text for the IRQ/SoftIRQ (row + 1) (which should probably change) */
+
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 1, -1, -1);
 			draw_row_columns(charts, chart, chart->proc_cpu_row_columns, 1 /* heading */, 0 /* depth */, row + 2, proc);
 			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row + 1);
