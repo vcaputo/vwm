@@ -74,19 +74,19 @@ static void compute_resize(XEvent *terminus, XWindowAttributes *new)
 	xdelta = xdelta / width_inc * width_inc;
 	ydelta = ydelta / height_inc * height_inc;
 
-	if (clickety.impetus_x < dw && clickety.impetus_y < dh) {
+	if (clickety.impetus_x <= dw && clickety.impetus_y <= dh) {
 		/* grabbed top left */
 		new->x = clickety.orig.x + xdelta;
 		new->y = clickety.orig.y + ydelta;
 		new->width = clickety.orig.width - xdelta;
 		new->height = clickety.orig.height - ydelta;
-	} else if (clickety.impetus_x > dw && clickety.impetus_y < dh) {
+	} else if (clickety.impetus_x > dw && clickety.impetus_y <= dh) {
 		/* grabbed top right */
 		new->x = clickety.orig.x;
 		new->y = clickety.orig.y + ydelta;
 		new->width = clickety.orig.width + xdelta;
 		new->height = clickety.orig.height - ydelta;
-	} else if (clickety.impetus_x < dw && clickety.impetus_y > dh) {
+	} else if (clickety.impetus_x <= dw && clickety.impetus_y > dh) {
 		/* grabbed bottom left */
 		new->x = clickety.orig.x + xdelta;
 		new->y = clickety.orig.y;
