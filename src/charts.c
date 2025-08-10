@@ -409,16 +409,30 @@ static int proc_hierarchy_changed(vmon_proc_t *proc)
 /* helper for drawing the vertical bars in the graph layers */
 static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, float mult, float a_fraction, float inv_a_total, vcr_layer_t a_layer, float b_fraction, float inv_b_total, vcr_layer_t b_layer)
 {
+	int	a_height, b_height;
 	float	a_t, b_t;
 
 	/* compute the bar %ages for this sample */
 	a_t = a_fraction * inv_a_total * mult;
+	if (a_t > 1.f)
+		a_t = 1.f;
+
 	b_t = b_fraction * inv_b_total * mult;
+	if (b_t > 1.f)
+		b_t = 1.f;
 
 	/* ensure at least 1 pixel when the scaled result is a fraction less than 1,
 	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
-	vcr_draw_bar(chart->vcr, a_layer, row, a_t, a_fraction != 0 ? 1 : 0 /* min_height */);
-	vcr_draw_bar(chart->vcr, b_layer, row, b_t, b_fraction != 0 ? 1 : 0 /* min_height */);
+	a_height = rintf(a_t * (float)(VCR_ROW_HEIGHT - 1));
+	if (a_height == 0 && a_fraction != 0.f)
+		a_height = 1;
+
+	b_height = rintf(b_t * (float)(VCR_ROW_HEIGHT - 1));
+	if (b_height == 0 && b_fraction != 0.f)
+		b_height = 1;
+
+	vcr_draw_bar(chart->vcr, a_layer, VCR_BAR_BASE_TOP, row, a_height);
+	vcr_draw_bar(chart->vcr, b_layer, VCR_BAR_BASE_BOTTOM, row, b_height);
 }
 
 
@@ -1069,7 +1083,7 @@ static void draw_chart_rest(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_
 
 			draw_bars(charts, chart, *row,
 				(proc->is_thread || !proc->is_threaded) ? charts->vmon.num_cpus : 1.f /* mult */,
-				-stime_delta,
+				stime_delta,
 				charts->inv_total_delta,
 				VCR_LAYER_GRAPHA,
 				utime_delta,
@@ -1111,7 +1125,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	/* IOWait and Idle % @ row 0 */
 	draw_bars(charts, chart, row,
 		1.f /* mult */,
-		-charts->iowait_delta,
+		charts->iowait_delta,
 		charts->inv_total_delta,
 		VCR_LAYER_GRAPHA,
 		charts->idle_delta,
@@ -1121,7 +1135,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	/* IRQ and SoftIRQ % @ row 1 */
 	draw_bars(charts, chart, row + 1,
 		1.f /* mult */,
-		-charts->irq_delta,
+		charts->irq_delta,
 		charts->inv_total_delta,
 		VCR_LAYER_GRAPHA,
 		charts->softirq_delta,
@@ -1131,7 +1145,7 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 	/* "Adherence" @ row 2 */
 	draw_bars(charts, chart, row + 2,
 		1.f /* mult */,
-		charts->this_sample_adherence > 0.f ? -charts->this_sample_adherence : 0.f /* a_fraction */,
+		charts->this_sample_adherence > 0.f ? charts->this_sample_adherence : 0.f /* a_fraction */,
 		1.f /* inv_a_total */,
 		VCR_LAYER_GRAPHA,
 		charts->this_sample_adherence < 0.f ? -charts->this_sample_adherence : 0.f /* b_fraction */,

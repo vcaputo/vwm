@@ -1195,35 +1195,32 @@ void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row)
 }
 
 
-/* draw a bar at the current phase into the specified layer of t % with a minimum of min_height pixels.
+/* draw a bar at the current phase into the specified layer of height pixels
  *
  * the only layers supported right now are grapha/graphb
  */
-void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, int row, float t, int min_height)
+void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, vcr_bar_base_t base, int row, int height)
 {
-	int	height, y = row * VCR_ROW_HEIGHT;
+	int	y = row * VCR_ROW_HEIGHT;
 
 	assert(vcr);
 	assert(vcr->backend);
 	assert(row >= 0);
 	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
-	assert(min_height >= 0 && min_height < (VCR_ROW_HEIGHT - 1));
+	assert(height >= 0 && height < VCR_ROW_HEIGHT);
 
 	if ((row + 1) * VCR_ROW_HEIGHT >= vcr->height)
 		return;
 
-	height = fabsf(t) * (float)(VCR_ROW_HEIGHT - 1);
-
-	if (height < min_height)
-		height = min_height;
-
-	/* clamp the height to not potentially overflow */
-	if (height > (VCR_ROW_HEIGHT - 1))
-		height = (VCR_ROW_HEIGHT - 1);
-
-	/* negative values project down from the top, positive up from bottom */
-	if (t > 0.f)
+	switch (base) {
+	case VCR_BAR_BASE_BOTTOM:
 		y += VCR_ROW_HEIGHT - height - 1;
+		break;
+	case VCR_BAR_BASE_TOP:
+		break;
+	default:
+		assert(0);
+	}
 
 	switch (vcr->backend->type) {
 #ifdef USE_XLIB
