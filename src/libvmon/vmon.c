@@ -1637,10 +1637,27 @@ static int sample_siblings_pass2(vmon_t *vmon, list_head_t *siblings)
 }
 
 
+static void sample_sys_wants(vmon_t *vmon)
+{
+	assert(vmon);
+
+	/* first the sys-wide samplers */
+	vmon->activity = 0;
+	for (int i = 0, cur = 1, wants = vmon->sys_wants; wants; cur <<= 1, i++) {
+		if (wants & cur) {
+			if (vmon->sys_funcs[i](vmon, &vmon->stores[i]) == SAMPLE_CHANGED)
+				vmon->activity |= cur;
+
+			wants &= ~cur;
+		}
+	}
+}
+
+
 /* collect information for all monitored processes, this is the interesting part, call it periodically at a regular interval */
 int vmon_sample(vmon_t *vmon)
 {
-	int	i, wants, cur, ret = 1;
+	int	ret = 1;
 
 	assert(vmon);
 
@@ -1704,21 +1721,6 @@ int vmon_sample(vmon_t *vmon)
 
 	/* now for actual sampling */
 
-	/* first the sys-wide samplers */
-	wants = vmon->sys_wants; /* the caller-requested sys-wide wants */
-	vmon->activity = 0;
-	for (i = 0, cur = 1; wants; cur <<= 1, i++) {
-		if (wants & cur) {
-			if (vmon->sys_funcs[i](vmon, &vmon->stores[i]) == SAMPLE_CHANGED)
-				vmon->activity |= cur;
-
-			wants &= ~cur;
-		}
-	}
-
-	if (vmon->sample_cb)
-		vmon->sample_cb(vmon, vmon->sample_cb_arg);
-
 	/* then the per-process samplers */
 	if ((vmon->flags & VMON_FLAG_PROC_ARRAY)) {
 		int	j;
@@ -1730,6 +1732,9 @@ int vmon_sample(vmon_t *vmon)
 		 * mode, only FOLLOW_CHILDREN mode, and it's likely PROC_ARRAY will generally be used together with PROC_ALL, so no hierarchy
 		 * is available to traverse even if we wanted to.
 		 */
+		sample_sys_wants(vmon);
+		if (vmon->sample_cb)
+			vmon->sample_cb(vmon, vmon->sample_cb_arg);
 
 		/* flat process-array ordered sampling, in this mode threads and processes are all placed flatly in the array,
 		 * so this does the sampling for all monitored in no particular order */
@@ -1757,11 +1762,19 @@ int vmon_sample(vmon_t *vmon)
 		  * XXX this is the path vwm utilizes, everything else is for other uses, like implementing top-like programs.
 		 */
 		ret = sample_siblings_pass1(vmon, &vmon->processes);	/* XXX TODO: errors */
+
+		sample_sys_wants(vmon);
+		if (vmon->sample_cb)
+			vmon->sample_cb(vmon, vmon->sample_cb_arg);
+
 		ret = sample_siblings_pass2(vmon, &vmon->processes);
 	} else {
 		/* recursive hierarchical depth-first processes tree sampling, at each node threads come before children, done in a single pass:
 		 * Pass 1. samplers; callbacks (for every node)
 		 */
+		sample_sys_wants(vmon);
+		if (vmon->sample_cb)
+			vmon->sample_cb(vmon, vmon->sample_cb_arg);
 		ret = sample_siblings_unipass(vmon, &vmon->processes);
 	}
 
