@@ -583,7 +583,7 @@ static void draw_tree_row(vwm_charts_t *charts, vwm_chart_t *chart, int x, int d
 		}
 
 		/* if we still don't think we need a tee, check if there are threads */
-		if (!needs_tee) {
+		if (!needs_tee && !charts->no_threads) {
 			list_for_each_entry(child, &sibling->threads, threads) {
 				if (!child->is_stale) {
 					needs_tee = 1;
