@@ -458,9 +458,9 @@ static void print_argv(const vwm_charts_t *charts, const vwm_chart_t *chart, int
 
 
 /* determine if a given process has subsequent siblings in the hierarchy */
-static inline int proc_has_subsequent_siblings(vwm_charts_t *charts, vmon_proc_t *proc)
+static inline int proc_has_subsequent_siblings(const vwm_charts_t *charts, const vmon_proc_t *proc)
 {
-	struct list_head	*sib, *head = &charts->vmon.processes;
+	const struct list_head	*sib, *head = &charts->vmon.processes;
 
 	if (proc->is_thread) {
 		if (!charts->no_threads) {
