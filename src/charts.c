@@ -416,10 +416,14 @@ static void draw_bars(vwm_charts_t *charts, vwm_chart_t *chart, int row, float m
 	a_t = a_fraction * inv_a_total * mult;
 	if (a_t > 1.f)
 		a_t = 1.f;
+	else if (a_t < 0.f)
+		a_t = 0.f;
 
 	b_t = b_fraction * inv_b_total * mult;
 	if (b_t > 1.f)
 		b_t = 1.f;
+	else if (b_t < 0.f)
+		b_t = 0.f;
 
 	/* ensure at least 1 pixel when the scaled result is a fraction less than 1,
 	 * I want to at least see 1 pixel blips for the slightest cpu utilization */
