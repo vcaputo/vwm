@@ -944,7 +944,7 @@ int vcr_resize_visible(vcr_t *vcr, int width, int height)
  * x may be negative or extend outside vcr bounds, clipping will be performed as needed.
  */
  /* XXX: maybe these strs should also include lengths instead of being null-terminated */
-void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, int x, int row, const vcr_str_t *strs, int n_strs, int *res_width)
+void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, vcr_text_flags_t flags, int x, int row, const vcr_str_t *strs, int n_strs, int *res_width)
 {
 	assert(vcr);
 	assert(vcr->backend);
@@ -952,6 +952,7 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, int x, int row, const vcr_str_
 	assert(row >= 0 || res_width);
 	assert(strs);
 	assert(n_strs > 0);
+	assert(flags < VCR_TEXT_FLAGS_CNT);
 	/* FIXME: this should really be able to draw text into any valid layer,
 	 * it's just the pictures/pixmaps in vcr_t aren't currently organized as an
 	 * array easily indexed by the layer enum. TODO

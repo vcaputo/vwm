@@ -457,7 +457,7 @@ static void print_argv(const vwm_charts_t *charts, const vwm_chart_t *chart, int
 	assert(chart);
 
 	proc_argv2strs(proc, strs, NELEMS(strs), &n_strs);
-	vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, x, row, strs, n_strs, res_width);
+	vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, VCR_TEXT_FLAGS_CLIPPED, x, row, strs, n_strs, res_width);
 }
 
 
@@ -800,7 +800,7 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 			int		str_width, xpos;
 
 			/* get the width first, so we can place the text, note the -1 to suppress drawings */
-			vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, -1 /* x */, -1 /* row */, strs, 1, &str_width);
+			vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, VCR_TEXT_FLAGS_CLIPPED, -1 /* x */, -1 /* row */, strs, 1, &str_width);
 			if (uniform && str_width > c->width) {
 				c->width = str_width;
 				chart->redraw_needed++;
@@ -838,7 +838,7 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 				assert(0);
 			}
 
-			vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, xpos, row, strs, 1, NULL);
+			vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, VCR_TEXT_FLAGS_CLIPPED, xpos, row, strs, 1, NULL);
 		}
 
 		if (advance) {

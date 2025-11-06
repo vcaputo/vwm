@@ -44,6 +44,11 @@ typedef enum vcr_bar_base_t {
 	VCR_BAR_BASE_CNT
 } vcr_bar_base_t;
 
+typedef enum vcr_text_flags_t {
+	VCR_TEXT_FLAGS_CLIPPED,
+	VCR_TEXT_FLAGS_CNT
+} vcr_text_flags_t;
+
 typedef struct vcr_backend_t vcr_backend_t;
 typedef struct vcr_dest_t vcr_dest_t;
 typedef struct vcr_t vcr_t;
@@ -72,7 +77,7 @@ vcr_dest_t * vcr_dest_free(vcr_dest_t *dest);
 vcr_t * vcr_new(vcr_backend_t *vbe, int *hierarchy_end_ptr, int *snowflakes_cnt_ptr, const unsigned *marker_distance_ptr);
 vcr_t * vcr_free(vcr_t *vcr);
 int vcr_resize_visible(vcr_t *vcr, int width, int height);
-void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, int x, int row, const vcr_str_t *strs, int n_strs, int *res_width);
+void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, vcr_text_flags_t flags, int x, int row, const vcr_str_t *strs, int n_strs, int *res_width);
 void vcr_draw_ortho_line(vcr_t *vcr, vcr_layer_t layer, int x1, int y1, int x2, int y2);
 void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row);
 void vcr_draw_bar(vcr_t *vcr, vcr_layer_t layer, vcr_bar_base_t base, int row, int height);
