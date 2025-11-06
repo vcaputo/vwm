@@ -46,6 +46,7 @@ typedef enum vcr_bar_base_t {
 
 typedef enum vcr_text_flags_t {
 	VCR_TEXT_FLAGS_CLIPPED,
+	VCR_TEXT_FLAGS_WRAPPED,
 	VCR_TEXT_FLAGS_CNT
 } vcr_text_flags_t;
 

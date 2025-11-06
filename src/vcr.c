@@ -927,6 +927,56 @@ int vcr_resize_visible(vcr_t *vcr, int width, int height)
 }
 
 
+
+static void vcr_mem_draw_text(vcr_t *vcr, vcr_layer_t layer, int x, int row, const vcr_str_t *strs, int n_strs)
+{
+	int	y = row * VCR_ROW_HEIGHT + 3;
+	uint8_t	mask = (0x1 << layer);
+
+	for (int i = 0; i < n_strs && x < vcr->width; i++) {
+		unsigned char	c;
+
+		x += 4; /* match the delta used w/XDrawText */
+
+		for (int j = 0, n = 0; j < strs[i].len; j++) {
+			int	w = ASCII_WIDTH;
+
+			c = strs[i].str[j];
+
+			/* skip weird/non-printable chars */
+			if (c < ' ' || c > '~')
+				continue;
+
+			if (n > 0)
+				x += 1;
+
+			if (x >= vcr->width) {
+				x = vcr->width;
+				break;
+			}
+
+			if (x + w >= vcr->width)
+				w = vcr->width - x;
+
+			for (int k = 0; k < ASCII_HEIGHT; k++) {
+				for (int l = 0; l < w; l++) {
+					int	x_l = x + l;
+					uint8_t	*p = &vcr->mem.bits[(y + k) * vcr->mem.pitch + (x_l >> 1)];
+
+					/* FIXME this can all be done more efficiently */
+					if (x_l < 0)
+						continue;
+
+					*p = (*p & ~(mask << ((x_l & 0x1) << 2))) | ((mask * ascii_chars[c][k * ASCII_WIDTH + l]) << ((x_l & 0x1) << 2));
+				}
+			}
+
+			x += ASCII_WIDTH;
+			n++;
+		}
+	}
+}
+
 /* this is inspired by XDrawText and its XTextItem *items + nr_items API,
  * primarily so it's easy to map the incoming call to an XDrawText call...
  * but for non-xlib backends, an XDrawText equivalent will be needed.
@@ -975,9 +1025,47 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, vcr_text_flags_t flags, int x,
 		}
 
 		if (row >= 0) {
-			XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
-				x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
-				items, n_strs);
+			switch (flags) {
+			case VCR_TEXT_FLAGS_CLIPPED:
+				XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+					x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
+					items, n_strs);
+				break;
+
+			case VCR_TEXT_FLAGS_WRAPPED: {
+				int	width = 0;
+
+				for (int i = 0; i < n_strs; i++)
+					width += XTextWidth(vcr->backend->xlib.chart_font, items[i].chars, items[i].nchars) + items[i].delta;
+
+				if (x < 0) {
+					XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+						vcr->width + x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
+						items, n_strs);
+
+					if (x + width > 0) {
+						XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+							x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
+							items, n_strs);
+					}
+				} else if (x + width > vcr->width) {
+					XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+						-(vcr->width - x), (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
+						items, n_strs);
+					XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+						x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
+						items, n_strs);
+				} else {
+					XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+						x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
+						items, n_strs);
+				}
+				break;
+			}
+
+			default:
+				assert(0);
+			}
 		}
 
 		/* if the caller wants to know the width, compute it, it's dumb that XDrawText doesn't
@@ -997,45 +1085,35 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, vcr_text_flags_t flags, int x,
 
 	case VCR_BACKEND_TYPE_MEM: {
 		if (row >= 0 && (row + 1) * VCR_ROW_HEIGHT < vcr->height) {
-			int	y = row * VCR_ROW_HEIGHT + 3;
-			uint8_t	mask = (0x1 << layer);
+			switch (flags) {
+			case VCR_TEXT_FLAGS_CLIPPED:
+				vcr_mem_draw_text(vcr, layer, x, row, strs, n_strs);
+				break;
+			case VCR_TEXT_FLAGS_WRAPPED: {
+				int	w = 0;
+				/* assume fixed 5x11 ascii glyphs */
+				for (int i = 0; i < n_strs; i++) {
+					w += 4; /* match the delta used w/XDrawText */
 
-			for (int i = 0; i < n_strs && x < vcr->width; i++) {
-				unsigned char	c;
-
-				x += 4; /* match the delta used w/XDrawText */
-
-				for (int j = 0, n = 0; j < strs[i].len; j++) {
-					c = strs[i].str[j];
-
-					/* skip weird/non-printable chars */
-					if (c < ' ' || c > '~')
-						continue;
-
-					if (n > 0)
-						x += 1;
-
-					if (x + ASCII_WIDTH >= vcr->width) {
-						x = vcr->width;
-						break;
-					}
-
-					for (int k = 0; k < ASCII_HEIGHT; k++) {
-						for (int l = 0; l < ASCII_WIDTH; l++) {
-							int	x_l = x + l;
-							uint8_t	*p = &vcr->mem.bits[(y + k) * vcr->mem.pitch + (x_l >> 1)];
-
-							/* FIXME this can all be done more efficiently */
-							if (x_l < 0)
-								continue;
-
-							*p = (*p & ~(mask << ((x_l & 0x1) << 2))) | ((mask * ascii_chars[c][k * ASCII_WIDTH + l]) << ((x_l & 0x1) << 2));
-						}
-					}
-
-					x += ASCII_WIDTH;
-					n++;
+					w += strs[i].len * (ASCII_WIDTH + 1);
 				}
+
+				if (x < 0) {
+					vcr_mem_draw_text(vcr, layer, vcr->width + x, row, strs, n_strs);
+
+					if (x + w > 0)
+						vcr_mem_draw_text(vcr, layer, x, row, strs, n_strs);
+				} else if (x + w > vcr->width) {
+					vcr_mem_draw_text(vcr, layer, -(vcr->width - x), row, strs, n_strs);
+					vcr_mem_draw_text(vcr, layer, x, row, strs, n_strs);
+				} else {
+					vcr_mem_draw_text(vcr, layer, x, row, strs, n_strs);
+				}
+
+				break;
+			}
+			default:
+				assert(0);
 			}
 		}
 
