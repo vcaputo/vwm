@@ -139,6 +139,9 @@ typedef struct vcr_t {
 #ifdef USE_XLIB
 		struct {
 			Pixmap		text_pixmap;	/* pixmap for charted text (kept around for XDrawText usage) */
+			Pixmap		grapha_pixmap;	/* ditto, so grapha layer may have text drawn */
+			Pixmap		graphb_pixmap;	/* ditto, so graphb layer may have text drawn */
+
 			Picture		text_picture;	/* picture representation of text_pixmap */
 			Picture		shadow_picture;	/* text shadow layer */
 			Picture		grapha_picture;	/* graph A layer */
@@ -744,6 +747,8 @@ static void vcr_free_xlib_internal(vcr_t *vcr)
 	XRenderFreePicture(xserver->display, vcr->xlib.tmp_b_picture);
 	XRenderFreePicture(xserver->display, vcr->xlib.text_picture);
 	XFreePixmap(xserver->display, vcr->xlib.text_pixmap);
+	XFreePixmap(xserver->display, vcr->xlib.grapha_pixmap);
+	XFreePixmap(xserver->display, vcr->xlib.graphb_pixmap);
 	XRenderFreePicture(xserver->display, vcr->xlib.shadow_picture);
 	XRenderFreePicture(xserver->display, vcr->xlib.picture);
 }
@@ -867,13 +872,14 @@ int vcr_resize_visible(vcr_t *vcr, int width, int height)
 		vcr->height = MAX(vcr->height, MAX(height, CHART_GRAPH_MIN_HEIGHT));
 
 		/* XXX: note this is actually _the_ place these things get allocated */
-		vcr->xlib.grapha_picture = create_picture_fill(xserver, vcr->width, vcr->height, CHART_MASK_DEPTH, CPRepeat, &pa_repeat, &chart_trans_color, NULL);
-		vcr->xlib.graphb_picture = create_picture_fill(xserver, vcr->width, vcr->height, CHART_MASK_DEPTH, CPRepeat, &pa_repeat, &chart_trans_color, NULL);
+
+		/* keep {text,grapha,graphb}_pixmap references around for XDrawText usage */
+		vcr->xlib.grapha_picture = create_picture_fill(xserver, vcr->width, vcr->height, CHART_MASK_DEPTH, CPRepeat, &pa_repeat, &chart_trans_color, &vcr->xlib.grapha_pixmap);
+		vcr->xlib.graphb_picture = create_picture_fill(xserver, vcr->width, vcr->height, CHART_MASK_DEPTH, CPRepeat, &pa_repeat, &chart_trans_color, &vcr->xlib.graphb_pixmap);
+		vcr->xlib.text_picture = create_picture_fill(xserver, vcr->width, vcr->height, CHART_MASK_DEPTH, 0, NULL, &chart_trans_color, &vcr->xlib.text_pixmap);
+
 		vcr->xlib.tmp_a_picture = create_picture(xserver, vcr->width, VCR_ROW_HEIGHT, CHART_MASK_DEPTH, 0, NULL, NULL);
 		vcr->xlib.tmp_b_picture = create_picture(xserver, vcr->width, VCR_ROW_HEIGHT, CHART_MASK_DEPTH, 0, NULL, NULL);
-
-		/* keep the text_pixmap reference around for XDrawText usage */
-		vcr->xlib.text_picture = create_picture_fill(xserver, vcr->width, vcr->height, CHART_MASK_DEPTH, 0, NULL, &chart_trans_color, &vcr->xlib.text_pixmap);
 
 		vcr->xlib.shadow_picture = create_picture_fill(xserver, vcr->width, vcr->height, CHART_MASK_DEPTH, 0, NULL, &chart_trans_color, NULL);
 		vcr->xlib.picture = create_picture(xserver, vcr->width, vcr->height, 32, 0, NULL, NULL);
@@ -1007,7 +1013,7 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, vcr_text_flags_t flags, int x,
 	 * it's just the pictures/pixmaps in vcr_t aren't currently organized as an
 	 * array easily indexed by the layer enum. TODO
 	 */
-	assert(layer == VCR_LAYER_TEXT);
+	assert(layer == VCR_LAYER_TEXT || layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
 
 	if (n_strs > VCR_DRAW_TEXT_N_STRS_MAX)
 		n_strs = VCR_DRAW_TEXT_N_STRS_MAX;
@@ -1016,6 +1022,21 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, vcr_text_flags_t flags, int x,
 #ifdef USE_XLIB
 	case VCR_BACKEND_TYPE_XLIB: {
 		XTextItem	items[VCR_DRAW_TEXT_N_STRS_MAX];
+		Pixmap		dest;
+
+		switch (layer) {
+		case VCR_LAYER_TEXT:
+			dest = vcr->xlib.text_pixmap;
+			break;
+		case VCR_LAYER_GRAPHA:
+			dest = vcr->xlib.grapha_pixmap;
+			break;
+		case VCR_LAYER_GRAPHB:
+			dest = vcr->xlib.graphb_pixmap;
+			break;
+		default:
+			assert(0);
+		}
 
 		for (int i = 0; i < n_strs; i++) {
 			items[i].nchars = strs[i].len;
@@ -1027,7 +1048,7 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, vcr_text_flags_t flags, int x,
 		if (row >= 0) {
 			switch (flags) {
 			case VCR_TEXT_FLAGS_CLIPPED:
-				XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+				XDrawText(vcr->backend->xlib.xserver->display, dest, vcr->backend->xlib.text_gc,
 					x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
 					items, n_strs);
 				break;
@@ -1039,24 +1060,24 @@ void vcr_draw_text(vcr_t *vcr, vcr_layer_t layer, vcr_text_flags_t flags, int x,
 					width += XTextWidth(vcr->backend->xlib.chart_font, items[i].chars, items[i].nchars) + items[i].delta;
 
 				if (x < 0) {
-					XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+					XDrawText(vcr->backend->xlib.xserver->display, dest, vcr->backend->xlib.text_gc,
 						vcr->width + x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
 						items, n_strs);
 
 					if (x + width > 0) {
-						XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+						XDrawText(vcr->backend->xlib.xserver->display, dest, vcr->backend->xlib.text_gc,
 							x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
 							items, n_strs);
 					}
 				} else if (x + width > vcr->width) {
-					XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+					XDrawText(vcr->backend->xlib.xserver->display, dest, vcr->backend->xlib.text_gc,
 						-(vcr->width - x), (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
 						items, n_strs);
-					XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+					XDrawText(vcr->backend->xlib.xserver->display, dest, vcr->backend->xlib.text_gc,
 						x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
 						items, n_strs);
 				} else {
-					XDrawText(vcr->backend->xlib.xserver->display, vcr->xlib.text_pixmap, vcr->backend->xlib.text_gc,
+					XDrawText(vcr->backend->xlib.xserver->display, dest, vcr->backend->xlib.text_gc,
 						x, (row + 1) * VCR_ROW_HEIGHT - 3,	/* dst x, y */
 						items, n_strs);
 				}
