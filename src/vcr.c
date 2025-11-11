@@ -102,7 +102,8 @@ typedef struct vcr_backend_t {
 						snowflakes_text_fill,
 						grapha_fill,
 						graphb_fill,
-						finish_fill;
+						finish_fill,
+						boundary_fill;
 		} xlib;
 #endif /* USE_XLIB */
 		struct {
@@ -347,6 +348,9 @@ static vcr_backend_t * vcr_backend_xlib_setup(vcr_backend_t *vbe, vwm_xserver_t 
 	vbe->xlib.finish_fill = create_picture(xserver, 1, 2, 32, CPRepeat, &pa_repeat, NULL);
 	XRenderFillRectangle(xserver->display, PictOpSrc, vbe->xlib.finish_fill, &chart_visible_color, 0, 0, 1, 1);
 	XRenderFillRectangle(xserver->display, PictOpSrc, vbe->xlib.finish_fill, &chart_trans_color, 0, 1, 1, 1);
+	vbe->xlib.boundary_fill = create_picture(xserver, 1, 8, 32, CPRepeat, &pa_repeat, NULL);
+	XRenderFillRectangle(xserver->display, PictOpSrc, vbe->xlib.boundary_fill, &chart_visible_color, 0, 0, 1, 4);
+	XRenderFillRectangle(xserver->display, PictOpSrc, vbe->xlib.boundary_fill, &chart_trans_color, 0, 4, 1, 4);
 
 	return vbe;
 
@@ -523,6 +527,7 @@ vcr_backend_t * vcr_backend_free(vcr_backend_t *vbe)
 			XRenderFreePicture(vbe->xlib.xserver->display, vbe->xlib.grapha_fill);
 			XRenderFreePicture(vbe->xlib.xserver->display, vbe->xlib.graphb_fill);
 			XRenderFreePicture(vbe->xlib.xserver->display, vbe->xlib.finish_fill);
+			XRenderFreePicture(vbe->xlib.xserver->display, vbe->xlib.boundary_fill);
 			XFreeFont(vbe->xlib.xserver->display, vbe->xlib.chart_font);
 			XFreeGC(vbe->xlib.xserver->display, vbe->xlib.text_gc);
 
@@ -1285,6 +1290,60 @@ void vcr_mark_finish_line(vcr_t *vcr, vcr_layer_t layer, int row)
 		p = &vcr->mem.bits[row * VCR_ROW_HEIGHT * vcr->mem.pitch + (vcr->phase >> 1)];
 		for (int i = 0; i < VCR_ROW_HEIGHT; i++, p += vcr->mem.pitch)
 			*p = ((*p & ~mask) | (mask * (i & 0x1)));
+
+		break;
+	}
+
+	default:
+		assert(0);
+	}
+}
+
+
+/* marks a boundary in layer for all rows @ current phase */
+void vcr_mark_boundary(vcr_t *vcr, vcr_layer_t layer)
+{
+	assert(vcr);
+	assert(vcr->backend);
+	/* FIXME: the layers in backend/vcr etc should be in a layer-indexable array */
+	assert(layer == VCR_LAYER_GRAPHA || layer == VCR_LAYER_GRAPHB);
+
+	switch (vcr->backend->type) {
+#ifdef USE_XLIB
+	case VCR_BACKEND_TYPE_XLIB: {
+		vwm_xserver_t	*xserver = vcr->backend->xlib.xserver;
+		Picture		dest;
+
+		switch (layer) {
+		case VCR_LAYER_GRAPHA:
+			dest = vcr->xlib.grapha_picture;
+			break;
+		case VCR_LAYER_GRAPHB:
+			dest = vcr->xlib.graphb_picture;
+			break;
+		default:
+			assert(0);
+		}
+
+		assert(xserver);
+
+		XRenderComposite(xserver->display, PictOpSrc, vcr->backend->xlib.boundary_fill, None, dest,
+				 0, 0,			/* src x, y */
+				 0, 0,			/* mask x, y */
+				 vcr->phase, 0,		/* dst x, y */
+				 1, vcr->height);
+
+		break;
+	}
+#endif /* USE_XLIB */
+
+	case VCR_BACKEND_TYPE_MEM: {
+		uint8_t	mask = (0x1 << layer) << ((vcr->phase & 0x1) << 2);
+		uint8_t	*p;
+
+		p = &vcr->mem.bits[(vcr->phase >> 1)];
+		for (int i = 0; i < vcr->height; i++, p += vcr->mem.pitch)
+			*p = ((*p & ~mask) | (mask * ((i >> 2) & 0x1)));
 
 		break;
 	}
