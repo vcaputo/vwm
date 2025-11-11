@@ -49,6 +49,7 @@
 #define CHART_DELTA_SECONDS_EPSILON	.001f				/* adherence errors smaller than this are treated as zero */
 #define CHART_NUM_FIXED_HEADER_ROWS	3				/* number of rows @ top before the hierarchy: { IOWait/Idle, IRQ/SoftIRQ, Adherence } */
 #define CHART_DEFAULT_INTERVAL_SECS	.1f				/* default to 10Hz */
+#define CHART_STAMP_ROW_INTERVAL	10				/* every Nth row to stamp boundaries with the text */
 
 /* the global charts state, supplied to vwm_chart_create() which keeps a reference for future use. */
 typedef struct _vwm_charts_t {
@@ -1445,6 +1446,37 @@ void vwm_chart_render(vwm_charts_t *charts, vwm_chart_t *chart, vcr_present_op_t
 		return;
 
 	vcr_present(chart->vcr, op, dest, x, y, width, height);
+}
+
+
+void vwm_chart_stamp_boundary(vwm_charts_t *charts, vwm_chart_t *chart, const char *text)
+{
+	vcr_str_t	strs;
+	int		w;
+
+	assert(charts);
+	assert(chart);
+	assert(text);
+
+	strs.str = text;
+	strs.len = strlen(text);
+
+	vcr_advance_phase(chart->vcr, -1);
+	vcr_mark_boundary(chart->vcr, VCR_LAYER_GRAPHA);
+	vcr_mark_boundary(chart->vcr, VCR_LAYER_GRAPHB);
+
+	vcr_draw_text(chart->vcr, VCR_LAYER_GRAPHA, VCR_TEXT_FLAGS_WRAPPED, -1, -1, &strs, 1, &w);
+	for (int i = 0; i < w; i++) /* TODO: advance_phase should support -N instead of -1/+1, this is silly */
+		vcr_advance_phase(chart->vcr, -1);
+
+	for (int i = 0; i * VCR_ROW_HEIGHT < chart->visible_height; i += CHART_STAMP_ROW_INTERVAL) {
+		vcr_draw_text(chart->vcr, VCR_LAYER_GRAPHA, VCR_TEXT_FLAGS_WRAPPED, vcr_phase_x(chart->vcr), i, &strs, 1, NULL);
+		vcr_draw_text(chart->vcr, VCR_LAYER_GRAPHB, VCR_TEXT_FLAGS_WRAPPED, vcr_phase_x(chart->vcr), i, &strs, 1, NULL);
+	}
+
+	vcr_advance_phase(chart->vcr, -1);
+	vcr_mark_boundary(chart->vcr, VCR_LAYER_GRAPHA);
+	vcr_mark_boundary(chart->vcr, VCR_LAYER_GRAPHB);
 }
 
 

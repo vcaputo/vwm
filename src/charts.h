@@ -39,5 +39,6 @@ void vwm_chart_compose(vwm_charts_t *charts, vwm_chart_t *chart);
 void vwm_chart_compose_xdamage(vwm_charts_t *charts, vwm_chart_t *chart, XserverRegion *res_damaged_region);
 #endif
 void vwm_chart_render(vwm_charts_t *charts, vwm_chart_t *chart, vcr_present_op_t op, vcr_dest_t *dest, int x, int y, int width, int height);
+void vwm_chart_stamp_boundary(vwm_charts_t *charts, vwm_chart_t *chart, const char *str);
 
 #endif
