@@ -89,6 +89,7 @@ void vcr_shadow_row(vcr_t *vcr, vcr_layer_t layer, int row);
 void vcr_stash_row(vcr_t *vcr, vcr_layer_t layer, int row);
 void vcr_unstash_row(vcr_t *vcr, vcr_layer_t layer, int row);
 void vcr_advance_phase(vcr_t *vcr, int delta);
+int vcr_phase_x(vcr_t *vcr);
 int vcr_compose(vcr_t *vcr);
 #ifdef USE_XLIB
 int vcr_get_composed_xdamage(vcr_t *vcr, XserverRegion *res_damaged_region);

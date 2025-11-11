@@ -1850,6 +1850,13 @@ void vcr_advance_phase(vcr_t *vcr, int delta)
 	}
 }
 
+int vcr_phase_x(vcr_t *vcr)
+{
+	assert(vcr);
+
+	return vcr->phase;
+}
+
 
 /* return the # of combined hierarchy+snowflakes rows in chart */
 static inline int vcr_composed_rows(vcr_t *vcr)
