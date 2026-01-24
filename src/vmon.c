@@ -1,7 +1,7 @@
 /*
  *                                  \/\/\
  *
- *  Copyright (C) 2012-2025  Vito Caputo - <vcaputo@pengaru.com>
+ *  Copyright (C) 2012-2026  Vito Caputo - <vcaputo@pengaru.com>
  *
  *  This program is free software: you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License version 2 as published
@@ -55,6 +55,7 @@ typedef struct vmon_t {
 	time_t		start_time;
 	int		snapshots_interval;
 	int		snapshot;
+	char		*strobe_file;
 	int		marker_distance;
 	int		now_names;
 	int		headless;
@@ -74,7 +75,7 @@ typedef struct vmon_t {
 #define WIDTH_MIN	200
 #define HEIGHT_MIN	28
 
-static volatile int got_sigchld, got_sigusr1, got_sigint, got_sigquit, got_sigterm;
+static volatile int got_sigchld, got_sigusr1, got_sigusr2, got_sigint, got_sigquit, got_sigterm;
 
 /* return if arg == flag or altflag if provided */
 static int is_flag(const char *arg, const char *flag, const char *altflag)
@@ -204,6 +205,7 @@ static void print_help(void)
 		" -p  --pid         PID of the top-level process to monitor (1 if unspecified)\n"
 		" -i  --snapshots   Save a PNG snapshot every N seconds (SIG{TERM,USR1} also snapshots)\n"
 		" -s  --snapshot    Save a PNG snapshot upon receiving SIG{CHLD,TERM,USR1}\n"
+		" -S  --strobe-file Save a PNG snapshot to this file path upon receiving SIGUSR2\n"
 		" -w  --wip-name    Name to use for work-in-progress snapshot filename\n"
 		" -v  --version     Print version\n"
 		" -D  --dump-procs  Dump libvmon internal processes table (debugging aid)\n"
@@ -227,7 +229,7 @@ static void print_copyright(void)
 {
 	puts(
 		"\n"
-		"Copyright (C) 2012-2025 Vito Caputo <vcaputo@pengaru.com>\n"
+		"Copyright (C) 2012-2026 Vito Caputo <vcaputo@pengaru.com>\n"
 		"\n"
 		"This program comes with ABSOLUTELY NO WARRANTY.  This is free software, and\n"
 		"you are welcome to redistribute it under certain conditions.  For details\n"
@@ -247,6 +249,12 @@ static void handle_sigchld(int signum)
 static void handle_sigusr1(int signum)
 {
 	got_sigusr1 = 1;
+}
+
+/* trigger a strobe (in-place snapshot to a fixed name) */
+static void handle_sigusr2(int signum)
+{
+	got_sigusr2 = 1;
 }
 
 
@@ -462,6 +470,11 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 		} else if (is_flag(*argv, "-s", "--snapshot")) {
 			vmon->snapshot = 1;
 			last = argv;
+		} else if (is_flag(*argv, "-S", "--strobe-file")) {
+			if (!parse_flag_str(argv, end, argv + 1, 1, &vmon->strobe_file))
+				return 0;
+
+			last = ++argv;
 		} else if (is_flag(*argv, "-w", "--wip-name")) {
 			if (!parse_flag_str(argv, end, argv + 1, 1, &vmon->wip_name))
 				return 0;
@@ -665,6 +678,13 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 		goto _err_vcr;
 	}
 
+	if (vmon->strobe_file) {
+		if (signal(SIGUSR2, handle_sigusr2) == SIG_ERR) {
+			VWM_PERROR("unable to set SIGUSR2 handler");
+			goto _err_vcr;
+		}
+	}
+
 	if (signal(SIGALRM, handle_sigusr1) == SIG_ERR) {
 		VWM_PERROR("unable to set SIGALRM handler");
 		goto _err_vcr;
@@ -784,6 +804,48 @@ static void vmon_resize(vmon_t *vmon, int width, int height)
 	vmon->width = width;
 	vmon->height = height;
 	vwm_chart_set_visible_size(vmon->charts, vmon->chart, width, height);
+}
+
+
+/* this is like vmon_snapshot() except in-place at a fixed name; truncates what's there, no atomicity */
+static int vmon_strobe(vmon_t *vmon)
+{
+#ifdef USE_PNG
+	FILE	*output;
+
+	assert(vmon);
+	assert(vmon->strobe_file);
+
+	output = fopen(vmon->strobe_file, "w+");
+	if (!output)
+		return -errno;
+
+	{
+		vcr_dest_t	*png_dest;
+
+		png_dest = vcr_dest_png_new(vmon->vcr_backend, output);
+		if (!png_dest) {
+			(void) unlink(vmon->strobe_file);
+			(void) fclose(output);
+			return -ENOMEM;
+		}
+
+		if (vmon->headless)
+			vwm_chart_compose(vmon->charts, vmon->chart);
+
+		/* FIXME: render/libpng errors need to propagate and be handled */
+		vwm_chart_render(vmon->charts, vmon->chart, VCR_PRESENT_OP_SRC, png_dest, -1, -1, -1, -1);
+		png_dest = vcr_dest_free(png_dest);
+	}
+
+	fflush(output);
+	fsync(fileno(output));
+	fclose(output);
+
+	return 0;
+#else
+	return -ENOTSUP;
+#endif
 }
 
 
@@ -989,6 +1051,15 @@ int main(int argc, const char * const *argv)
 				VWM_ERROR("failed to waitpid on SIGCHLD: %s", strerror(errno));
 				vmon->done = 1;
 			}
+		}
+
+		if (got_sigusr2) {
+			int	r;
+
+			if ((r = vmon_strobe(vmon)) < 0)
+				VWM_ERROR("error saving strobe file: %s", strerror(-r));
+
+			got_sigusr2 = 0;
 		}
 
 		if (got_sigusr1 || (vmon->snapshots_interval && !vmon->n_snapshots)) {
