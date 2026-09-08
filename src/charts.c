@@ -90,6 +90,7 @@ typedef enum _vwm_column_type_t {
 	VWM_COLUMN_PROC_TREE,
 	VWM_COLUMN_PROC_ARGV,
 	VWM_COLUMN_PROC_PID,
+	VWM_COLUMN_PROC_PPID,
 	VWM_COLUMN_PROC_WCHAN,
 	VWM_COLUMN_PROC_STATE,
 	VWM_COLUMN_PROC_RSS,
@@ -795,7 +796,15 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 				str_len = snpf(str, sizeof(str), "PID");
 			else
 				str_len = snpf(str, sizeof(str), "%5i", proc->pid);
+			break;
 
+		case VWM_COLUMN_PROC_PPID: /* print the process' parent's PID (or TGID if a thread)*/
+			if (heading)
+				str_len = snpf(str, sizeof(str), "PPID/TGID");
+			else if (proc->parent)
+				str_len = snpf(str, sizeof(str), "%5i", proc->parent->pid);
+			else
+				str_len = snpf(str, sizeof(str), "???");
 			break;
 
 		case VWM_COLUMN_PROC_WCHAN: /* print the process' wchan */
@@ -971,6 +980,10 @@ static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart,
 			break;
 		case VWM_COLUMN_PROC_PID:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_PID))
+				return 1;
+			break;
+		case VWM_COLUMN_PROC_PPID:
+			if (!proc->is_thread && BITTEST(proc_stat->changed, VMON_PROC_STAT_PPID))
 				return 1;
 			break;
 		case VWM_COLUMN_PROC_WCHAN:
