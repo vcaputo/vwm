@@ -145,13 +145,17 @@ typedef struct _vwm_chart_t {
 	int			gen_last_composed;				/* the last composed vmon generation */
 	int			redraw_needed;					/* if a redraw is required (like when the window is resized...) */
 	char			*name;						/* name if provided, included in chart by the \/\/\ */
-	vwm_column_t		top_columns[CHART_MAX_COLUMNS];			/* "top" columns in the chart (vwm logo, hz) */
+	vwm_column_t		top0_columns[CHART_MAX_COLUMNS];			/* "top" columns in the chart (IOWait, Idle, vwm logo, hz) */
+	vwm_column_t		top1_columns[CHART_MAX_COLUMNS];			/* "top"+1 columns in the chart (System, User, Uptime) */
+	vwm_column_t		top2_columns[CHART_MAX_COLUMNS];			/* "top"+2 columns in the chart (IRQ, SoftIRQ) */
 	vwm_column_t		proc_cpu_columns[CHART_MAX_COLUMNS];		/* per-proc+thread CPU columns in the chart TODO, for now just stowing the widths here */
 	vwm_column_t		proc_mem_columns[CHART_MAX_COLUMNS];		/* per-proc Memory columns in the chart TODO, for now just stowing the widths here */
 	vwm_column_t		snowflake_cpu_columns[CHART_MAX_COLUMNS];	/* per-proc+thread CPU columns in the snowflaked rows */
 	vwm_column_t		snowflake_mem_columns[CHART_MAX_COLUMNS];	/* per-proc Memory columns in the snowflaked rows */
 
-	vwm_row_column_t	top_row_columns[CHART_MAX_COLUMNS];		/* "top" columns in the chart (vwm logo, hz) */
+	vwm_row_column_t	top0_row_columns[CHART_MAX_COLUMNS];		/* "top" columns in the chart (IOWait, Idle, vwm logo, hz) */
+	vwm_row_column_t	top1_row_columns[CHART_MAX_COLUMNS];		/* "top"+1 columns in the chart (System, User, Uptime) */
+	vwm_row_column_t	top2_row_columns[CHART_MAX_COLUMNS];		/* "top"+2 columns in the chart (IRQ, SoftIRQ) */
 	vwm_row_column_t	proc_cpu_row_columns[CHART_MAX_COLUMNS];
 	vwm_row_column_t	proc_mem_row_columns[CHART_MAX_COLUMNS];
 	vwm_row_column_t	snowflake_cpu_row_columns[CHART_MAX_COLUMNS];	/* per-proc+thread CPU columns in the snowflaked rows */
@@ -1244,15 +1248,21 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 
 	/* only draw the column headings, \/\/\ and HZ if necessary */
 	if (sample_duration_idx == (charts->this_sample_duration - 1)) {
+		/* FIXME: this conditional drawing is basically broken since labels to these "top[0-2]" rows were added, but it only affects vwm - vmon defers. I'll fix it later */
 		if (deferred_pass || (!charts->defer_maintenance && (chart->redraw_needed || charts->prev_sampling_interval_secs != charts->sampling_interval_secs))) {
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row, -1, -1);
-			draw_row_columns(charts, chart, chart->top_row_columns, 1 /* heading */, 0 /* depth */, row, proc);
+			draw_row_columns(charts, chart, chart->top0_row_columns, 1 /* heading */, 0 /* depth */, row, proc);
 			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
 
-			/* XXX: note at this time there's no overlay text for the IRQ/SoftIRQ (row + 1) and User/Sys (row + 2)(which should probably change) */
-
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 1, -1, -1);
+			draw_row_columns(charts, chart, chart->top1_row_columns, 1 /* heading */, 0 /* depth */, row + 1, proc);
+			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row + 1);
+
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 2, -1, -1);
+			draw_row_columns(charts, chart, chart->top2_row_columns, 1 /* heading */, 0 /* depth */, row + 2, proc);
+			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row + 2);
+
+			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 3, -1, -1);
 			draw_row_columns(charts, chart, chart->proc_cpu_row_columns, 1 /* heading */, 0 /* depth */, row + 3, proc);
 			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row + 3);
 		}
@@ -1384,7 +1394,16 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 		}
 	}
 
-	chart->top_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM };
+	chart->top0_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_SYS_IOWAIT };
+	chart->top0_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_SYS_IDLE };
+	chart->top0_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_VWM };
+
+	chart->top1_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_SYS_SYS };
+	chart->top1_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_SYS_USER };
+	chart->top1_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_SYS_UPTIME };
+
+	chart->top2_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_SYS_IRQ };
+	chart->top2_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_SYS_SIRQ };
 
 	/* TODO: make the columns interactively configurable @ runtime */
 	chart->proc_cpu_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_ROW };
@@ -1409,7 +1428,16 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->snowflake_mem_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_RSS };
 
 
-	chart->top_row_columns[0] = (vwm_row_column_t){ .column = &chart->top_columns[0], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->top0_row_columns[0] = (vwm_row_column_t){ .column = &chart->top0_columns[0], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
+	chart->top0_row_columns[1] = (vwm_row_column_t){ .column = &chart->top0_columns[1], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
+	chart->top0_row_columns[2] = (vwm_row_column_t){ .column = &chart->top0_columns[2], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
+
+	chart->top1_row_columns[0] = (vwm_row_column_t){ .column = &chart->top1_columns[0], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
+	chart->top1_row_columns[1] = (vwm_row_column_t){ .column = &chart->top1_columns[1], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
+	chart->top1_row_columns[2] = (vwm_row_column_t){ .column = &chart->top1_columns[2], .side = VWM_SIDE_RIGHT, .justify = VWM_JUSTIFY_RIGHT };
+
+	chart->top2_row_columns[0] = (vwm_row_column_t){ .column = &chart->top2_columns[0], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
+	chart->top2_row_columns[1] = (vwm_row_column_t){ .column = &chart->top2_columns[1], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
 
 	chart->proc_cpu_row_columns[0] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[0], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
 	chart->proc_cpu_row_columns[1] = (vwm_row_column_t){ .column = &chart->proc_cpu_columns[1], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
