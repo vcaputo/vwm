@@ -77,6 +77,13 @@ typedef struct _vwm_charts_t {
 typedef enum _vwm_column_type_t {
 	VWM_COLUMN_VWM,
 	VWM_COLUMN_ROW,
+	VWM_COLUMN_SYS_UPTIME,
+	VWM_COLUMN_SYS_USER,
+	VWM_COLUMN_SYS_SYS,
+	VWM_COLUMN_SYS_IDLE,
+	VWM_COLUMN_SYS_IOWAIT,
+	VWM_COLUMN_SYS_SIRQ,
+	VWM_COLUMN_SYS_IRQ,
 	VWM_COLUMN_PROC_USER,
 	VWM_COLUMN_PROC_SYS,
 	VWM_COLUMN_PROC_WALL,
@@ -682,6 +689,43 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 			proc_ctxt->row = row;
 			break;
 
+		/* Since these columns don't really make sense in tabular format, they ignore `heading` and
+		 * always print "label: value", making the assumption they're not in a table.  This may change
+		 * in the future, since I can see potential for snowflake rows including sys-wide cpu at the
+		 * time the snowflake was added... and the snowflakes region should probably get a table heading
+		 * row of its own.  In that future, there'd be Sys-wide columns with labeled headings, and plain
+		 * values in the columns below them.  But for now just doing what I want, since this is likely
+		 * to all get reworked at some point.
+		 */
+		case VWM_COLUMN_SYS_UPTIME: /* Sys-wide up-time / boottime */
+			str_len = snpf(str, sizeof(str), "Uptime: %'.2fs",
+						(float)sys_stat->boottime * charts->inv_ticks_per_sec);
+			break;
+		case VWM_COLUMN_SYS_USER: /* Sys-wide User CPU time */
+			str_len = snpf(str, sizeof(str), "User: %'.2fs",
+						(float)sys_stat->user * charts->inv_ticks_per_sec);
+			break;
+		case VWM_COLUMN_SYS_SYS: /* Sys-wide System CPU time */
+			str_len = snpf(str, sizeof(str), "Sys: %'.2fs",
+						(float)sys_stat->system * charts->inv_ticks_per_sec);
+			break;
+		case VWM_COLUMN_SYS_IDLE: /* Sys-wide Idle CPU time */
+			str_len = snpf(str, sizeof(str), "Idle: %'.2fs",
+						(float)sys_stat->idle * charts->inv_ticks_per_sec);
+			break;
+		case VWM_COLUMN_SYS_IOWAIT: /* Sys-wide IOWait CPU time */
+			str_len = snpf(str, sizeof(str), "IOWait: %'.2fs",
+						(float)sys_stat->iowait * charts->inv_ticks_per_sec);
+			break;
+		case VWM_COLUMN_SYS_SIRQ: /* Sys-wide SoftIRQ CPU time */
+			str_len = snpf(str, sizeof(str), "SoftIRQ: %'.2fs",
+						(float)sys_stat->softirq * charts->inv_ticks_per_sec);
+			break;
+		case VWM_COLUMN_SYS_IRQ: /* Sys-wide (hard)IRQ CPU time */
+			str_len = snpf(str, sizeof(str), "IRQ: %'.2fs",
+						(float)sys_stat->softirq * charts->inv_ticks_per_sec);
+			break;
+
 		case VWM_COLUMN_PROC_USER: /* User CPU time */
 			if (heading)
 				str_len = snpf(str, sizeof(str), "User");
@@ -872,6 +916,34 @@ static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart,
 			break;
 		case VWM_COLUMN_ROW:
 			return (row != proc_ctxt->row);
+		case VWM_COLUMN_SYS_UPTIME:
+			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_BOOTTIME))
+				return 1;
+			break;
+		case VWM_COLUMN_SYS_USER:
+			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_USER))
+				return 1;
+			break;
+		case VWM_COLUMN_SYS_SYS:
+			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_SYS))
+				return 1;
+			break;
+		case VWM_COLUMN_SYS_IDLE:
+			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_IDLE))
+				return 1;
+			break;
+		case VWM_COLUMN_SYS_IOWAIT:
+			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_IOWAIT))
+				return 1;
+			break;
+		case VWM_COLUMN_SYS_SIRQ:
+			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_SIRQ))
+				return 1;
+			break;
+		case VWM_COLUMN_SYS_IRQ:
+			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_IRQ))
+				return 1;
+			break;
 		case VWM_COLUMN_PROC_USER:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_UTIME))
 				return 1;
