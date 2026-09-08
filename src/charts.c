@@ -926,81 +926,84 @@ static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart,
 		switch (c->type) {
 		case VWM_COLUMN_VWM:
 			/* XXX: meh, maybe we should detect Hz changes here? */
-			break;
+			continue;
 		case VWM_COLUMN_ROW:
 			if (row != proc_ctxt->row)
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_SYS_UPTIME:
 			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_BOOTTIME))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_SYS_USER:
 			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_USER))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_SYS_SYS:
 			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_SYS))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_SYS_IDLE:
 			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_IDLE))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_SYS_IOWAIT:
 			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_IOWAIT))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_SYS_SIRQ:
 			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_SIRQ))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_SYS_IRQ:
 			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_CPU_IRQ))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_USER:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_UTIME))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_SYS:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_STIME))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_WALL:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_START) ||
 			    BITTEST(sys_stat->changed, VMON_SYS_STAT_BOOTTIME))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_TREE:
-			break;
+			continue;
 		case VWM_COLUMN_PROC_ARGV:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_ARGV))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_PID:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_PID))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_PPID:
 			if (!proc->is_thread && BITTEST(proc_stat->changed, VMON_PROC_STAT_PPID))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_WCHAN:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_WCHAN))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_STATE:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_STATE))
 				return 1;
-			break;
+			continue;
 		case VWM_COLUMN_PROC_RSS:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_RSS))
 				return 1;
-			break;
-		default:
+			continue;
+		case VWM_COLUMN_CNT:
 			assert(0);
 		}
+
+		/* expected to be unreachable, unhandled cases above should throw a compiler warning (no default) */
+		assert(0);
 	}
 
 	return 0;
