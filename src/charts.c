@@ -47,7 +47,7 @@
 #define CHART_VMON_SYS_WANTS		(VMON_WANT_SYS_STAT)
 #define CHART_MAX_COLUMNS		16
 #define CHART_DELTA_SECONDS_EPSILON	.001f				/* adherence errors smaller than this are treated as zero */
-#define CHART_NUM_FIXED_HEADER_ROWS	3				/* number of rows @ top before the hierarchy: { IOWait/Idle, IRQ/SoftIRQ, Adherence } */
+#define CHART_NUM_FIXED_HEADER_ROWS	4				/* number of rows @ top before the hierarchy: { IOWait/Idle, User/Sys, IRQ/SoftIRQ, Adherence (behind column header labels) } */
 #define CHART_DEFAULT_INTERVAL_SECS	.1f				/* default to 10Hz */
 #define CHART_STAMP_ROW_INTERVAL	10				/* every Nth row to stamp boundaries with the text */
 
@@ -63,6 +63,7 @@ typedef struct _vwm_charts_t {
 	typeof(((vmon_sys_stat_t *)0)->system)	last_system_cpu;
 	unsigned long long			last_total, this_total, total_delta;
 	unsigned long long			last_idle, last_iowait, idle_delta, iowait_delta;
+	unsigned long long			last_user, last_system, user_delta, system_delta;
 	unsigned long long			last_irq, last_softirq, irq_delta, softirq_delta;
 	vmon_t					vmon;
 	float					prev_sampling_interval_secs, sampling_interval_secs;
@@ -198,6 +199,8 @@ static void sample_callback(vmon_t *vmon, void *arg)
 	charts->inv_total_delta = 1.f / (float)charts->total_delta;
 	charts->idle_delta = sys_stat->idle - charts->last_idle;
 	charts->iowait_delta = sys_stat->iowait - charts->last_iowait;
+	charts->user_delta = sys_stat->user - charts->last_user;
+	charts->system_delta = sys_stat->system - charts->last_system;
 	charts->irq_delta = sys_stat->irq - charts->last_irq;
 	charts->softirq_delta = sys_stat->softirq - charts->last_softirq;
 }
@@ -1137,8 +1140,18 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 		charts->inv_total_delta,
 		VCR_LAYER_GRAPHB);
 
-	/* IRQ and SoftIRQ % @ row 1 */
+	/* Sys and User % @ row 1 */
 	draw_bars(charts, chart, row + 1,
+		1.f /* mult */,
+		charts->system_delta,
+		charts->inv_total_delta,
+		VCR_LAYER_GRAPHA,
+		charts->user_delta,
+		charts->inv_total_delta,
+		VCR_LAYER_GRAPHB);
+
+	/* IRQ and SoftIRQ % @ row 2 */
+	draw_bars(charts, chart, row + 2,
 		1.f /* mult */,
 		charts->irq_delta,
 		charts->inv_total_delta,
@@ -1147,8 +1160,8 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 		charts->inv_total_delta,
 		VCR_LAYER_GRAPHB);
 
-	/* "Adherence" @ row 2 */
-	draw_bars(charts, chart, row + 2,
+	/* "Adherence" @ row 3 */
+	draw_bars(charts, chart, row + 3,
 		1.f /* mult */,
 		charts->this_sample_adherence > 0.f ? charts->this_sample_adherence : 0.f /* a_fraction */,
 		1.f /* inv_a_total */,
@@ -1164,11 +1177,12 @@ static void draw_chart(vwm_charts_t *charts, vwm_chart_t *chart, vmon_proc_t *pr
 			draw_row_columns(charts, chart, chart->top_row_columns, 1 /* heading */, 0 /* depth */, row, proc);
 			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row);
 
-			/* XXX: note at this time there's no overlay text for the IRQ/SoftIRQ (row + 1) (which should probably change) */
+			/* XXX: note at this time there's no overlay text for the IRQ/SoftIRQ (row + 1) and User/Sys (row + 2)(which should probably change) */
 
 			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 1, -1, -1);
-			draw_row_columns(charts, chart, chart->proc_cpu_row_columns, 1 /* heading */, 0 /* depth */, row + 2, proc);
-			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row + 1);
+			vcr_clear_row(chart->vcr, VCR_LAYER_TEXT, row + 2, -1, -1);
+			draw_row_columns(charts, chart, chart->proc_cpu_row_columns, 1 /* heading */, 0 /* depth */, row + 3, proc);
+			vcr_shadow_row(chart->vcr, VCR_LAYER_TEXT, row + 3);
 		}
 
 		if (!prev_redraw_needed)
@@ -1633,6 +1647,8 @@ int vwm_charts_update(vwm_charts_t *charts, int *desired_delay_us)
 
 			charts->last_idle = sys_stat->idle;
 			charts->last_iowait = sys_stat->iowait;
+			charts->last_user = sys_stat->user;
+			charts->last_system = sys_stat->system;
 			charts->last_irq = sys_stat->irq;
 			charts->last_softirq = sys_stat->softirq;
 		}
