@@ -1439,10 +1439,11 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->proc_mem_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_RSS };
 
 	chart->snowflake_cpu_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PID };
-	chart->snowflake_cpu_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER };
-	chart->snowflake_cpu_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS };
-	chart->snowflake_cpu_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL };
-	chart->snowflake_cpu_columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV };
+	chart->snowflake_cpu_columns[1] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_PPID };
+	chart->snowflake_cpu_columns[2] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_USER };
+	chart->snowflake_cpu_columns[3] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_SYS };
+	chart->snowflake_cpu_columns[4] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_WALL };
+	chart->snowflake_cpu_columns[5] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_ARGV };
 
 	chart->snowflake_mem_columns[0] = (vwm_column_t){ .enabled = 1, .type = VWM_COLUMN_PROC_RSS };
 
@@ -1477,7 +1478,8 @@ vwm_chart_t * vwm_chart_create(vwm_charts_t *charts, int pid, int width, int hei
 	chart->snowflake_cpu_row_columns[1] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[1], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
 	chart->snowflake_cpu_row_columns[2] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[2], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
 	chart->snowflake_cpu_row_columns[3] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[3], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
-	chart->snowflake_cpu_row_columns[4] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[4], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
+	chart->snowflake_cpu_row_columns[4] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[4], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
+	chart->snowflake_cpu_row_columns[5] = (vwm_row_column_t){ .column = &chart->snowflake_cpu_columns[5], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_LEFT };
 
 	chart->snowflake_mem_row_columns[0] = (vwm_row_column_t){ .column = &chart->snowflake_mem_columns[0], .side = VWM_SIDE_LEFT, .justify = VWM_JUSTIFY_RIGHT };
 
