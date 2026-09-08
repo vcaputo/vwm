@@ -919,7 +919,9 @@ static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart,
 			/* XXX: meh, maybe we should detect Hz changes here? */
 			break;
 		case VWM_COLUMN_ROW:
-			return (row != proc_ctxt->row);
+			if (row != proc_ctxt->row)
+				return 1;
+			break;
 		case VWM_COLUMN_SYS_UPTIME:
 			if (BITTEST(sys_stat->changed, VMON_SYS_STAT_BOOTTIME))
 				return 1;
@@ -977,6 +979,10 @@ static int columns_changed(const vwm_charts_t *charts, const vwm_chart_t *chart,
 			break;
 		case VWM_COLUMN_PROC_STATE:
 			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_STATE))
+				return 1;
+			break;
+		case VWM_COLUMN_PROC_RSS:
+			if (BITTEST(proc_stat->changed, VMON_PROC_STAT_RSS))
 				return 1;
 			break;
 		default:
