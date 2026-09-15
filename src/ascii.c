@@ -355,7 +355,6 @@ const char ascii_chars[256][ASCII_WIDTH * ASCII_HEIGHT] = {
 		0, 0, 0, 0, 0,
 	},
 	['<'] = {
-		0, 0, 0, 0, 0,
 		0, 0, 0, 0, 1,
 		0, 0, 0, 1, 0,
 		0, 0, 1, 0, 0,
@@ -365,6 +364,7 @@ const char ascii_chars[256][ASCII_WIDTH * ASCII_HEIGHT] = {
 		0, 0, 1, 0, 0,
 		0, 0, 0, 1, 0,
 		0, 0, 0, 0, 1,
+		0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0,
 	},
 	['='] = {
@@ -381,7 +381,6 @@ const char ascii_chars[256][ASCII_WIDTH * ASCII_HEIGHT] = {
 		0, 0, 0, 0, 0,
 	},
 	['>'] = {
-		0, 0, 0, 0, 0,
 		1, 0, 0, 0, 0,
 		0, 1, 0, 0, 0,
 		0, 0, 1, 0, 0,
@@ -391,6 +390,7 @@ const char ascii_chars[256][ASCII_WIDTH * ASCII_HEIGHT] = {
 		0, 0, 1, 0, 0,
 		0, 1, 0, 0, 0,
 		1, 0, 0, 0, 0,
+		0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0,
 	},
 	['?'] = {
