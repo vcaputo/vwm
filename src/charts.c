@@ -728,7 +728,7 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 			break;
 		case VWM_COLUMN_SYS_IRQ: /* Sys-wide (hard)IRQ CPU time */
 			str_len = snpf(str, sizeof(str), "IRQ: %'.2fs",
-						(float)sys_stat->softirq * charts->inv_ticks_per_sec);
+						(float)sys_stat->irq * charts->inv_ticks_per_sec);
 			break;
 
 		case VWM_COLUMN_PROC_USER: /* User CPU time */
