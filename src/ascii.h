@@ -2,7 +2,7 @@
 #define _ASCII_H
 
 #define ASCII_WIDTH	5
-#define ASCII_HEIGHT	11
+#define ASCII_HEIGHT	12
 
 extern const char ascii_chars[256][ASCII_WIDTH * ASCII_HEIGHT];
 
