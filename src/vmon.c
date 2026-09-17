@@ -1047,7 +1047,7 @@ int main(int argc, const char * const *argv)
 				}
 			}
 
-			if (reaped < 0) {
+			if (reaped < 0 && errno != ECHILD) {
 				VWM_ERROR("failed to waitpid on SIGCHLD: %s", strerror(errno));
 				vmon->done = 1;
 			}
