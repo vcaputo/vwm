@@ -58,6 +58,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifdef USE_XLIB
 #include <X11/Xlib.h>
@@ -204,6 +205,7 @@ typedef struct vcr_dest_t {
 			png_infop	info_ctx;
 			png_structp	png_ctx;
 			FILE		*output;
+			png_text	text[3];
 		} png;
 #endif /* USE_PNG */
 	};
@@ -617,7 +619,7 @@ vcr_dest_t * vcr_dest_xpicture_new(vcr_backend_t *vbe, Picture picture)
 
 
 #ifdef USE_PNG
-vcr_dest_t * vcr_dest_png_new(vcr_backend_t *vbe, FILE *output)
+vcr_dest_t * vcr_dest_png_new(vcr_backend_t *vbe, FILE *output, const char *name, const char *payload)
 {
 	vcr_dest_t	*dest;
 
@@ -649,6 +651,36 @@ vcr_dest_t * vcr_dest_png_new(vcr_backend_t *vbe, FILE *output)
 		png_destroy_write_struct(&dest->png.png_ctx, NULL);
 		free(dest);
 		return NULL;
+	}
+
+	{
+		time_t		now = time(NULL);
+		struct tm	*t = localtime(&now);
+		char		t_str[32];
+
+		strftime(t_str, sizeof(t_str), "%F %T %Z", t);
+
+		/* we always stick three text fields into the PNGs, the caller is expected to always
+		 * provide a `date` style string for timestamp, the chart name for name, and the
+		 * payload is flexible.  For strobes it's expected the payload may contain some
+		 * context about the cause for strobing.
+		 */
+		dest->png.text[0].compression = -1; /* none */
+		dest->png.text[0].key = "timestamp";
+		dest->png.text[0].text = t_str;
+		dest->png.text[0].text_length = strlen(t_str);
+
+		dest->png.text[1].compression = -1; /* none */
+		dest->png.text[1].key = "name";
+		dest->png.text[1].text = (char *)name;
+		dest->png.text[1].text_length = name ? strlen(name) : 0;
+
+		dest->png.text[2].compression = -1; /* none */
+		dest->png.text[2].key = "payload";
+		dest->png.text[2].text = (char *)payload;
+		dest->png.text[2].text_length = payload ? strlen(payload) : 0;
+
+		png_set_text(dest->png.png_ctx, dest->png.info_ctx, dest->png.text, 3);
 	}
 
 	png_init_io(dest->png.png_ctx, output);

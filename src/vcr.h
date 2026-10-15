@@ -71,7 +71,7 @@ unsigned vcr_dest_xwindow_get_id(vcr_dest_t *dest);
 vcr_dest_t * vcr_dest_xpicture_new(vcr_backend_t *vbe, Picture picture);
 #endif /* USE_XLIB */
 #ifdef USE_PNG
-vcr_dest_t * vcr_dest_png_new(vcr_backend_t *vbe, FILE *output);
+vcr_dest_t * vcr_dest_png_new(vcr_backend_t *vbe, FILE *output, const char *name, const char *payload);
 #endif /* USE_PNG */
 vcr_dest_t * vcr_dest_free(vcr_dest_t *dest);
 

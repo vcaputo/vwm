@@ -808,7 +808,7 @@ static void vmon_resize(vmon_t *vmon, int width, int height)
 
 
 /* this is like vmon_snapshot() except in-place at a fixed name; truncates what's there, no atomicity */
-static int vmon_strobe(vmon_t *vmon)
+static int vmon_strobe(vmon_t *vmon, const char *payload)
 {
 #ifdef USE_PNG
 	FILE	*output;
@@ -823,7 +823,7 @@ static int vmon_strobe(vmon_t *vmon)
 	{
 		vcr_dest_t	*png_dest;
 
-		png_dest = vcr_dest_png_new(vmon->vcr_backend, output);
+		png_dest = vcr_dest_png_new(vmon->vcr_backend, output, vmon->name, payload);
 		if (!png_dest) {
 			(void) unlink(vmon->strobe_file);
 			(void) fclose(output);
@@ -849,7 +849,7 @@ static int vmon_strobe(vmon_t *vmon)
 }
 
 
-static int vmon_snapshot(vmon_t *vmon)
+static int vmon_snapshot(vmon_t *vmon, const char *payload)
 {
 #ifdef USE_PNG
 	time_t		now, *t_ptr = &now;
@@ -905,7 +905,7 @@ static int vmon_snapshot(vmon_t *vmon)
 	{
 		vcr_dest_t	*png_dest;
 
-		png_dest = vcr_dest_png_new(vmon->vcr_backend, output);
+		png_dest = vcr_dest_png_new(vmon->vcr_backend, output, vmon->name, payload);
 		if (!png_dest) {
 			(void) unlink(tmp_path);
 			(void) fclose(output);
@@ -1037,7 +1037,7 @@ int main(int argc, const char * const *argv)
 					continue;
 
 				if (WIFEXITED(status) || WIFSIGNALED(status)) {
-					if (vmon->snapshot && (r = vmon_snapshot(vmon)) < 0)
+					if (vmon->snapshot && (r = vmon_snapshot(vmon, NULL)) < 0)
 						VWM_ERROR("error saving snapshot: %s", strerror(-r));
 
 					ret = WEXITSTATUS(status);
@@ -1056,7 +1056,7 @@ int main(int argc, const char * const *argv)
 		if (got_sigusr2) {
 			int	r;
 
-			if ((r = vmon_strobe(vmon)) < 0)
+			if ((r = vmon_strobe(vmon, NULL)) < 0)
 				VWM_ERROR("error saving strobe file: %s", strerror(-r));
 
 			got_sigusr2 = 0;
@@ -1065,7 +1065,7 @@ int main(int argc, const char * const *argv)
 		if (got_sigusr1 || (vmon->snapshots_interval && !vmon->n_snapshots)) {
 			int	r;
 
-			if ((r = vmon_snapshot(vmon)) < 0)
+			if ((r = vmon_snapshot(vmon, NULL)) < 0)
 				VWM_ERROR("error saving snapshot: %s", strerror(-r));
 
 			got_sigusr1 = 0;
