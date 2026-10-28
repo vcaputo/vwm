@@ -72,6 +72,7 @@ typedef struct _vwm_charts_t {
 	float					inv_ticks_per_sec, inv_total_delta;
 	unsigned				defer_maintenance:1;
 	unsigned				no_threads:1;
+	unsigned				short_argv:1;
 } vwm_charts_t;
 
 typedef enum _vwm_column_type_t {
@@ -258,6 +259,9 @@ vwm_charts_t * vwm_charts_create(vcr_backend_t *vbe, unsigned flags)
 		vmon_flags |= VMON_FLAG_NEGLECT_THREADS;
 	}
 
+	if (flags & VWM_CHARTS_SHORT_ARGV)
+		charts->short_argv = 1;
+
 	charts->prev_sampling_interval_secs = charts->sampling_interval_secs = CHART_DEFAULT_INTERVAL_SECS;
 
 	if (!vmon_init(&charts->vmon, vmon_flags, CHART_VMON_SYS_WANTS, CHART_VMON_PROC_WANTS)) {
@@ -336,7 +340,7 @@ static void allocate_row(vwm_charts_t *charts, vwm_chart_t *chart, int row)
 
 
 /* simple helper to map the vmon per-proc argv array into an XTextItem array, deals with threads vs. processes and the possibility of the comm field not getting read in before the process exited... */
-static void proc_argv2strs(const vmon_proc_t *proc, vcr_str_t *strs, int max_strs, int *res_n_strs)
+static void proc_argv2strs(const vwm_charts_t *charts, const vmon_proc_t *proc, vcr_str_t *strs, int max_strs, int *res_n_strs)
 {
 	static char	n_threads_str[sizeof(STRINGIFY(UINT_MAX)) + sizeof("[]")];
 	int		nr = 0;
@@ -370,9 +374,16 @@ static void proc_argv2strs(const vmon_proc_t *proc, vcr_str_t *strs, int max_str
 	nr++;
 
 	if (!proc->is_thread) { /* suppress the argv for threads */
-		for (int i = 1; nr < max_strs && i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
-			strs[nr].str = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i];
-			strs[nr].len = strlen(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i]);	/* TODO: libvmon should inform us of the length */
+		if (!charts->short_argv) {
+			for (int i = 1; nr < max_strs && i < ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc; nr++, i++) {
+				strs[nr].str = ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i];
+				strs[nr].len = strlen(((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argv[i]);	/* TODO: libvmon should inform us of the length */
+			}
+		} else if (nr < max_strs && ((vmon_proc_stat_t *)proc->stores[VMON_STORE_PROC_STAT])->argc > 1) {
+			/* in short_argv mode we'll add an ellipsis for when there's more args, but we're suppressing them. */
+			strs[nr].str = "...";
+			strs[nr].len = 3;
+			nr++;
 		}
 	}
 
@@ -472,7 +483,7 @@ static void print_argv(const vwm_charts_t *charts, const vwm_chart_t *chart, int
 
 	assert(chart);
 
-	proc_argv2strs(proc, strs, NELEMS(strs), &n_strs);
+	proc_argv2strs(charts, proc, strs, NELEMS(strs), &n_strs);
 	vcr_draw_text(chart->vcr, VCR_LAYER_TEXT, VCR_TEXT_FLAGS_CLIPPED, x, row, strs, n_strs, res_width);
 }
 
@@ -777,7 +788,8 @@ static void draw_row_columns(vwm_charts_t *charts, vwm_chart_t *chart, vwm_row_c
 
 		case VWM_COLUMN_PROC_ARGV: { /* print the process' argv */
 			if (heading) {
-				str_len = snpf(str, sizeof(str), "[NThreads] ArgV%s",
+				str_len = snpf(str, sizeof(str), "[NThreads] %s%s",
+						charts->short_argv ? "Comm" : "ArgV",
 						charts->no_threads ? "" : "/~ThreadName");
 			} else {
 				int	width;
