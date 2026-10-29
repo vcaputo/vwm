@@ -52,6 +52,7 @@ typedef struct vmon_t {
 	int		mem_locked;
 	int		reaper;
 	int		no_threads;
+	int		short_argv;
 	time_t		start_time;
 	int		snapshots_interval;
 	int		snapshot;
@@ -212,6 +213,7 @@ static void print_help(void)
 		" -L  --mem-locked  Lock in memory using mlockall(MCL_CURRENT|MCL_FUTURE)\n"
 		" -R  --reaper      Become the child subreaper (see prctl(2); PR_SET_CHILD_SUBREAPER)\n"
 		" -T  --no-threads  Don't monitor threads beyond tracking their potential children\n"
+		" -V  --short-argv  Don't show the full argv of processes, include only the comm/argv[0]\n"
 		" -W  --width       Chart width\n"
 		" -z  --hertz       Sample rate in hertz\n"
 		"-------------------------------------------------------------------------------"
@@ -522,6 +524,9 @@ static int vmon_handle_argv(vmon_t *vmon, int argc, const char * const *argv)
 		} else if (is_flag(*argv, "-T", "--no-threads")) {
 			vmon->no_threads = 1;
 			last = argv;
+		} else if (is_flag(*argv, "-V", "--short-argv")) {
+			vmon->short_argv= 1;
+			last = argv;
 		} else if ((*argv)[0] == '-') {
 			VWM_ERROR("Unrecognized argument: \"%s\", try --help\n", argv[0]);
 			exit(EXIT_FAILURE);
@@ -660,6 +665,9 @@ static vmon_t * vmon_startup(int argc, const char * const *argv)
 
 	if (vmon->no_threads)
 		charts_flags |= VWM_CHARTS_NO_THREADS;
+
+	if (vmon->short_argv)
+		charts_flags |= VWM_CHARTS_SHORT_ARGV;
 
 	vmon->charts = vwm_charts_create(vmon->vcr_backend, charts_flags);
 	if (!vmon->charts) {
